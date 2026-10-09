@@ -17,6 +17,7 @@ system** — see [Medical Safety & Limitations](#medical-safety--limitations).
 [Architecture](docs/architecture.md) ·
 [API](docs/api.md) ·
 [Development](docs/development.md) ·
+[Appointment Reminders](docs/appointment-reminders.md) ·
 [Security](SECURITY.md) ·
 [Engineering Decisions](docs/engineering-decisions.md)
 
@@ -66,7 +67,7 @@ interest here is in the parts a chat UI hides:
 | A model may *downplay* a serious symptom | Safety validator that escalates on red-flag keywords and never lowers urgency |
 | "Take 500 mg ibuprofen" is unsafe to generate | Prescription-detail detection (dosage patterns + drug names) flags the response |
 | Providers differ, change, and cost money | `ProviderFactory` + capability routing + a deterministic offline provider |
-| You cannot test code that calls a paid API | Offline provider: 53 hermetic backend tests, no credentials, no network |
+| You cannot test code that calls a paid API | Offline provider: 289 hermetic backend tests, no credentials, no network |
 | A green build that silently tests nothing | System test asserts the *content* of a real response, not just its status code |
 
 ## Core Capabilities
@@ -311,7 +312,7 @@ Verified on Python 3.14.6 / Node 22.23.2:
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Backend tests | `pytest tests/` (53 tests) | **PASS** |
+| Backend tests | `pytest tests/` (289 tests) | **PASS** |
 | Frontend tests | `npm test` (25 tests) | **PASS** |
 | TypeScript | `tsc --noEmit` | **PASS** (0 errors) |
 | Frontend build | `npm run build` | **PASS** |

@@ -1,0 +1,284 @@
+"""
+Care navigation + doctor handoff API (consultation continuation).
+
+Reuses `current_user_id` from the profile API so there is exactly one
+authorization implementation in the platform. There is deliberately no route
+that accepts a user id: a patient can only ever reach their own records.
+
+Two rules enforced here rather than in the client
+-------------------------------------------------
+* **Location is permission-gated.** Coordinates arrive only after the patient
+  explicitly grants geolocation. A request without them still works and ranks by
+  clinical relevance alone, and says so in `location_used`.
+* **Sharing requires the fingerprint the patient reviewed.** The client echoes
+  back the fingerprint of the summary it displayed; a mismatch is refused.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
+
+from dedan_platform import care_navigation as cn
+from dedan_platform import handoff as ho
+from dedan_platform.api_profile import current_user_id
+from dedan_platform.models import EventStatus, HealthEventType
+from dedan_platform.timeline import record_event
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/users/me", tags=["care-navigation", "handoff"])
+
+
+# --- care navigation --------------------------------------------------------
+
+class CareSearchRequest(BaseModel):
+    symptoms: List[str] = Field(default_factory=list, max_length=40)
+    urgency: str = "routine"
+    is_emergency: bool = False
+    language: str = "en"
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    query: Optional[str] = Field(default=None, max_length=120)
+    limit: int = Field(default=5, ge=1, le=20)
+    #: Set by the client only when the patient granted geolocation. Informational
+    #: for the audit trail; the coordinates themselves are the evidence.
+    location_granted: bool = False
+
+
+@router.post("/care/facilities")
+def search_facilities(
+    body: CareSearchRequest,
+    user_id: str = Depends(current_user_id),
+) -> Dict[str, Any]:
+    """Rank real facilities for this consultation."""
+    # Coordinates without an explicit grant are treated as absent. A client that
+    # sends both and claims `location_granted: false` gets relevance-only
+    # ranking rather than the precise result -- the flag is not trusted over the
+    # operator's own consent flow.
+    latitude = body.latitude if (body.location_granted and body.latitude is not None) else None
+    longitude = body.longitude if (body.location_granted and body.longitude is not None) else None
+
+    context = cn.ClinicalContext(
+        symptoms=body.symptoms,
+        is_emergency=body.is_emergency,
+        urgency=body.urgency,
+        language=body.language,
+    )
+    try:
+        return cn.search(
+            context,
+            latitude=latitude,
+            longitude=longitude,
+            limit=body.limit,
+            query=body.query,
+        )
+    except cn.CareNavigationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/care/facilities/{facility_id}")
+def read_facility(facility_id: str) -> Dict[str, Any]:
+    facility = cn.get_facility(facility_id)
+    if facility is None:
+        # 404 rather than 403: a wrong-owner request must not confirm the
+        # facility exists elsewhere.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found.")
+    return facility.to_payload()
+
+
+@router.get("/care/facilities/{facility_id}/availability")
+def read_availability(
+    facility_id: str,
+    on_date: Optional[str] = None,
+    user_id: str = Depends(current_user_id),
+) -> Dict[str, Any]:
+    """Real availability, or an honest statement that there is none.
+
+    Never fabricates a slot: see `care_navigation.slots_for`.
+    """
+    facility = cn.get_facility(facility_id)
+    if facility is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Facility not found.")
+    return cn.slots_for(facility, on_date=on_date)
+
+
+# --- care navigation events -------------------------------------------------
+
+class CareNavigationRecord(BaseModel):
+    facility_id: Optional[str] = None
+    facility_name: Optional[str] = None
+    appointment_id: Optional[str] = None
+    symptoms: List[str] = Field(default_factory=list, max_length=40)
+    urgency: str = "routine"
+    is_emergency: bool = False
+    reason: Optional[str] = Field(default=None, max_length=200)
+
+
+@router.post("/care/navigation", status_code=status.HTTP_201_CREATED)
+def record_care_navigation(
+    body: CareNavigationRecord,
+    request: Request,
+    user_id: str = Depends(current_user_id),
+) -> Dict[str, Any]:
+    """Record that DEDAN routed this patient toward care.
+
+    Written as a `SAFETY_ALERT` when the consultation escalated and as
+    `CARE_NAVIGATION` otherwise. A red flag that produced no navigation record
+    would be invisible in the patient's history, which is precisely the case a
+    reviewer needs to see.
+    """
+    event_type = (
+        HealthEventType.SAFETY_ALERT if body.is_emergency
+        else HealthEventType.CARE_NAVIGATION
+    )
+    title = "Urgent care recommended" if body.is_emergency else "Care navigation"
+    description = body.facility_name or body.reason or "DEDAN recommended professional care."
+
+    try:
+        return record_event(
+            user_id=user_id,
+            event_type=event_type,
+            title=title,
+            description=description,
+            status=EventStatus.COMPLETED if not body.is_emergency else EventStatus.SCHEDULED,
+            source="dedan",
+            correlation_id=request.headers.get("X-Correlation-ID"),
+            metadata={
+                "facility_id": body.facility_id,
+                "facility_name": body.facility_name,
+                "appointment_id": body.appointment_id,
+                "urgency": body.urgency,
+                "symptom_count": len(body.symptoms),
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+# --- doctor handoff ---------------------------------------------------------
+
+class HandoffRequest(BaseModel):
+    main_concern: str = Field(default="", max_length=400)
+    patient_statements: List[str] = Field(default_factory=list, max_length=40)
+    allergies: List[str] = Field(default_factory=list, max_length=40)
+    medications: List[str] = Field(default_factory=list, max_length=40)
+    relevant_context: List[str] = Field(default_factory=list, max_length=20)
+    safety_findings: List[str] = Field(default_factory=list, max_length=20)
+    possible_causes: List[str] = Field(default_factory=list, max_length=20)
+    clinician_questions: List[str] = Field(default_factory=list, max_length=20)
+    onset: Optional[str] = Field(default=None, max_length=120)
+    severity: Optional[str] = Field(default=None, max_length=40)
+    language: str = "en"
+
+
+@router.post("/handoff/summary", status_code=status.HTTP_201_CREATED)
+def create_handoff_summary(
+    body: HandoffRequest,
+    user_id: str = Depends(current_user_id),
+) -> Dict[str, Any]:
+    """Build the clinician-facing summary and record the patient's review.
+
+    The response carries `fingerprint`. Nothing is transmitted to any clinician at
+    this point -- the patient must read it first, then approve it explicitly.
+    """
+    try:
+        summary = ho.build_summary(
+            main_concern=body.main_concern,
+            patient_statements=body.patient_statements,
+            allergies=body.allergies,
+            medications=body.medications,
+            relevant_context=body.relevant_context,
+            safety_findings=body.safety_findings,
+            possible_causes=body.possible_causes,
+            clinician_questions=body.clinician_questions,
+            onset=body.onset,
+            severity=body.severity,
+        )
+    except ho.HandoffError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    approved = ho.approve(summary)
+    explanation = ho.patient_explanation(summary, language=body.language)
+
+    record_event(
+        user_id=user_id,
+        event_type=HealthEventType.DOCUMENT,
+        title="Visit summary prepared",
+        description=summary.main_concern,
+        status=EventStatus.COMPLETED,
+        source="dedan",
+        metadata={
+            "handoff_id": approved["handoff_id"],
+            "is_shared": False,
+            "fingerprint": approved["fingerprint"],
+            # The full payload is stored so `share` can re-verify the
+            # fingerprint against *our* copy. Verifying against a
+            # client-supplied summary would make the consent check theatre: a
+            # client could send any content plus a matching hash.
+            "summary": approved["summary"],
+        },
+    )
+    return {**approved, "patient_explanation": explanation}
+
+
+class HandoffShareRequest(BaseModel):
+    handoff_id: str
+    fingerprint: str = Field(default="", max_length=128)
+
+
+@router.post("/handoff/share")
+def share_handoff(
+    body: HandoffShareRequest,
+    request: Request,
+    user_id: str = Depends(current_user_id),
+) -> Dict[str, Any]:
+    """Approve sharing -- gated on the fingerprint the patient actually read."""
+    if not body.fingerprint:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Sharing requires explicit patient approval.",
+        )
+
+    from dedan_platform import timeline as tl
+
+    events = tl.list_events(user_id=user_id, limit=100, event_type=HealthEventType.DOCUMENT)
+    stored = next(
+        (e for e in events["events"] if e["metadata"].get("handoff_id") == body.handoff_id),
+        None,
+    )
+    if stored is None:
+        # 404, not 403: do not confirm that someone else's handoff exists.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.")
+
+    try:
+        shared = ho.share(
+            {
+                "handoff_id": body.handoff_id,
+                "fingerprint": stored["metadata"].get("fingerprint", ""),
+                "summary": stored["metadata"].get("summary", {}),
+            },
+            body.fingerprint,
+        )
+    except ho.HandoffError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    record_event(
+        user_id=user_id,
+        event_type=HealthEventType.DOCUMENT,
+        title="Visit summary shared with care team",
+        description=f"Handoff {body.handoff_id} approved and shared.",
+        status=EventStatus.COMPLETED,
+        source="dedan",
+        correlation_id=request.headers.get("X-Correlation-ID"),
+        metadata={"handoff_id": body.handoff_id, "is_shared": True},
+    )
+    return {
+        "handoff_id": shared["handoff_id"],
+        "is_shared": True,
+        "shared_at": shared["shared_at"],
+        "disclaimer": ho.AI_SUMMARY_DISCLAIMER,
+    }

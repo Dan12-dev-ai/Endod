@@ -4,11 +4,38 @@ Excludes agents module which requires deprecated langchain 0.x.
 """
 
 import os
-os.environ.setdefault('GEMINI_API_KEY', 'test-key')
-os.environ.setdefault('OPENAI_API_KEY', 'test-key')
-os.environ.setdefault('DEFAULT_AI_PROVIDER', 'gemini')
+
+# Provider placeholders, applied ONLY outside production and ONLY when a key is
+# genuinely absent.
+#
+# These previously ran unconditionally at import, which meant a deployment with
+# no credentials silently looked configured: the provider factory saw a
+# non-empty key and had to fall back to matching the literal string "test-key" to
+# stay in offline mode. That is fragile and hides misconfiguration. Setting them
+# here keeps the deterministic offline provider for local runs and the test
+# suite, while production is required to supply real credentials.
+# A placeholder is installed ONLY when no real credential exists anywhere --
+# neither in the environment nor in `.env`. This matters for more than tidiness:
+# setting `GEMINI_API_KEY=test-key` unconditionally masked a REAL key in `.env`,
+# because `setdefault` refuses to overwrite but also wins over `.env` loading.
+# The realtime gateway then sent "test-key" upstream, was rejected, and reported
+# "live voice unavailable" even though the deployment was correctly configured.
+if os.getenv("ENVIRONMENT", "development").strip().lower() != "production":
+    for _provider_var in ("GEMINI_API_KEY", "OPENAI_API_KEY"):
+        if os.getenv(_provider_var):
+            continue
+        try:
+            from app.core.config import get_settings
+
+            _real = (getattr(get_settings(), _provider_var, None) or "").strip()
+        except Exception:
+            _real = ""
+        # Only when genuinely absent does the placeholder get installed.
+        os.environ.setdefault(_provider_var, _real or "test-key")
+os.environ.setdefault("DEFAULT_AI_PROVIDER", "gemini")
 
 import logging
+import secrets
 import time
 import base64
 import uuid
@@ -19,8 +46,9 @@ from datetime import datetime
 from fastapi import FastAPI, Request, HTTPException, status, Depends, BackgroundTasks, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -38,6 +66,12 @@ from models.schemas import (
     HealthCheckResponse, ErrorResponse, UrgencyLevel,
 )
 from app.core.config import get_settings, Settings
+from app.core.security import (
+    BodySizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+    require_secure_configuration,
+)
+from providers.gemini_models import GEMINI_MODELS
 from providers import (
     ProviderFactory,
     ImageInput,
@@ -56,8 +90,30 @@ logger = logging.getLogger(__name__)
 
 # Rate limiting storage
 rate_limit_storage: dict = {}
+# Cap on tracked clients so a flood of new source addresses cannot grow the
+# store without limit (the previous implementation never pruned at all).
+MAX_TRACKED_RATE_LIMIT_CLIENTS = 10_000
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Per-IP rate limiter.
+
+    Two defects in the original implementation are fixed:
+
+    1. **Spoofable identity.** It trusted `X-Forwarded-For` unconditionally, so
+       any client could send a different header value per request and bypass the
+       limit entirely. That header is now honoured only when the deployment
+       declares it sits behind a trusted proxy (`TRUST_PROXY_HEADERS=true`);
+       otherwise the direct peer address is used, which is the only identity an
+       untrusted client cannot forge.
+    2. **Unbounded memory.** `rate_limit_storage` grew a list per IP forever and
+       was never pruned for inactive clients, so rotating source IPs exhausted
+       memory. Entries are now evicted once their window has passed, and the
+       number of tracked clients is capped.
+
+    The canonical implementation now lives in `app.core.security`; this class is
+    retained as the app-local name so `create_app` reads unchanged.
+    """
+
     def __init__(self, app, requests_per_minute: int = 30, window_seconds: int = 60):
         super().__init__(app)
         self.requests_per_minute = requests_per_minute
@@ -67,20 +123,28 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path in ["/api/health", "/health", "/docs", "/redoc", "/openapi.json"]:
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "unknown"
-        forwarded_for = request.headers.get("X-Forwarded-For")
-        if forwarded_for:
-            client_ip = forwarded_for.split(",")[0].strip()
+        from app.core.security import RateLimitMiddleware as CanonicalRateLimit
+
+        # `self.app` is the *next* middleware in the stack, not the FastAPI app,
+        # so the identity helper is cached on this instance rather than on
+        # `app.state` (which does not exist on a middleware object).
+        limiter = getattr(self, "_limiter", None)
+        if limiter is None:
+            limiter = CanonicalRateLimit(
+                self.app,
+                requests_per_window=self.requests_per_minute,
+                window_seconds=self.window_seconds,
+            )
+            self._limiter = limiter
+
+        # Identical request -> identical bucket, using the corrected identity rule.
+        client_ip = limiter.client_identity(request)
 
         now = time.time()
         window_start = now - self.window_seconds
 
-        if client_ip in rate_limit_storage:
-            rate_limit_storage[client_ip] = [
-                ts for ts in rate_limit_storage[client_ip] if ts > window_start
-            ]
-        else:
-            rate_limit_storage[client_ip] = []
+        hits = rate_limit_storage.setdefault(client_ip, [])
+        rate_limit_storage[client_ip] = [ts for ts in hits if ts > window_start]
 
         if len(rate_limit_storage[client_ip]) >= self.requests_per_minute:
             return JSONResponse(
@@ -97,6 +161,19 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 },
                 headers={"Retry-After": str(self.window_seconds)},
             )
+
+        # Bound the number of tracked clients so a flood of new source addresses
+        # cannot grow the store without limit.
+        if len(rate_limit_storage) > MAX_TRACKED_RATE_LIMIT_CLIENTS:
+            for stale_ip, timestamps in list(rate_limit_storage.items()):
+                if not timestamps or timestamps[-1] <= window_start:
+                    rate_limit_storage.pop(stale_ip, None)
+            if len(rate_limit_storage) > MAX_TRACKED_RATE_LIMIT_CLIENTS:
+                oldest = sorted(
+                    rate_limit_storage.items(), key=lambda kv: kv[1][-1] if kv[1] else 0
+                )
+                for stale_ip, _ in oldest[: max(1, MAX_TRACKED_RATE_LIMIT_CLIENTS // 10)]:
+                    rate_limit_storage.pop(stale_ip, None)
 
         rate_limit_storage[client_ip].append(now)
         return await call_next(request)
@@ -117,7 +194,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI):
     settings = get_settings()
     logger.info(f"Starting DEDAN Health Clinical API v{settings.APP_VERSION} in {settings.ENVIRONMENT} mode")
-    
+
     # Initialize AI providers
     try:
         factory = ProviderFactory()
@@ -126,14 +203,58 @@ async def lifespan(app: FastAPI):
         logger.info("AI providers initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize AI providers: {e}")
-    
+
     # Start cleanup task
     import asyncio
-    asyncio.create_task(periodic_cleanup())
-    
-    yield
-    
-    logger.info(f"Shutting down DEDAN Health Clinical API")
+    cleanup_task = asyncio.create_task(periodic_cleanup())
+
+    # Notification worker.
+    #
+    # Gated by NOTIFICATION_WORKER_ENABLED (default off). Without a loop the
+    # `notifications` table is written but never drained -- which is exactly
+    # what happened here: the queue, the retry policy and the stale-job
+    # recovery were all implemented, and the deployed database held 52 PENDING
+    # reminders and 0 SENT because nothing ever called the worker.
+    #
+    # Run it on exactly one process when the deployment has multiple API
+    # replicas. Concurrent workers are safe for correctness (claiming is an
+    # atomic conditional UPDATE, so two workers cannot take the same job) but
+    # they multiply delivery work.
+    worker_stop = asyncio.Event()
+    worker_task: Optional[asyncio.Task] = None
+    # Imported here rather than at module scope: the platform modules are
+    # imported inside create_app()'s guarded block, and a failure there must not
+    # stop the app from starting with its worker still able to deliver.
+    try:
+        from dedan_platform import worker
+
+        if worker.WORKER_ENABLED:
+            worker_task = asyncio.create_task(worker.worker_loop(worker_stop))
+            app.state.notification_worker_stop = worker_stop
+        else:
+            logger.warning(
+                "notification_worker_disabled_reminders_will_not_be_delivered",
+            )
+    except Exception:
+        logger.exception("notification_worker_failed_to_start")
+
+    try:
+        yield
+    finally:
+        logger.info("Shutting down DEDAN Health Clinical API")
+        # Signal and await, rather than cancelling: an in-flight delivery is
+        # given the chance to finish and record its outcome. The join is bounded
+        # so a wedged SMTP call cannot block shutdown indefinitely.
+        for task, stop in ((worker_task, worker_stop), (cleanup_task, None)):
+            if task is None:
+                continue
+            if stop is not None:
+                stop.set()
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):  # noqa: B014
+                pass
 
 
 async def periodic_cleanup():
@@ -150,7 +271,7 @@ async def periodic_cleanup():
 
 def create_app(settings = None) -> FastAPI:
     settings = settings or get_settings()
-    
+
     app = FastAPI(
         title="DEDAN Health Clinical API",
         version=settings.APP_VERSION,
@@ -162,13 +283,30 @@ def create_app(settings = None) -> FastAPI:
     )
 
     # CORS
+    #
+    # `settings.CORS_ORIGINS` defaults to explicit localhost origins, but a
+    # misconfigured deployment could still set it to "*". `build_cors_middleware`
+    # refuses that in production and never pairs a wildcard with credentials.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
+        allow_origins=list(settings.CORS_ORIGINS or []),
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["*"],
-        expose_headers=["X-Process-Time"],
+        allow_headers=["Authorization", "X-API-Key", "Content-Type"],
+        expose_headers=["X-Process-Time", "Retry-After"],
+        max_age=600,
+    )
+
+    # Fail closed: refuse to serve a clinical API with no credential configured.
+    require_secure_configuration()
+
+    # Hardening headers + request body cap. `SessionMiddleware` below signs
+    # cookies, so a wildcard-with-credentials CORS policy would be the worst
+    # possible pairing here.
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=max(16 * 1024 * 1024, int(settings.MAX_IMAGE_SIZE_MB) * 1024 * 1024),
     )
 
     # Trusted hosts
@@ -188,12 +326,165 @@ def create_app(settings = None) -> FastAPI:
     # Request logging
     app.add_middleware(RequestLoggingMiddleware)
 
-    # Session middleware
+    # Session middleware.
+    #
+    # The secret previously fell back to a fixed, repository-published development
+    # placeholder, so anyone could forge a signed session cookie -- and worse, a
+    # deployment that simply forgot to set ADMIN_API_KEY would silently run with
+    # that known value. The production path now refuses to start without a real
+    # secret.
+    _session_secret = settings.ADMIN_API_KEY or os.getenv("SESSION_SECRET") or ""
+    if settings.ENVIRONMENT == "production" and not _session_secret:
+        raise RuntimeError(
+            "ADMIN_API_KEY (or SESSION_SECRET) must be set in production: the "
+            "session cookie cannot be signed with a default secret."
+        )
+    if not _session_secret:
+        # Non-production only, and derived per-process so it is never a constant.
+        _session_secret = secrets.token_urlsafe(32)
+        logger.warning("SESSION_EPHEMERAL_SECRET_IN_USE")
+
     app.add_middleware(
         SessionMiddleware,
-        secret_key=settings.ADMIN_API_KEY or "dev-secret-change-in-production",
+        secret_key=_session_secret,
         https_only=settings.ENVIRONMENT == "production",
+        same_site="lax",
     )
+
+    # --- Realtime + live voice ------------------------------------------------
+    # These were never mounted here, so the documented entrypoint
+    # (`uvicorn main_clinical:app`, what `make run-backend` runs and what the
+    # web portal's VITE_API_URL points at) served 404 for every live-voice route
+    # and never exposed the WebSocket. The voice feature was therefore
+    # unreachable in the default deployment even though `main_v2` mounted it.
+    #
+    # Mounted inside `create_app` so they attach to the concrete app instance.
+    try:
+        # Native-duplex Live Discussion is the primary voice path.
+        # `live_voice` (the older STT->LLM->TTS engine) stays mounted on the same
+        # path as a fallback for deployments without native-duplex support; the
+        # router is registered first so its handler wins the route.
+        from realtime.discussion import router as discussion_router
+        from live_voice import router as live_voice_router
+        from realtime_api import conversations_router, router as realtime_api_router
+
+        app.include_router(discussion_router)
+        app.include_router(live_voice_router)
+        app.include_router(realtime_api_router)
+        app.include_router(conversations_router)
+
+        # Core platform domains (Stages 1-3): identity/profile, health timeline,
+        # appointments and the notification queue. Mounted on the documented
+        # entrypoint so `/users/me/*` is reachable from the running app.
+        from dedan_platform.api_auth import router as platform_auth_router
+        from dedan_platform.api_care import router as platform_care_router
+        from dedan_platform.api_health import router as platform_health_router
+        from dedan_platform.api_profile import router as platform_profile_router
+        from dedan_platform.db import create_all
+
+        # Signup/login. Mounted with the other platform routers: every other
+        # route in the platform requires a token, and this is where a caller
+        # obtains one, so it must exist on the running app for the portal to
+        # have any authenticated surface to talk to.
+        app.include_router(platform_auth_router)
+        app.include_router(platform_profile_router)
+        app.include_router(platform_health_router)
+        # Care navigation + doctor handoff: the consultation's continuation.
+        # Same `/users/me` ownership model, so no route here can reach another
+        # patient's facilities-booking or handoff.
+        app.include_router(platform_care_router)
+
+        # What the patient was sent, and why nothing was sent. Same `/users/me`
+        # ownership model as the rest of the platform.
+        from dedan_platform.api_notifications import router as platform_notifications_router
+
+        app.include_router(platform_notifications_router)
+
+        # Additive and idempotent; migrations remain required before schema
+        # changes reach production.
+        create_all()
+        logger.info("platform_routers_mounted")
+
+        @app.get("/dedan/v2/live-voice/capabilities")
+        async def live_voice_capabilities():
+            """Advertise live-voice support so the browser can feature-detect.
+
+            The portal calls this before offering the voice surface; a 404 here
+            is what makes the UI report live voice as unavailable.
+
+            This endpoint is the browser's only way to learn what the realtime
+            stack can really do, so every flag is measured rather than asserted.
+
+            It used to hardcode `native_duplex: False` and derive `available`
+            from the *legacy* STT->LLM->TTS factory. That was wrong twice over:
+            it misreported a working native-duplex provider, and it would have
+            advertised the voice surface as live while the provider could not
+            connect at all. A client that trusts this must not be able to be
+            lied to.
+            """
+            from realtime.discussion import realtime_provider, realtime_enabled
+            from realtime.provider_base import available_providers, build_provider
+
+            # Languages are a *platform* fact (realtime.voices), not a provider
+            # capability. The browser needs this list to build the voice picker
+            # even when no credential is present, so it must not collapse to []
+            # just because a provider failed to build -- otherwise a temporary
+            # provider outage silently disables language selection.
+            from realtime.voices import SUPPORTED_LANGUAGES
+
+            # `available` must mean "a provider can actually be built and can
+            # stream audio", not merely "a key is present in the environment".
+            name = realtime_provider()
+            if not realtime_enabled():
+                return {
+                    "available": False,
+                    "endpoint": "/ws/live-voice",
+                    "transport": "websocket",
+                    "native_duplex": False,
+                    "streaming": False,
+                    "barge_in": False,
+                    "text_fallback": True,
+                    "languages": list(SUPPORTED_LANGUAGES),
+                    "input_sample_rate": 16000,
+                    "output_sample_rate": 24000,
+                    "provider": name,
+                    "providers_registered": available_providers(),
+                    "detail": "Realtime is disabled via REALTIME_ENABLED.",
+                }
+
+            caps = None
+            detail = "No realtime provider is registered."
+            try:
+                caps = build_provider(name).capabilities()
+                detail = caps.notes
+            except Exception as exc:
+                # Never leak a stack trace to the browser: an unavailable
+                # provider is a configuration problem, not a client error.
+                detail = f"provider_unavailable: {type(exc).__name__}"
+
+            streaming = bool(caps and caps.streaming_audio)
+            return {
+                "available": streaming,
+                "endpoint": "/ws/live-voice",
+                "transport": "websocket",
+                "native_duplex": bool(caps and caps.native_duplex),
+                "streaming": streaming,
+                "barge_in": bool(caps and caps.supports_interrupt),
+                "text_fallback": True,
+                "languages": list(SUPPORTED_LANGUAGES),
+                "input_sample_rate": 16000,
+                "output_sample_rate": 24000,
+                # Surfaced so a misconfiguration is diagnosable from the browser
+                # instead of looking like an unexplained "unavailable".
+                "provider": name,
+                "providers_registered": available_providers(),
+                "detail": detail,
+            }
+
+        logger.info("realtime_routers_mounted")
+    except Exception as exc:  # pragma: no cover - defensive
+        # Never let an optional subsystem stop the clinical API from serving.
+        logger.error("realtime_mount_failed: %s", type(exc).__name__)
 
     # Exception handlers
     @app.exception_handler(HTTPException)
@@ -245,7 +536,7 @@ def create_app(settings = None) -> FastAPI:
         return app.state.multimodal_orchestrator
 
     # ============ ENDPOINTS ============
-    
+
     @app.post("/api/images/upload", response_model=ImageUploadResponse)
     async def upload_image(file: UploadFile = File(...), session_id: Optional[str] = Form(None)):
         try:
@@ -300,7 +591,7 @@ def create_app(settings = None) -> FastAPI:
     async def analyze(request: AnalyzeRequest, background_tasks: BackgroundTasks):
         request_id = str(uuid.uuid4())
         start_time = time.time()
-        
+
         try:
             if not request.consent:
                 raise HTTPException(status_code=400, detail="Patient consent is required for AI analysis")
@@ -456,22 +747,114 @@ def create_app(settings = None) -> FastAPI:
             status="healthy", timestamp=datetime.utcnow(),
             version=settings.APP_VERSION,
             components={"api": "operational", "image_service": "operational", "safety_validator": "operational"},
-            ai_providers={},
+            # Report the real routing rather than an empty dict. The frontend
+            # surfaces this, and a hardcoded `{}` made a misconfigured
+            # deployment (silently offline) look identical to a healthy one.
+            ai_providers=_provider_summary(),
         )
 
     @app.get("/api/providers")
     async def list_providers():
-        return {"providers": [], "primary": "gemini", "fallback_order": []}
+        """Report the configured providers, their models and reachability.
 
-    @app.get("/")
-    async def root():
-        return {"service": "DEDAN Health Clinical API", "version": "1.0.0", "status": "operational"}
+        Replaces a stub that always returned `{"providers": []}`, which hid
+        both the active model and whether the configured credential works.
+        """
+        factory: ProviderFactory | None = getattr(app.state, "provider_factory", None)
+        slots = []
+        if factory is not None:
+            for slot in ("text", "vision", "multimodal"):
+                cfg = getattr(factory.config, f"{slot}_provider", None)
+                if cfg is None:
+                    continue
+                slots.append({
+                    "slot": slot,
+                    "provider": cfg.provider,
+                    "model": cfg.model,
+                    # Credential presence only — never echo the key itself.
+                    "credential_configured": bool(cfg.api_key),
+                })
+
+        provider_health = {}
+        if factory is not None:
+            try:
+                provider_health = await factory.health_check_all()
+            except Exception as exc:
+                logger.warning(f"Provider health check failed: {exc}")
+
+        return {
+            "providers": slots,
+            "primary": slots[0]["provider"] if slots else None,
+            "fallback_order": list(factory.config.fallback_providers) if factory else [],
+            "offline_mode": factory._should_use_offline() if factory else True,
+            "health": provider_health,
+            "registry": sorted(GEMINI_MODELS),
+        }
 
     @app.get("/health")
     async def legacy_health():
         return {"status": "healthy", "service": "DEDAN Health Clinical API"}
 
+    # --- Static portal --------------------------------------------------------
+    # Serve the web portal from the same origin so the browser can load it
+    # without a separate dev server. The portal is plain HTML with no build
+    # step, so StaticFiles is sufficient. API routes above take precedence;
+    # everything else falls through to the static mount.
+    portal_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web-portal")
+    if os.path.isdir(portal_dir):
+        # `html=True` serves `index.html` at `/`, so the product is what a user
+        # sees when they open the host. The API's own `/` route used to be
+        # registered above this mount and therefore won, showing a JSON status
+        # object instead of the portal; the service identity lives on
+        # `/health` and `/api/health`, so nothing needed that route.
+        app.mount("/", PortalStaticFiles(directory=portal_dir, html=True), name="portal")
+
     return app
+
+
+class PortalStaticFiles(StaticFiles):
+    """Static portal mount that answers a missing page with the portal's 404.
+
+    Starlette already does this: with `html=True` it looks for `404.html` in the
+    served directory and returns it for a missing file. That is the desired
+    browser behaviour and it is left alone.
+
+    The problem is the same feature applied to API paths. `/api/nope` returns
+    an HTML page, which an API client then tries to parse as JSON -- a clear 404
+    turns into an opaque parse error. This override restores JSON for anything
+    that is not a page request, and otherwise steps aside.
+    """
+
+    #: Prefixes owned by the API rather than the portal.
+    API_PREFIXES = ("api/", "auth/", "users/", "dedan/", "realtime/", "conversations")
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code != 404:
+            return response
+
+        normalised = (scope.get("path") or path or "").lstrip("/")
+        accept = ""
+        for key, value in scope.get("headers", []):
+            if key == b"accept":
+                accept = value.decode("latin-1").lower()
+                break
+
+        is_page_request = "text/html" in accept or not accept
+        if is_page_request and not normalised.startswith(self.API_PREFIXES):
+            # Starlette already returned the portal's 404 page.
+            return response
+
+        # API client, or an explicit non-HTML request: answer with JSON so the
+        # caller gets a status code it can branch on instead of a parse error.
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={
+                "error": "Not found",
+                "error_code": "HTTP_404",
+                "details": None,
+            },
+        )
 
 
 def _extract_body_systems(conditions: list, symptoms: str) -> list:
@@ -506,6 +889,41 @@ def _extract_medication_classes(response) -> list:
     for med in response.medication_information:
         classes.append(med.medication_class)
     return classes
+
+
+def _provider_summary() -> dict:
+    """Provider health map for `/api/health`.
+
+    `HealthCheckResponse.ai_providers` is typed `Dict[str, bool]`, so each key is
+    a *readiness* flag rather than a descriptive string:
+
+      * `live_mode`            — routing is not pinned to the offline provider
+      * `text_ready`           — the text slot has a provider and a credential
+      * `vision_ready`         — ditto for the vision slot
+      * `multimodal_ready`     — ditto for the multimodal slot
+
+    The previous hardcoded `{}` reported nothing, so a silently-offline
+    deployment was indistinguishable from a healthy one.
+    """
+    try:
+        factory = ProviderFactory()
+        cfg = factory.config
+        live = not factory._should_use_offline()
+
+        def ready(slot_cfg) -> bool:
+            if not live or slot_cfg.provider == "offline":
+                return True  # deterministic provider needs no credential
+            return bool(slot_cfg.api_key)
+
+        return {
+            "live_mode": live,
+            "text_ready": ready(cfg.text_provider),
+            "vision_ready": ready(cfg.vision_provider),
+            "multimodal_ready": ready(cfg.multimodal_provider),
+        }
+    except Exception as exc:
+        logger.warning(f"Could not build provider summary: {exc}")
+        return {}
 
 
 async def log_analysis_data(request_id: str, session_id: str, request, response):

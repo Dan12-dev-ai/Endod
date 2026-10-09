@@ -21,7 +21,23 @@ export BACKEND_PORT FRONTEND_PORT
 
 .PHONY: help setup setup-backend setup-frontend run run-backend run-frontend \
         stop test test-backend test-frontend test-system lint format fmt-check \
-        health clean build
+        health clean build start-api journey-test check-portal screenshots
+
+## ---------------------------------------------------------------------------
+## Portal review + verification
+## ---------------------------------------------------------------------------
+
+start-api: ## Start the API detached (serves both the API and the portal)
+	@./scripts/start-api.sh
+
+journey-test: ## Drive the whole patient journey in a real browser (50 checks)
+	@$(VENV)/bin/python scripts/journey-test.py
+
+check-portal: ## Lint the static portal (markup, links, unsafe patterns, JS syntax)
+	@$(VENV)/bin/python scripts/check-portal.py
+
+screenshots: ## Capture every portal page to /tmp/opencode/shots
+	@$(VENV)/bin/python scripts/screenshot-portal.py
 
 ## ---------------------------------------------------------------------------
 ## Help
@@ -53,10 +69,14 @@ setup-backend: ## Create the venv and install backend dependencies
 	fi
 	@echo ">> Backend ready"
 
-setup-frontend: ## Install frontend dependencies
-	@echo ">> Installing frontend dependencies"
-	@cd $(FRONT_DIR) && npm install --no-audit --no-fund
-	@echo ">> Frontend ready"
+setup-frontend: ## Install frontend dependencies (skipped: portal is static HTML)
+	@if [ -f $(FRONT_DIR)/package.json ]; then \
+		echo ">> Installing frontend dependencies"; \
+		cd $(FRONT_DIR) && npm install --no-audit --no-fund; \
+		echo ">> Frontend ready"; \
+	else \
+		echo ">> No $(FRONT_DIR)/package.json — portal is static HTML, nothing to install"; \
+	fi
 
 ## ---------------------------------------------------------------------------
 ## Run
@@ -82,22 +102,57 @@ test: test-backend test-frontend ## Run all automated tests
 test-backend: ## Run the Python test suite
 	@cd $(BACKEND_DIR) && ../$(VENV)/bin/python -m pytest tests/ -v --no-header -p no:warnings
 
-test-frontend: ## Run the frontend test suite
-	@cd $(FRONT_DIR) && npm test
+test-frontend: ## Validate the static portal (HTML, links, inline JS)
+	@python3 scripts/check-portal.py
 
 test-system: ## Run the end-to-end system smoke test
 	@./scripts/test-system.sh
 
 ## ---------------------------------------------------------------------------
+## Notification worker
+##
+## Reminders are queued in the database by the API and delivered by this worker.
+## If nothing runs it, reminders are stored and never sent.
+##
+## Single-replica deployments can set NOTIFICATION_WORKER_ENABLED=true and let
+## the API process run the loop. Multi-replica deployments should run
+## `make worker` as its own single supervised process instead.
+## ---------------------------------------------------------------------------
+worker: ## Run the notification worker in the foreground
+	@cd $(BACKEND_DIR) && ../$(VENV)/bin/python -m dedan_platform.worker_main
+
+worker-once: ## Drain one batch of due notifications and exit
+	@cd $(BACKEND_DIR) && ../$(VENV)/bin/python -m dedan_platform.worker_main --once
+
+worker-reconcile: ## Repair missing reminders and stale queued ones, then exit
+	@cd $(BACKEND_DIR) && ../$(VENV)/bin/python -m dedan_platform.worker_main --reconcile
+
+migrate: ## Apply pending additive schema migrations
+	@cd $(BACKEND_DIR) && ../$(VENV)/bin/python -m dedan_platform.migrations
+
+## ---------------------------------------------------------------------------
 ## Quality
 ## ---------------------------------------------------------------------------
-lint: ## Type-check the frontend and byte-compile the backend
-	@echo ">> TypeScript"
-	@cd $(FRONT_DIR) && npx tsc --noEmit
+lint: ## Byte-compile the backend and validate the static portal
 	@echo ">> Python syntax"
 	@cd $(BACKEND_DIR) && ../$(VENV)/bin/python -m compileall -q \
-		main_clinical.py app providers models tests > /dev/null
+		main_clinical.py app providers models dedan_platform realtime tests > /dev/null
+	@echo ">> Portal markup"
+	@python3 scripts/check-portal.py > /dev/null
+	@echo ">> Navigation consistency"
+	@python3 scripts/check-navigation.py > /dev/null
 	@echo "Lint OK"
+
+check-shell: ## Drive the portal in a browser and verify one shared shell
+	@python3 scripts/verify-shell.py
+
+check-auth: ## Drive sign-in, session persistence and post-login routing in a browser
+	@python3 scripts/check-auth-flow.py
+
+check-ui: check-navigation check-shell check-auth ## Run every browser-level portal check
+
+styles: ## Rebuild the portal CSS from tailwind.config.js
+	@cd web-portal/build && npm run build
 
 format: ## Normalise whitespace and final newlines in tracked source
 	@find . -type f \
@@ -118,8 +173,12 @@ fmt-check: ## Verify whitespace normalisation (no files modified)
 health: ## Check that the running system is healthy
 	@./scripts/health-check.sh
 
-build: ## Build the frontend for production
-	@cd $(FRONT_DIR) && npm run build
+build: ## Build the frontend for production (skipped: portal is static HTML)
+	@if [ -f $(FRONT_DIR)/package.json ]; then \
+		cd $(FRONT_DIR) && npm run build; \
+	else \
+		echo ">> No $(FRONT_DIR)/package.json — portal is static HTML, nothing to build"; \
+	fi
 
 clean: ## Remove caches, build output and runtime state
 	@echo ">> Removing caches and build output"

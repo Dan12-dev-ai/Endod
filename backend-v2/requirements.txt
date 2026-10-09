@@ -38,8 +38,24 @@ numpy>=1.26                     # providers/image_validation.py: brightness,
 # --- AI provider adapters ---------------------------------------------------
 # Imported by providers/gemini_provider.py and providers/openai_provider.py.
 # Both are only *called* in live mode; importing them in offline mode is safe.
-google-generativeai>=0.8
+# `google-generativeai` (the legacy SDK) has no Live API at all: its `Client`
+# exposes no `.live` attribute, so a realtime session cannot be opened with it.
+# Native duplex requires `google-genai`, whose `live.AsyncLive` provides the
+# bidirectional session.
+google-generativeai>=0.8      # legacy text/image path
+google-genai>=1.0             # CURRENT SDK — required for realtime live duplex
 openai>=1.30
+
+# --- Persistence ------------------------------------------------------------
+# SQLAlchemy 2.0 declarative: the platform models, the database session scope,
+# and the notification queue all import it at module load, and
+# `main_clinical.create_app()` calls `dedan_platform.db.create_all()` during
+# startup -- so this is required by the deployed app, not an optional extra.
+#
+# This was previously listed only in the "not required" comment block below,
+# which was stale: it left a clean `pip install -r requirements.txt` unable to
+# import `main_clinical`.
+sqlalchemy>=2.0
 
 # --- Test suite -------------------------------------------------------------
 httpx>=0.27                     # fastapi.testclient transport
@@ -51,7 +67,7 @@ pytest>=8.0
 # This file covers the Clinical API only (`main_clinical:app`). The prototype
 # modules additionally import langchain, langchain_core, langchain_openai,
 # crewai, chromadb, sentence-transformers, pandas, scikit-learn, joblib,
-# structlog, sqlalchemy, aioredis, asyncpg, boto3, cryptography, stripe,
+# structlog, aioredis, asyncpg, boto3, cryptography, stripe,
 # jinja2, aiofiles, websockets, speech-recognition, and opencv-python.
 #
 # None of those are reachable from `main_clinical`, and none are needed to run
@@ -59,4 +75,8 @@ pytest>=8.0
 # prototype module, install its own dependencies separately rather than adding
 # them here — doing so previously made the file un-installable on modern
 # Python.
+#
+# `sqlalchemy` was previously named in this list. It has moved to the required
+# section above: `main_clinical` imports the platform models and runs
+# `create_all()` at startup, so omitting it made the app uninstallable.
 # ---------------------------------------------------------------------------
