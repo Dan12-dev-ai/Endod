@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><title>Hospitals - DEDAN Health</title><link rel="icon" href="logo.png"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@600;700;800&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}.no-scrollbar::-webkit-scrollbar{display:none;}.no-scrollbar{scrollbar-width:none;-ms-overflow-style:none;}</style><link href="assets/icons.css" rel="stylesheet"/><link href="assets/tailwind.css" rel="stylesheet"/></head><body class="bg-surface font-body-md text-on-surface antialiased">
+<!-- Left Sidebar Navigation -->
+<aside id="dedan-sidebar" aria-label="Main navigation"
+       class="dedan-sidebar fixed left-0 top-0 z-50 h-screen w-sidebar -translate-x-full
+              lg:translate-x-0 bg-surface-container-low flex flex-col
+              justify-between py-space-md shadow-lg transition-transform
+              duration-300">
+      <div id="dedan-sidebar-mount" class="flex flex-col min-h-0 flex-1"></div>
+    </aside>
+    <div id="dedan-nav-overlay" aria-hidden="true"
+         class="hidden fixed inset-0 z-40 bg-primary/60 lg:hidden"></div>
+<div class=" lg:pl-sidebar ">
+<header class="sticky top-0 z-30 h-header bg-surface-container-low
+               border-b border-outline-variant/30 px-space-md lg:px-space-xl
+               flex items-center gap-space-sm shadow-panel">
+        <button type="button" data-dedan="nav-toggle"
+                    aria-expanded="false" aria-controls="dedan-sidebar"
+                    aria-label="Open navigation"
+                    class="lg:hidden -ml-1 p-2 rounded-lg text-on-surface-variant
+                           hover:bg-surface-container focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-secondary">
+          <span class="material-symbols-outlined text-[22px]" aria-hidden="true">menu</span>
+        </button>
+<div class="flex items-center gap-space-md flex-1 max-w-xl">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full bg-surface-container-lowest pl-10 pr-4 py-2 rounded-lg font-body-md text-body-md text-on-surface placeholder:text-outline focus:outline-none focus:ring-1 focus:ring-secondary transition-all shadow-[0_1px_3px_rgba(10,37,64,0.04)]" placeholder="Search hospitals, medical centers, emergency rooms, or specialties..." type="text"/>
+<div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+<span class="px-1.5 py-0.5 rounded bg-surface-container font-label-sm text-label-sm text-on-surface-variant font-medium">⌘K</span>
+</div>
+</div>
+<div class="hidden xl:flex items-center gap-space-xs bg-surface-container-low px-space-sm py-1.5 rounded-full text-on-surface-variant font-label-md text-label-md shrink-0">
+<span class="material-symbols-outlined text-secondary text-[16px]">near_me</span>
+<span class="font-medium text-on-surface">San Francisco, CA</span>
+<span class="text-outline">• Within 15 mi</span>
+</div>
+<div class="hidden 2xl:flex items-center gap-space-xs bg-secondary-container px-space-sm py-1.5 rounded-full text-on-secondary-container font-label-sm text-label-sm shrink-0 font-medium">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span>Location Verified</span>
+</div>
+</div>
+<div class="flex items-center gap-space-md shrink-0">
+<button aria-label="Notifications" class="w-9 h-9 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors relative" type="button">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button aria-label="System Settings" class="w-9 h-9 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors" type="button">
+<span class="material-symbols-outlined text-[20px]">tune</span>
+</button>
+<div class="flex items-center gap-space-sm pl-space-sm">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-sm shrink-0">
+<span class="material-symbols-outlined text-on-primary text-[18px]">person</span>
+</div>
+<div class="flex flex-col text-left">
+<span class="font-label-md text-label-md font-semibold text-on-surface leading-tight">Daniel Vance</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant leading-tight">DE482731</span>
+</div>
+</div>
+</div>
+</header>
+<main class="w-full pt-16 bg-surface min-h-screen">
+  <!-- Subtle Ambient Top Gradient Accent -->
+  <div class="h-1 w-full bg-gradient-to-r from-emerald-500 via-teal-600 to-[#0a2540]"></div>
+  <!-- ================= MAIN CONTENT WRAPPER ================= -->
+  <div class="w-full max-w-[1560px] mx-auto px-6 lg:px-10 py-6">
+    <!-- Page header & breadcrumb -->
+    <div class="mb-6">
+      <nav aria-label="breadcrumb" class="text-sm text-slate-500 mb-2 flex items-center gap-2">
+        <a href="find-hospitals.html" class="hover:text-slate-700 transition-colors">Find Hospitals</a>
+        <span class="text-slate-400">/</span>
+        <a href="hospitals.html" class="hover:text-slate-700 transition-colors">St. Jude Cardiovascular</a>
+        <span class="text-slate-400">/</span>
+        <a href="hospitals.html" class="hover:text-slate-700 transition-colors">Dr. Sarah Aris, MD</a>
+        <span class="text-slate-400">/</span>
+        <span class="text-slate-400" aria-current="page">Schedule Appointment</span>
+      </nav>
+      <div class="inline-flex items-center gap-2 px-3 py-1 bg-emerald-100/50 text-emerald-700 rounded-full text-xs font-medium">
+        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.813 15.556c1.138 0 1.874-.78 2.106-1.796l.626-2.44c.232-.907.975-1.556 1.797-1.756.361-.08.723-.12 1.084-.12a2.25 2.25 0 0-1 2.25 2.25 1.125 1.125 0 0-1-1.125 1.125 2.25 2.25 0 0-1-2.25 2.25h-2.25a3.375 3.375 0 0-1-3.375-3.375 3.375 3.375 0 0-1 3.375 3.375v.001a.75.75 0 1-1-1.5.001v-2.625a1.875 1.875 0 1-1 3.75 0v2.625a3.375 3.375 0 1-1-6.75 0c0-1.04.23-2.005.659-2.846.745-1.442 2.045-2.532 3.427-3.047A5.625 5.625 0 0-0 9.813 6.5c-.315 0-.627.025-.934.07A5.625 5.625 0 0-0 3.25 12.125c0 3.126 2.625 5.625 5.75 5.625h.001A5.625 5.625 0 0 0 9.813 15.556Z"></path>
+        </svg>
+        <span>AI Triage Match • High Priority</span>
+      </div>
+      <h1 class="text-3xl font-bold text-slate-800 mt-2">Appointment Booking</h1>
+      <p class="text-slate-500 mt-1 text-sm">Review provider schedule, select care modality, and reserve clinical consultation.</p>
+    </div>
+  <!-- ================= TWO-COLUMN BOOKING ENGINE ================= -->
+  <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+    <!-- ================= LEFT COLUMN — Booking Form ================= -->
+    <div class="xl:col-span-8 space-y-6">
+      <!-- Provider Clinical Dossier -->
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-8">
+        <div class="flex items-start gap-6">
+          <div class="w-28 h-28 rounded-2xl overflow-hidden bg-gradient-to-br from-slate-100 to-slate-50 flex-shrink-0 flex items-center justify-center">
+            <svg class="w-16 h-16 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.116 12.854a1.125 1.125 0 0 0 1.707.988L12 11.878l5.177 1.965a1.125 1.125 0 0 0 1.463-1.107l-.75-5.25a1.125 1.125 0 0 0-1.447-.9L12 10.752 7.82 7.757a1.125 1.125 0 0 0-.985 1.744l.82 1.143v.001l-.008.002c.25.14.5.27.793.37.12.041.244.076.372.097v6.773c.34.347.73.63 1.158.832a3.375 3.375 0 0 0-.372-1.823 3.375 3.375 0 0 1 3.372.85 1.125 1.125 0 1 0 1.5 0 3.375 3.375 0 0 1 3.372-2.85c.621.005 1.281-.493 1.513-1.277a1.125 1.125 0 0 0-.546-1.343l-2.75-.75a1.125 1.125 0 0 0-1.008.194l-.8.775a1.125 1.125 0 0 1-.3.213V6.75a1.125 1.125 0 1 0-2.247-.013 3.375 3.375 0 0 0-3.372 2.85z"></path>
+            </svg>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h2 class="text-xl font-semibold text-slate-800">Dr. Sarah Aris, MD</h2>
+            <p class="text-emerald-700 font-medium mt-0.5">Cardiologist • Invasive & Clinical</p>
+            <p class="text-slate-500 text-sm mt-2">Board-certified cardiologist specializing in interventional procedures and preventive cardiology with 14 years of clinical experience.</p>
+          </div>
+          <div class="flex-shrink-0">
+            <button class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10c0 1.1.9 2 2 2h4l4 4h4a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-1l-2-2h-4a2 2 0 0 0-2 2z"></path></svg>
+            </button>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
+          <div><span class="text-xs text-slate-400 uppercase font-medium">Medical School</span><span class="block text-slate-700 text-sm mt-1">Stanford University</span></div>
+          <div><span class="text-xs text-slate-400 uppercase font-medium">Specialty</span><span class="block text-slate-700 text-sm mt-1">Cardiology</span></div>
+          <div><span class="text-xs text-slate-400 uppercase font-medium">Experience</span><span class="block text-slate-700 text-sm mt-1">14 yrs</span></div>
+          <div><span class="text-xs text-slate-400 uppercase font-medium">Facility</span><span class="block text-slate-700 text-sm mt-1">St. Jude</span></div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-slate-100">
+          <div class="flex flex-wrap gap-2">
+            <span class="px-2.5 py-1 bg-slate-100/50 text-slate-600 rounded-full text-xs">Medicare</span>
+            <span class="px-2.5 py-1 bg-slate-100/50 text-slate-600 rounded-full text-xs">BCBS PPO</span>
+            <span class="px-2.5 py-1 bg-slate-100/50 text-slate-600 rounded-full text-xs">Aetna</span>
+            <span class="px-2.5 py-1 bg-slate-100/50 text-slate-600 rounded-full text-xs">UnitedCare</span>
+          </div>
+        </div>
+      </div>
+  <!-- Care Modality Selection -->
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-8">
+    <h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+      <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m0 0v4m0-4h8M8 7H4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8m0-12v12a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-4m0 0h-8"></path></svg>
+      <span>Care Modality</span>
+    </h3>
+    <p class="text-slate-500 text-sm mb-4">How would you like to meet with the provider?</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div class="border-2 border-slate-200 rounded-2xl p-6 text-center cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-all">
+        <div class="w-14 h-14 mx-auto mb-3 bg-emerald-100/50 rounded-xl flex items-center justify-center">
+                    <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2ZM9 9h.01M15 9h.01M9 13h.01M15 13h.01M11 5h2v2h-2zM7 7h10"></path></svg>
+        </div>
+        <span class="font-semibold text-slate-700">In-Person Visit</span>
+        <p class="text-xs text-slate-500 mt-1">Face-to-face consultation at clinic</p>
+      </div>
+      <div class="border-2 border-slate-200 rounded-2xl p-6 text-center cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition-all">
+        <div class="w-14 h-14 mx-auto mb-3 bg-emerald-100/50 rounded-xl flex items-center justify-center">
+          <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3 3-3"></path></svg>
+        </div>
+        <span class="font-semibold text-slate-700">Telehealth Consultation</span>
+        <p class="text-xs text-slate-500 mt-1">Virtual visit via secure video</p>
+      </div>
+    </div>
+  </div>
+  <!-- Clinical Reason -->
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-8">
+    <h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+      <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.813 15.556c1.138 0 1.874-.78 2.106-1.796l.626-2.44c.232-.907.975-1.556 1.797-1.756.361-.08.723-.12 1.084-.12a2.25 2.25 0 0-1 2.25 2.25 1.125 1.125 0 0-1-1.125 1.125 2.25 2.25 0 0-1-2.25 2.25h-2.25a3.375 3.375 0 0-1-3.375-3.375 3.375 3.375 0 0-1 3.375 3.375v.001a.75.75 0 1-1-1.5.001v-2.625a1.875 1.875 0 1-1 3.75 0v2.625a3.375 3.375 0 1-1-6.75 0c0-1.04.23-2.005.659-2.846.745-1.442 2.045-2.532 3.427-3.047A5.625 5.625 0 0-0 9.813 6.5c-.315 0-.627.025-.934.07A5.625 5.625 0 0 0 3.25 12.125c0 3.126 2.625 5.625 5.75 5.625h.001A5.625 5.625 0 0 0 9.813 15.556Z"></path></svg>
+      <span>Clinical Reason</span>
+    </h3>
+    <p class="text-slate-500 text-sm mb-4">Please describe the reason for your appointment.</p>
+    <div class="flex flex-wrap gap-2 mb-4">
+      <button class="px-4 py-2 bg-emerald-50/50 text-emerald-700 rounded-full text-sm font-medium hover:bg-emerald-100 transition-colors">Annual Checkup</button>
+      <button class="px-4 py-2 bg-slate-50 text-slate-600 rounded-full text-sm font-medium hover:bg-slate-100 transition-colors">Chest Pain</button>
+      <button class="px-4 py-2 bg-slate-50 text-slate-600 rounded-full text-sm font-medium hover:bg-slate-100 transition-colors">Follow-up</button>
+      <button class="px-4 py-2 bg-slate-50 text-slate-600 rounded-full text-sm font-medium hover:bg-slate-100 transition-colors">Consultation</button>
+    </div>
+    <textarea placeholder="Enter any additional details about your visit..." rows="3" class="w-full px-4 py-3 border-2 border-slate-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all text-sm text-slate-700 placeholder-slate-400 resize-none"></textarea>
+  </div>
+  <!-- Date & Time Selection -->
+  <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-8">
+    <h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+      <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7V4a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l6.414 6.414a1 1 0 0 1 .293.707V17a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5h6a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path></svg>
+      <span>Date & Time</span>
+    </h3>
+    <p class="text-slate-500 text-sm mb-4">Select your preferred appointment date and time slot.</p>
+    <div class="mb-4">
+      <div class="flex items-center justify-between mb-3">
+        <button class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        </button>
+        <h4 class="text-sm font-medium text-slate-700">October 2025</h4>
+        <button class="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+      </div>
+      <div class="grid grid-cols-7 gap-1 text-center">
+        <div class="text-xs font-medium text-slate-400 py-2">Su</div>
+        <div class="text-xs font-medium text-slate-400 py-2">Mo</div>
+        <div class="text-xs font-medium text-slate-400 py-2">Tu</div>
+        <div class="text-xs font-medium text-slate-400 py-2">We</div>
+        <div class="text-xs font-medium text-slate-400 py-2">Th</div>
+        <div class="text-xs font-medium text-slate-400 py-2">Fr</div>
+        <div class="text-xs font-medium text-slate-400 py-2">Sa</div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">28</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">29</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">30</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">1</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">2</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">3</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">4</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">5</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">6</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">7</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">8</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">9</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">10</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">11</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">12</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">13</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">14</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">15</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">16</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">17</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">18</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">19</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">20</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">21</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">22</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">23</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">24</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">25</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">26</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">27</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">28</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">29</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">30</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">31</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">1</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">2</button></div>
+        <div class="py-2"><button class="w-10 h-10 rounded-full text-sm text-slate-400 hover:bg-slate-100 transition-colors">3</button></div>
+      </div>
+    </div>
+    <div>
+      <h4 class="text-sm font-medium text-slate-700 mb-3">Available Time Slots</h4>
+      <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+        <button class="py-3 px-4 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl hover:bg-emerald-50/30 hover:border-emerald-300 hover:text-emerald-700 transition-all">9:00 AM</button>
+        <button class="py-3 px-4 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl hover:bg-emerald-50/30 hover:border-emerald-300 hover:text-emerald-700 transition-all">9:30 AM</button>
+        <button class="py-3 px-4 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl hover:bg-emerald-50/30 hover:border-emerald-300 hover:text-emerald-700 transition-all">10:00 AM</button>
+        <button class="py-3 px-4 text-sm font-medium text-emerald-700 bg-emerald-50 border-2 border-emerald-300 rounded-xl transition-all">10:30 AM</button>
+        <button class="py-3 px-4 text-sm font-medium text-emerald-700 bg-emerald-50 border-2 border-emerald-300 rounded-xl transition-all">11:00 AM</button>
+        <button class="py-3 px-4 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl hover:bg-emerald-50/30 hover:border-emerald-300 hover:text-emerald-700 transition-all">11:30 AM</button>
+        <button class="py-3 px-4 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl hover:bg-emerald-50/30 hover:border-emerald-300 hover:text-emerald-700 transition-all">1:00 PM</button>
+        <button class="py-3 px-4 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl hover:bg-emerald-50/30 hover:border-emerald-300 hover:text-emerald-700 transition-all">1:30 PM</button>
+      </div>
+    </div>
+  </div>
+<!-- End LEFT COLUMN -->
+    </div>
+    <!-- ================= RIGHT COLUMN — Summary & Preview ================= -->
+    <div class="xl:col-span-4 space-y-6">
+      <!-- Appointment Summary -->
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-8 sticky top-24">
+        <h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+          <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 0V8m6 4v4"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.75 12a9 9 0 1 1 18 0 9 9 0 0 1-18 0Z"></path></svg>
+          <span>Your Appointment</span>
+        </h3>
+        <div class="space-y-4">
+          <div class="flex justify-between"><span class="text-slate-500 text-sm">Provider</span><span class="text-slate-700 font-medium text-sm">Dr. Sarah Aris, MD</span></div>
+          <div class="flex justify-between"><span class="text-slate-500 text-sm">Specialty</span><span class="text-slate-700 font-medium text-sm">Cardiology</span></div>
+          <div class="flex justify-between"><span class="text-slate-500 text-sm">Modality</span><span class="text-slate-700 font-medium text-sm">In-Person</span></div>
+          <div class="flex justify-between"><span class="text-slate-500 text-sm">Reason</span><span class="text-slate-700 font-medium text-sm">Annual Checkup</span></div>
+          <div class="flex justify-between"><span class="text-slate-500 text-sm">Date</span><span class="text-slate-700 font-medium text-sm">Wed, Oct 15</span></div>
+          <div class="flex justify-between"><span class="text-slate-500 text-sm">Time</span><span class="text-slate-700 font-medium text-sm">10:30 AM</span></div>
+          <div class="flex justify-between"><span class="text-slate-500 text-sm">Location</span><span class="text-slate-700 font-medium text-sm">St. Jude Hospital</span></div>
+        </div>
+        <button class="w-full mt-6 py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-xl font-semibold text-sm transition-all duration-200 shadow-lg hover:shadow-xl">
+          Confirm &amp; Schedule
+        </button>
+        <button class="w-full mt-3 py-3 px-4 bg-white text-slate-700 border-2 border-slate-200 rounded-xl font-semibold text-sm hover:bg-slate-50 transition-colors">
+          Save as Draft
+        </button>
+      </div>
+      <!-- Upcoming Encounter Preview -->
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-8">
+        <h3 class="text-sm font-medium text-slate-500 uppercase mb-4 flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3"></path><circle cx="12" cy="12" r="9"></circle></svg>
+          Upcoming Encounter
+        </h3>
+        <div class="space-y-3">
+          <div class="flex items-center gap-3 text-sm"><span class="text-slate-500 w-16">Type:</span><span class="text-slate-700">Echocardiogram</span></div>
+          <div class="flex items-center gap-3 text-sm"><span class="text-slate-500 w-16">Date:</span><span class="text-slate-700">Nov 3, 2025</span></div>
+          <div class="flex items-center gap-3 text-sm"><span class="text-slate-500 w-16">Time:</span><span class="text-slate-700">8:30 AM</span></div>
+          <div class="flex items-center gap-3 text-sm"><span class="text-slate-500 w-16">With:</span><span class="text-slate-700">Dr. Sarah Aris, MD</span></div>
+          <div class="pt-3 border-t border-slate-100 mt-3">
+            <a href="#" class="text-emerald-600 font-medium text-sm hover:text-emerald-700">View Full Details →</a>
+          </div>
+        </div>
+      </div>
+      <!-- Security & Compliance Notice -->
+      <div class="bg-slate-50/50 rounded-2xl border border-slate-100 p-4">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 20h.01M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9Z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6v.01"></path></svg>
+          <p class="text-xs text-slate-500">This system is HIPAA-compliant. Appointment changes may affect existing reservations. Review our <a href="#" class="text-emerald-600 hover:text-emerald-700">privacy policy</a> and <a href="#" class="text-emerald-600 hover:text-emerald-700">terms of service</a>.</p>
+        </div>
+      </div>
+    </div>
+    <!-- End RIGHT COLUMN -->
+  </div>
+      <!-- End Two-column booking engine -->
+</div>
+<!-- End Main Content Wrapper -->
+</main>
+<!-- Footer with medical-safety disclaimer -->
+<footer class="pl-64 bg-surface-container-low border-t border-surface-container-high py-space-lg px-space-lg">
+<div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-secondary text-[20px]">health_and_safety</span>
+<span class="font-label-md text-label-md text-on-surface-variant font-semibold">DEDAN Health — Clinical Intelligence Platform</span>
+</div>
+<div class="flex items-center gap-space-md font-label-sm text-label-sm text-on-surface-variant">
+<a class="hover:text-on-surface transition-colors" href="#">Privacy Policy</a>
+<a class="hover:text-on-surface transition-colors" href="#">Terms of Service</a>
+<a class="hover:text-on-surface transition-colors" href="#">HIPAA Compliance</a>
+</div>
+</div>
+</footer>
+</div>
+<script src="assets/api.js"></script>
+<script src="assets/nav.js"></script>
+<script src="assets/shell.js"></script>
+<script src="assets/hospitals.js"></script>
+</body>
+</html>

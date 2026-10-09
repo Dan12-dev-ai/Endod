@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_dashboard" name="shell-type"/><title>Find Hospitals &amp; Clinics - DEDAN Health</title><link rel="icon" href="logo.png"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><link rel="stylesheet" href="assets/icons.css"/></head><body class="bg-surface font-body-md text-on-surface antialiased"><!-- Left Sidebar Navigation -->
+<link href="assets/tailwind.css" rel="stylesheet"/>
+<aside id="dedan-sidebar" aria-label="Main navigation"
+       class="dedan-sidebar fixed left-0 top-0 z-50 h-screen w-sidebar -translate-x-full
+              lg:translate-x-0 bg-surface-container-low flex flex-col
+              justify-between py-space-md shadow-lg transition-transform
+              duration-300">
+      <div id="dedan-sidebar-mount" class="flex flex-col min-h-0 flex-1"></div>
+    </aside>
+    <div id="dedan-nav-overlay" aria-hidden="true"
+         class="hidden fixed inset-0 z-40 bg-primary/60 lg:hidden"></div>
+<div id="dedan-content" class=" lg:pl-sidebar ">
+<header class="sticky top-0 z-30 h-header bg-surface-container-low
+               border-b border-outline-variant/30 px-space-md lg:px-space-xl
+               flex items-center gap-space-sm shadow-panel">
+        <button type="button" data-dedan="nav-toggle"
+                    aria-expanded="false" aria-controls="dedan-sidebar"
+                    aria-label="Open navigation"
+                    class="lg:hidden -ml-1 p-2 rounded-lg text-on-surface-variant
+                           hover:bg-surface-container focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-secondary">
+          <span class="material-symbols-outlined text-[22px]" aria-hidden="true">menu</span>
+        </button>
+<div class="flex items-center gap-space-md flex-1 max-w-xl">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full bg-surface-container-lowest pl-10 pr-4 py-2 rounded-lg font-body-md text-body-md text-on-surface placeholder:text-outline focus:outline-none focus:ring-1 focus:ring-secondary transition-all shadow-[0_1px_3px_rgba(10,37,64,0.04)]" placeholder="Search hospitals, specialized clinics, clinical departments..." type="text"/>
+</div>
+<div class="hidden xl:flex items-center gap-space-xs bg-surface-container-low px-space-sm py-1.5 rounded-full text-on-surface-variant font-label-md text-label-md shrink-0">
+<span class="material-symbols-outlined text-secondary text-[16px]">near_me</span>
+<span class="font-medium text-on-surface" data-dedan="country">—</span>
+</div>
+<div class="hidden 2xl:flex items-center gap-space-xs bg-secondary-container px-space-sm py-1.5 rounded-full text-on-secondary-container font-label-sm text-label-sm shrink-0 font-medium">
+<span class="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+<span>Location Verified</span>
+</div>
+</div>
+<div class="flex items-center gap-space-md shrink-0">
+
+<!-- Removed: a Notifications / Settings control with no handler and no
+
+     backing endpoint. Dead controls read as broken features. -->
+
+
+<!-- Removed: a Notifications / Settings control with no handler and no
+
+     backing endpoint. Dead controls read as broken features. -->
+
+<div class="flex items-center gap-space-sm pl-space-sm">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-sm shrink-0">
+<span class="material-symbols-outlined text-on-primary text-[18px]">person</span>
+</div>
+<div class="flex flex-col text-left">
+<span class="font-label-md text-label-md font-semibold text-on-surface leading-tight" data-dedan="display-name" data-dedan="display-name">—</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant leading-tight" data-dedan="dedan-id" data-dedan="dedan-id">—</span>
+</div>
+</div>
+</div>
+</header>
+<main class="w-full pt-16 bg-surface min-h-screen"><div class="flex flex-col gap-gutter p-margin">
+  <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-space-md">
+    <div class="flex flex-col gap-1">
+      <h1 class="font-headline-lg text-headline-lg text-primary font-bold tracking-tight">Find care near you</h1>
+      <p class="font-body-md text-body-md text-on-surface-variant">Ranked from DEDAN's verified facility directory by clinical relevance, and by distance once you share a location.</p>
+    </div>
+  </div>
+
+  <section class="rounded-xl bg-surface-container-lowest border border-outline-variant/40 p-space-lg flex flex-col gap-space-md">
+    <form class="grid grid-cols-1 lg:grid-cols-12 gap-space-md" id="care-search-form" novalidate>
+      <div class="lg:col-span-5 flex flex-col gap-1.5">
+        <label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-semibold" for="search-symptoms">Symptoms</label>
+        <input class="w-full bg-surface-container-lowest text-on-surface rounded-lg shadow-sm px-3 py-2 font-body-md text-body-md placeholder:text-outline focus:outline-none focus:ring-1 focus:ring-secondary" id="search-symptoms" placeholder="headache, fever, cough" type="text"/>
+        <p class="font-body-sm text-body-sm text-on-surface-variant">Comma separated.</p>
+      </div>
+      <div class="lg:col-span-3 flex flex-col gap-1.5">
+        <label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-semibold" for="search-urgency">Urgency</label>
+        <select class="w-full bg-surface-container-lowest text-on-surface rounded-lg shadow-sm px-3 py-2 font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-secondary" id="search-urgency">
+          <option value="routine">Routine</option>
+          <option value="soon">Within 24 hours</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+      <div class="lg:col-span-4 flex flex-col gap-1.5">
+        <label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-semibold" for="search-query">Or search by name</label>
+        <input class="w-full bg-surface-container-lowest text-on-surface rounded-lg shadow-sm px-3 py-2 font-body-md text-body-md placeholder:text-outline focus:outline-none focus:ring-1 focus:ring-secondary" id="search-query" placeholder="e.g. Nairobi" type="text"/>
+      </div>
+      <div class="lg:col-span-12 flex flex-wrap items-center gap-space-md pt-1">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input checked="" class="w-4 h-4 rounded text-error focus:ring-0 cursor-pointer" id="search-emergency" type="checkbox"/>
+          <span class="font-body-md text-body-md text-on-surface">This may be an emergency</span>
+        </label>
+        <button class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-secondary text-on-secondary px-4 py-2 font-label-lg text-label-lg hover:opacity-90" type="submit">Search facilities</button>
+        <button class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-outline-variant/50 px-4 py-2 font-label-lg text-label-lg text-on-surface hover:bg-surface-container transition-colors disabled:opacity-60" id="share-location" type="button">Share my location</button>
+        <span class="font-body-sm text-body-sm text-on-surface-variant" id="location-status">Location is optional and never stored.</span>
+      </div>
+    </form>
+    <p class="rounded-lg bg-error-container text-on-error-container px-3 py-2 font-body-sm text-body-sm">
+      If this is an emergency, contact your local emergency services now. DEDAN does not provide emergency care.
+    </p>
+  </section>
+
+  <div class="flex flex-col gap-space-md" id="results"></div>
+</div></main>
+<footer class="pl-64 bg-surface-container-low border-t border-surface-container-high py-space-lg px-space-lg mt-auto">
+<div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-secondary text-[20px]">health_and_safety</span>
+<span class="font-label-md text-label-md text-on-surface-variant font-semibold">DEDAN Health — Clinical Intelligence Platform</span>
+</div>
+<!--
+  Privacy Policy / Terms of Service / HIPAA Compliance were empty hash
+  placeholders. They were removed rather than pointed somewhere arbitrary:
+  a legal link that goes nowhere is a false assurance on a clinical product.
+  These need real pages before they belong in a footer.
+-->
+</div>
+</footer>
+</div>
+<script src="assets/icons.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/nav.js"></script>
+<script src="assets/shell.js"></script>
+<script src="assets/care.js"></script>
+</body>
+</html>

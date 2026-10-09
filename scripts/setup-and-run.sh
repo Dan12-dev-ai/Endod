@@ -4,9 +4,9 @@
 #
 #   ./scripts/setup-and-run.sh
 #
-# Creates a Python virtualenv, installs backend and frontend dependencies,
-# and starts both services in the default OFFLINE (mock) mode — $0 cost and
-# no AI provider credentials required.
+# Creates a Python virtualenv, installs backend dependencies, copies the
+# example environment file, and starts the API in the default OFFLINE (mock)
+# mode — $0 cost and no AI provider credentials required.
 #
 # Logs and PID files are written to .run/ (git-ignored).
 # =============================================================================
@@ -24,16 +24,6 @@ if ! command -v python3 >/dev/null 2>&1; then
   log_error "python3 is required but was not found on PATH."
   exit 1
 fi
-if ! command -v node >/dev/null 2>&1; then
-  log_error "node is required but was not found on PATH. Install Node.js 18+."
-  exit 1
-fi
-if ! command -v npm >/dev/null 2>&1; then
-  log_error "npm is required but was not found on PATH."
-  exit 1
-fi
-log_ok "python3 $(python3 --version 2>&1 | awk '{print $2}')"
-log_ok "node $(node --version)"
 
 # --- 2. Python environment ---------------------------------------------------
 VENV_DIR="${DEDAN_ROOT}/.venv"
@@ -70,15 +60,7 @@ else
   log_info "Using existing ${BACKEND_DIR}/.env"
 fi
 
-# --- 5. Frontend dependencies ------------------------------------------------
-log_info "Installing frontend dependencies..."
-if ! (cd "${FRONTEND_DIR}" && npm install --no-audit --no-fund); then
-  log_error "Failed to install frontend dependencies."
-  exit 1
-fi
-log_ok "Frontend dependencies installed"
-
-# --- 6. Start the services ---------------------------------------------------
+# --- 5. Start the service ----------------------------------------------------
 mkdir -p "${DEDAN_RUN_DIR}"
 
 # Offline mode keeps the run deterministic and free. Override by exporting
@@ -105,28 +87,8 @@ else
   fi
 fi
 
-if port_open "${FRONTEND_PORT}"; then
-  log_warn "Port ${FRONTEND_PORT} is already in use; assuming the frontend is already running."
-else
-  log_info "Starting the web portal on port ${FRONTEND_PORT}..."
-  (
-    cd "${FRONTEND_DIR}"
-    nohup npm run dev -- --port "${FRONTEND_PORT}" \
-      > "${DEDAN_RUN_DIR}/frontend.log" 2>&1 &
-    echo $! > "${DEDAN_RUN_DIR}/frontend.pid"
-  )
-  if wait_for_port "${FRONTEND_PORT}" 60 "the web portal"; then
-    log_ok "Frontend listening on http://localhost:${FRONTEND_PORT}"
-  else
-    log_error "Frontend failed to start. See ${DEDAN_RUN_DIR}/frontend.log"
-    tail -20 "${DEDAN_RUN_DIR}/frontend.log" 2>/dev/null || true
-    exit 1
-  fi
-fi
-
 echo
 log_info "DEDAN Health is running"
-printf '  Web portal : %s\n' "http://localhost:${FRONTEND_PORT}"
 printf '  API        : %s\n' "http://localhost:${BACKEND_PORT}"
 printf '  Health     : %s\n' "http://localhost:${BACKEND_PORT}/api/health"
 printf '  API docs   : %s\n' "http://localhost:${BACKEND_PORT}/docs"

@@ -19,7 +19,7 @@ log_info "Stopping DEDAN Health services"
 stopped_any=0
 
 # --- 1. Stop via recorded PID files -----------------------------------------
-for service in frontend backend; do
+for service in backend; do
   pidfile="${DEDAN_RUN_DIR}/${service}.pid"
   if pid="$(pid_from_file "${pidfile}")"; then
     log_info "Stopping ${service} (pid ${pid})"
@@ -40,7 +40,7 @@ done
 
 # --- 2. Sweep any stragglers from THIS checkout -----------------------------
 # The pattern includes the DEDAN root path, so only our own processes match.
-for pattern in uvicorn vite; do
+for pattern in uvicorn; do
   for pid in $(dedan_pids_for "${pattern}"); do
     # Never signal ourselves or our own process group.
     [[ "${pid}" == "$$" || "${pid}" == "${PPID}" ]] && continue

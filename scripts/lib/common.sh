@@ -18,12 +18,10 @@ DEDAN_RUN_DIR="${DEDAN_ROOT}/.run"
 export DEDAN_RUN_DIR
 
 BACKEND_DIR="${DEDAN_ROOT}/backend-v2"
-FRONTEND_DIR="${DEDAN_ROOT}/web-portal"
 
 # Ports (override via environment).
 BACKEND_PORT="${BACKEND_PORT:-8001}"
-FRONTEND_PORT="${FRONTEND_PORT:-3000}"
-export BACKEND_PORT FRONTEND_PORT
+export BACKEND_PORT
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   C_RED=$'\033[0;31m'; C_GREEN=$'\033[0;32m'
@@ -64,7 +62,7 @@ wait_for_port() {
 # DEDAN-specific process discovery
 #
 # These helpers deliberately match on the DEDAN repository path so they can
-# never terminate an unrelated project's uvicorn/vite process (e.g. another
+# never terminate an unrelated project's application server (e.g. another
 # app on the same machine also running `uvicorn` on a different port).
 # ---------------------------------------------------------------------------
 

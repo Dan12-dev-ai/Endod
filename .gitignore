@@ -27,12 +27,25 @@ htmlcov/
 .mypy.ini
 
 # ---------------------------------------------------------------------------
-# Node / frontend
+# Node / Node.js build artifacts
 # ---------------------------------------------------------------------------
 node_modules/
-web-portal/dist/
 dist/
 build/
+# ...except the portal's Tailwind build config.
+#
+# `web-portal/build/` holds `tailwind.config.js`, the single source of truth for
+# the design tokens that generate the *committed* `assets/tailwind.css`. Under
+# the blanket rule it was untracked, so a fresh clone could serve the stylesheet
+# but had no way to rebuild or change it. Only the config and its manifest are
+# wanted; `node_modules/` stays ignored by the rule above.
+!web-portal/build/
+web-portal/build/*
+!web-portal/build/tailwind.config.js
+!web-portal/build/package.json
+!web-portal/build/package-lock.json
+!web-portal/build/safelist.txt
+!web-portal/build/normalize_shell.py
 .vite/
 npm-debug.log*
 yarn-error.log*
@@ -52,6 +65,11 @@ logs/
 *.sqlite
 *.sqlite3
 *.db-journal
+# SQLite WAL sidecars — same database content, same sensitivity.
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
 
 # ---------------------------------------------------------------------------
 # Runtime state created by scripts/ (PID tracking)
@@ -74,4 +92,10 @@ Thumbs.db
 # ---------------------------------------------------------------------------
 *.bak
 *.orig
+# `*.bak` alone does not cover these: the suffix rule matches the end of the
+# name, so `index.html.bak.incomplete` was still trackable and three of them
+# were staged for commit. Backups have no business in the repository at all.
+*.bak.*
+*.incomplete
+*_incomplete.*
 

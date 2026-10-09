@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>DEDAN Health - AI Doctor Telehealth Platform</title><link rel="icon" href="logo.png"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="assets/tailwind.css" rel="stylesheet"/>
+<link rel="stylesheet" href="assets/icons.css"/>
+<style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #F8FAFC;
+      color: #0F172A;
+      -webkit-font-smoothing: antialiased;
+    }
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    .material-symbols-outlined.fill {
+      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+  </style>
+</head>
+<body class="bg-surface min-h-screen text-on-surface antialiased flex flex-col">
+<!-- Left Sidebar Fixed -->
+<aside id="dedan-sidebar" aria-label="Main navigation"
+       class="dedan-sidebar fixed left-0 top-0 z-50 h-screen w-sidebar -translate-x-full
+              lg:translate-x-0 bg-surface-container-low flex flex-col
+              justify-between py-space-md shadow-lg transition-transform
+              duration-300">
+      <div id="dedan-sidebar-mount" class="flex flex-col min-h-0 flex-1"></div>
+    </aside>
+    <div id="dedan-nav-overlay" aria-hidden="true"
+         class="hidden fixed inset-0 z-40 bg-primary/60 lg:hidden"></div>
+<!-- Main Content Wrapper -->
+<div class=" lg:pl-sidebar flex flex-col min-h-screen">
+<!-- Top Bar Header -->
+<header class="sticky top-0 z-30 h-header bg-surface-container-low
+               border-b border-outline-variant/30 px-space-md lg:px-space-xl
+               flex items-center gap-space-sm shadow-panel">
+        <button type="button" data-dedan="nav-toggle"
+                    aria-expanded="false" aria-controls="dedan-sidebar"
+                    aria-label="Open navigation"
+                    class="lg:hidden -ml-1 p-2 rounded-lg text-on-surface-variant
+                           hover:bg-surface-container focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-secondary">
+          <span class="material-symbols-outlined text-[22px]" aria-hidden="true">menu</span>
+        </button>
+<!-- Live Consultation Connection Pill -->
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2.5">
+<span class="w-2.5 h-2.5 rounded-full bg-secondary animate-pulse"></span>
+<div>
+<span class="text-xs font-semibold text-on-surface block leading-tight">Live Consultation</span>
+<span class="text-[11px] text-outline font-normal">You are connected with DEDAN</span>
+</div>
+</div>
+</div>
+<!-- Right Header Actions -->
+<div class="flex items-center gap-5">
+<!-- Notification Button -->
+        <!-- Removed: dead "notifications" control (no handler, no endpoint). -->
+<!-- Settings Icon -->
+<!-- Removed: dead settings control (no handler, no endpoint). -->
+<div class
+        <!-- Removed: dead "settings" control (no handler, no endpoint). -->or-pointer">
+<div class="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container font-semibold flex items-center justify-center text-xs border border-secondary-container/50">
+<span class="material-symbols-outlined text-[18px]">person</span>
+</div>
+<div class="flex flex-col text-left">
+<span class="text-xs font-bold text-on-surface leading-none" data-dedan="dedan-id">—</span>
+<span class="text-[10px] text-outline leading-tight mt-0.5">Patient ID</span>
+</div>
+<span class="material-symbols-outlined text-outline text-[16px]">expand_more</span>
+</div>
+</div>
+</header>
+<!-- Main Workspace Container -->
+<main class="flex-1 p-6 max-w-[1550px] w-full mx-auto space-y-6"><div class="flex flex-col gap-gutter p-margin" id="consult-root">
+  <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-space-md">
+    <div class="flex flex-col gap-1">
+      <h1 class="font-headline-lg text-headline-lg text-primary font-bold tracking-tight">Live consultation</h1>
+      <p class="font-body-md text-body-md text-on-surface-variant">Describe how you feel. DEDAN checks your medications and history, then explains your options.</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="w-2.5 h-2.5 rounded-full bg-secondary-fixed-dim" id="connection-pill"></span>
+      <span class="font-label-sm text-label-sm text-on-surface-variant" id="connection-label">Connecting…</span>
+      <a class="ml-3 inline-flex items-center gap-1 rounded-lg border border-outline-variant/50 px-3 py-1.5 font-label-sm text-label-sm text-on-surface hover:bg-surface-container" href="health-history.html">
+        History (<span id="history-count">0</span>)
+      </a>
+    </div>
+  </div>
+
+  <p class="rounded-lg bg-error-container text-on-error-container px-3 py-2 font-body-sm text-body-sm">
+    DEDAN is not a doctor and does not provide emergency care. If you may be in danger, contact your local emergency services immediately.
+  </p>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
+    <section class="lg:col-span-7 rounded-xl bg-surface-container-lowest border border-outline-variant/40 flex flex-col overflow-hidden" style="height:min(620px,70vh)">
+      <div class="flex-1 overflow-y-auto p-space-md flex flex-col gap-space-sm" id="message-list"></div>
+      <div class="border-t border-outline-variant/30 p-3 flex flex-col gap-2">
+        <div class="hidden items-center gap-2 font-body-sm text-body-sm text-on-surface-variant" id="thinking">
+          <span class="w-3 h-3 rounded-full border-2 border-secondary border-t-transparent animate-spin"></span>
+          Assessing…
+        </div>
+        <div class="flex items-end gap-2">
+          <label class="sr-only" for="message-input">Describe your symptoms</label>
+          <textarea class="flex-1 bg-surface-container-lowest text-on-surface rounded-lg shadow-sm px-3 py-2 font-body-md text-body-md placeholder:text-outline focus:outline-none focus:ring-1 focus:ring-secondary resize-none" id="message-input" placeholder="e.g. I have had a headache and fever for two days…" rows="2"></textarea>
+          <button class="w-10 h-10 rounded-lg bg-secondary text-on-secondary flex items-center justify-center shrink-0 disabled:opacity-50" id="send-btn" title="Send" type="button">
+            <span class="material-symbols-outlined" style="font-size:20px">send</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <div class="lg:col-span-5 flex flex-col gap-gutter">
+      <section class="rounded-xl bg-surface-container-lowest border border-outline-variant/40 p-space-lg flex flex-col gap-space-md">
+        <h2 class="font-headline-sm text-headline-sm text-primary font-semibold">About you</h2>
+        <div class="flex flex-col gap-1.5">
+          <label class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-semibold" for="patient-age">Your age</label>
+          <input class="w-full bg-surface-container-lowest text-on-surface rounded-lg shadow-sm px-3 py-2 font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-secondary" id="patient-age" min="0" max="150" placeholder="e.g. 34" type="number"/>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">Used for age-specific risk assessment. Kept for this session only.</p>
+        </div>
+        <div class="flex flex-col gap-1" id="profile-context"></div>
+      </section>
+
+      <section class="rounded-xl bg-surface-container-lowest border border-outline-variant/40 p-space-lg flex flex-col gap-space-md">
+        <h2 class="font-headline-sm text-headline-sm text-primary font-semibold">Assessment</h2>
+        <div class="flex flex-col gap-space-md" id="analysis-panel"></div>
+      </section>
+    </div>
+  </div>
+</div></main>
+</div>
+
+<script src="assets/icons.js"></script>
+<script src="assets/api.js"></script>
+<script src="assets/nav.js"></script>
+<script src="assets/shell.js"></script>
+<script src="assets/consult.js"></script>
+</body></html>

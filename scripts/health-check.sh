@@ -4,7 +4,7 @@
 #
 #   ./scripts/health-check.sh
 #
-# Verifies the frontend, the backend and the API health endpoint.
+# Verifies the backend and the API health endpoint.
 # Reports READY only when every required check passes.
 # =============================================================================
 set -uo pipefail
@@ -51,30 +51,15 @@ else
   log_warn "Provider registry (/api/providers) unavailable"
 fi
 
-# --- Frontend ----------------------------------------------------------------
-if port_open "${FRONTEND_PORT}"; then
-  log_ok "Frontend reachable (port ${FRONTEND_PORT})"
-else
-  log_error "Frontend not reachable (port ${FRONTEND_PORT})"
-  failures=$((failures + 1))
-fi
-
-if curl -fsS --max-time 10 "http://localhost:${FRONTEND_PORT}/" >/dev/null 2>&1; then
-  log_ok "Frontend serving HTML (/)"
-else
-  log_error "Frontend did not serve / successfully"
-  failures=$((failures + 1))
-fi
-
 echo
 echo "=========================================================="
 if (( failures == 0 )); then
   echo "System status: READY"
-  echo "  Web portal: http://localhost:${FRONTEND_PORT}"
   echo "  API:        http://localhost:${BACKEND_PORT}"
+  echo "  API docs:   http://localhost:${BACKEND_PORT}/docs"
   exit 0
 else
   echo "System status: NOT READY (${failures} check(s) failed)"
-  echo "  Start both services with: ./scripts/setup-and-run.sh"
+  echo "  Start the backend with: ./scripts/setup-and-run.sh"
   exit 1
 fi

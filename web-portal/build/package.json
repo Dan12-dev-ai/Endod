@@ -1,0 +1,14 @@
+{
+  "name": "dedan-portal-styles",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build-time CSS for the DEDAN Health web portal. Kept in its own package so restoring the portal's React app (web-portal/package.json) cannot collide with it.",
+  "scripts": {
+    "build": "tailwindcss -c tailwind.config.js -o ../assets/tailwind.css --minify",
+    "watch": "tailwindcss -c tailwind.config.js -o ../assets/tailwind.css --watch",
+    "check": "tailwindcss -c tailwind.config.js -o /tmp/dedan-tailwind-check.css"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

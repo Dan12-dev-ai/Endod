@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <meta content="web_dashboard" name="shell-type"/>
+  <title>Settings & Preferences - DEDAN Health</title>
+  <link rel="icon" href="logo.png"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com" rel="preconnect"/>
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    @layer base{
+      html,body{margin:0;padding:0;}
+      body{overscroll-behavior:none;}
+      main>:first-child{margin-top:0!important;}
+      main>:last-child{margin-bottom:0!important;}
+    }
+    ::-webkit-scrollbar{display:none;}
+    .no-scrollbar::-webkit-scrollbar{display:none;}
+    .no-scrollbar{scrollbar-width:none;-ms-overflow-style:none;}
+  </style>
+  <link href="assets/icons.css" rel="stylesheet"/>
+  <link href="assets/tailwind.css" rel="stylesheet"/>
+</head>
+<body class="bg-surface font-body-md text-on-surface antialiased">
+
+  <!-- Sidebar -->
+  <aside id="dedan-sidebar" aria-label="Main navigation"
+       class="dedan-sidebar fixed left-0 top-0 z-50 h-screen w-sidebar -translate-x-full
+              lg:translate-x-0 bg-surface-container-low flex flex-col
+              justify-between py-space-md shadow-lg transition-transform
+              duration-300">
+      <div id="dedan-sidebar-mount" class="flex flex-col min-h-0 flex-1"></div>
+    </aside>
+    <div id="dedan-nav-overlay" aria-hidden="true"
+         class="hidden fixed inset-0 z-40 bg-primary/60 lg:hidden"></div>
+
+  <!-- Main content -->
+  <div id="dedan-content" class=" lg:pl-sidebar ">
+    <!-- Header -->
+    <header class="sticky top-0 z-30 h-header bg-surface-container-low
+               border-b border-outline-variant/30 px-space-md lg:px-space-xl
+               flex items-center gap-space-sm shadow-panel">
+        <button type="button" data-dedan="nav-toggle"
+                    aria-expanded="false" aria-controls="dedan-sidebar"
+                    aria-label="Open navigation"
+                    class="lg:hidden -ml-1 p-2 rounded-lg text-on-surface-variant
+                           hover:bg-surface-container focus-visible:outline-none
+                           focus-visible:ring-2 focus-visible:ring-secondary">
+          <span class="material-symbols-outlined text-[22px]" aria-hidden="true">menu</span>
+        </button>
+      <div class="flex items-center gap-space-sm">
+        <h1 class="font-headline-md text-headline-md text-primary font-semibold">Settings</h1>
+        <span class="hidden md:inline font-body-sm text-body-sm text-on-surface-variant">Manage your account and preferences</span>
+      </div>
+      <div class="flex items-center gap-space-md shrink-0">
+
+        <!-- Removed: a Notifications / Settings control with no handler and no
+
+             backing endpoint. Dead controls read as broken features. -->
+
+
+        <!-- Removed: a Notifications / Settings control with no handler and no
+
+             backing endpoint. Dead controls read as broken features. -->
+
+        <div class="w-px h-6 bg-outline-variant/30"></div>
+        <div class="flex items-center gap-space-sm pl-space-sm">
+          <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-sm shrink-0">
+            <span class="material-symbols-outlined text-on-primary text-[18px]">person</span>
+          </div>
+          <div class="flex flex-col text-left">
+            <span class="font-label-md text-label-md font-semibold text-on-surface leading-tight">Daniel Vance</span>
+            <span class="font-label-sm text-label-sm text-on-surface-variant leading-tight">DE482731</span>
+          </div>
+        </div>
+        <button type="button" data-dedan="logout" class="p-space-xs text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-lg transition-all duration-200" aria-label="Sign out">
+          <span class="material-symbols-outlined text-[18px]">logout</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="w-full pt-6 pb-space-xl bg-surface min-h-[calc(100vh-4rem)]">
+      <div class="w-full max-w-[1200px] mx-auto px-space-md lg:px-space-xl">
+        <!-- Intro -->
+        <div class="mb-space-xl">
+          <h1 class="font-headline-lg text-headline-lg text-primary font-bold tracking-tight">Settings &amp; Preferences</h1>
+          <p class="font-body-md text-body-md text-on-surface-variant mt-space-sm max-w-2xl">Manage your personal information, health profile, communication preferences, and security settings in one place.</p>
+        </div>
+
+        <!-- Settings Sections -->
+        <div class="space-y-space-xl">
+          <!-- Personal Information -->
+          <section id="personal-info" class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-space-xl shadow-sm">
+            <h2 class="font-headline-md text-headline-md text-primary font-semibold mb-space-md">Personal Information</h2>
+          </section>
+
+          <!-- Health Profile -->
+          <section id="health-profile" class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-space-xl shadow-sm">
+            <h2 class="font-headline-md text-headline-md text-primary font-semibold mb-space-md">Health Profile</h2>
+          </section>
+
+          <!-- Communication Preferences -->
+          <section id="communication" class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-space-xl shadow-sm">
+            <h2 class="font-headline-md text-headline-md text-primary font-semibold mb-space-md">Communication Preferences</h2>
+          </section>
+
+          <!-- DEDAN AI -->
+          <section id="dedan-ai" class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-space-xl shadow-sm">
+            <h2 class="font-headline-md text-headline-md text-primary font-semibold mb-space-md">DEDAN AI</h2>
+          </section>
+
+          <!-- Security -->
+          <section id="security" class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-space-xl shadow-sm">
+            <h2 class="font-headline-md text-headline-md text-primary font-semibold mb-space-md">Security</h2>
+          </section>
+
+          <!-- Privacy & FHIR -->
+          <section id="privacy-fhir" class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-space-xl shadow-sm">
+            <h2 class="font-headline-md text-headline-md text-primary font-semibold mb-space-md">Privacy &amp; FHIR</h2>
+          </section>
+
+          <!-- Account -->
+          <section id="account" class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-space-xl shadow-sm">
+            <h2 class="font-headline-md text-headline-md text-primary font-semibold mb-space-md">Account</h2>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="assets/icons.js"></script>
+<script src="assets/api.js"></script>
+  <script src="assets/nav.js"></script>
+<script src="assets/shell.js"></script>
+  <script src="assets/settings.js"></script>
+</body>
+</html>
