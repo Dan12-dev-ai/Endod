@@ -180,6 +180,25 @@
     document.querySelectorAll('[data-dedan="nav-collapse"]').forEach(function (button) {
       button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
       button.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
+      button.setAttribute('title', collapsed ? 'Expand navigation' : 'Collapse navigation');
+    });
+    // The chevron points the way the rail moves: left to collapse, right to
+    // expand. Both are always in the DOM; only one is shown.
+    mount.querySelectorAll('.dedan-nav-chev-expanded').forEach(function (node) {
+      node.classList.toggle('hidden', collapsed);
+    });
+    mount.querySelectorAll('.dedan-nav-chev-collapsed').forEach(function (node) {
+      node.classList.toggle('hidden', !collapsed);
+    });
+    // Collapsed rail: centre the header so the lone icon and the toggle sit
+    // symmetrically in the 4rem column instead of hugging the left edge.
+    mount.querySelectorAll('.dedan-nav-header').forEach(function (node) {
+      node.classList.toggle('justify-center', collapsed);
+      node.classList.toggle('px-space-sm', collapsed);
+      node.classList.toggle('px-space-lg', !collapsed);
+    });
+    mount.querySelectorAll('.dedan-nav-collapse').forEach(function (node) {
+      node.classList.toggle('ml-auto', !collapsed);
     });
     storageSet(COLLAPSE_KEY, collapsed ? '1' : '0');
   }
@@ -263,14 +282,14 @@
 
   function sidebarBody(current) {
     return [
-      DEDAN.el('div', { class: 'px-space-lg py-space-sm mb-space-sm flex items-center gap-space-sm' }, [
+      DEDAN.el('div', { class: 'dedan-nav-header px-space-lg py-space-sm mb-space-sm flex items-center gap-space-sm' }, [
         // The wordmark is the expand/collapse control, matching the pattern the
         // product is modelled on. It stays a real link for middle-click and
         // "open in new tab"; the handler only intercepts a plain left click.
         DEDAN.el('a', {
           href: 'index.html',
           'data-dedan': 'nav-brand',
-          class: 'flex items-center gap-space-sm rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary'
+          class: 'dedan-nav-brand flex items-center gap-space-sm rounded-md min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary'
         }, [
           DEDAN.el('span', {
             class: 'material-symbols-outlined text-[22px] text-secondary shrink-0',
@@ -288,6 +307,34 @@
               text: 'Health Network'
             })
           ])
+        ]),
+        // Dedicated collapse/expand toggle (desktop rail only). The chevron
+        // points the way the rail will move: left to collapse, right to expand.
+        // Below lg the sidebar is an off-canvas drawer, where collapsing is
+        // meaningless, so the control is hidden there.
+        DEDAN.el('button', {
+          type: 'button',
+          'data-dedan': 'nav-collapse',
+          'aria-expanded': 'true',
+          'aria-label': 'Collapse navigation',
+          title: 'Collapse navigation',
+          class: 'dedan-nav-collapse ml-auto hidden lg:inline-flex items-center justify-center ' +
+            'w-7 h-7 rounded-md text-on-surface-variant hover:bg-surface-container ' +
+            'hover:text-on-surface transition-colors shrink-0 ' +
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary'
+        }, [
+          DEDAN.el('span', {
+            class: 'material-symbols-outlined text-[20px] dedan-nav-chev-expanded',
+            'data-dedan-icon': 'chevron_left',
+            'aria-hidden': 'true',
+            text: 'chevron_left'
+          }),
+          DEDAN.el('span', {
+            class: 'material-symbols-outlined text-[20px] dedan-nav-chev-collapsed hidden',
+            'data-dedan-icon': 'chevron_right',
+            'aria-hidden': 'true',
+            text: 'chevron_right'
+          })
         ])
       ]),
       DEDAN.el('div', { class: 'overflow-y-auto px-space-sm flex-1' },

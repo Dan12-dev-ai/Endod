@@ -120,6 +120,10 @@
     smart_display: '<rect x="2.5" y="4.5" width="19" height="12.5" rx="2"/><path d="M8.5 20.5h7M12 17v3.5"/><path d="m9.5 10 4 2.5-4 2.5z"/>',
     enhanced_encryption: '<rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7.5a4 4 0 0 1 7.5-2"/><path d="M12 14v2.5"/>',
     hd: '<rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M6.5 9.5v5M6.5 12h3M9.5 9.5v5"/><path d="M14 9.5v5h1.5a2.5 2.5 0 0 0 0-5z"/>',
+    chevron_left: '<path d="M14.5 5.5 8 12l6.5 6.5"/>',
+    chevron_right: '<path d="M9.5 5.5 16 12l-6.5 6.5"/>',
+    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
   };
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
