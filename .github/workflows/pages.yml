@@ -1,0 +1,69 @@
+# =============================================================================
+# DEDAN Health — landing-page review deployment (GitHub Pages)
+#
+# Publishes the static portal (web-portal/) to GitHub Pages so the landing page
+# redesign can be reviewed from a durable public URL.
+#
+# Scope, deliberately narrow:
+#   * Only web-portal/ is uploaded — never the backend, databases, or config.
+#   * A .nojekyll marker is written so GitHub serves the underscore-prefixed
+#     directories (e.g. _archive) verbatim instead of treating them as Jekyll.
+#   * Triggered manually (workflow_dispatch) and on every push to main, so the
+#     public URL tracks main without anyone having to remember to redeploy.
+#
+# The portal is static HTML with no build step: assets/tailwind.css is already
+# committed, so "build" here is a copy, not a compile.
+#
+# NOTE ON AUTH: the portal's api.js calls the backend same-origin, so the Pages
+# build serves the public/marketing surface (landing, sign-in, register, trust).
+# Authenticated routes need the FastAPI backend on the same origin and are out
+# of scope for this static preview.
+# =============================================================================
+
+name: Deploy portal to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Allow the GITHUB_TOKEN to write the Pages deployment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a newer deploy win; a superseded one does not need to finish.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Publish web-portal to Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assemble the site from web-portal/
+        run: |
+          # Publish only the portal. The backend, .db files, .env.example and
+          # every other top-level path are intentionally left behind.
+          mkdir -p _site
+          cp -R web-portal/. _site/
+          # Serve _archive (and any other _-prefixed dir) verbatim, not as Jekyll.
+          touch _site/.nojekyll
+
+      - name: Upload the artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
