@@ -1,18 +1,19 @@
 export default function Pipette() {
   return (
-    <section className="relative min-h-[580px] lg:h-[640px] w-full flex items-center bg-stone-100 overflow-hidden" data-purpose="pipette-hero-card">
-      {/* Lab scientist in cleanroom suit background (Screenshot 9) */}
+    <section className="relative min-h-[580px] lg:h-[640px] w-full flex items-center overflow-hidden" data-purpose="pipette-hero-card">
+      {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <img
           alt="Scientist operating laptop in laboratory cleanroom"
-          className="w-full h-full object-cover object-center filter blur-[1px] brightness-95"
-          src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'><rect width='1600' height='900' fill='%23cbd5e1'/><circle cx='850' cy='320' r='120' fill='%2322c55e' opacity='0.7'/><rect x='600' y='280' width='500' height='620' rx='80' fill='%23f8fafc'/><rect x='720' y='420' width='260' height='160' rx='10' fill='%230f172a'/></svg>"
+          className="w-full h-full object-cover object-center"
+          src="/images/catalyst-agent.webp"
         />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-black/40" />
       </div>
 
       {/* Frosted Glass Card Left Overlay */}
       <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-12 w-full py-12">
-        <div className="glass-morphism rounded-3xl p-8 sm:p-12 max-w-lg lg:max-w-xl shadow-xl border border-white/60">
+        <div className="glass-morphism rounded-3xl p-8 sm:p-12 max-w-lg lg:max-w-xl shadow-xl border border-white/40 backdrop-blur-xl bg-white/50">
           {/* Overline badge */}
           <div className="mb-4">
             <span className="inline-block text-[11px] font-bold uppercase tracking-widest text-slate-800 border-b-2 border-slate-900 pb-0.5">

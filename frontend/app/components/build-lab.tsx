@@ -13,7 +13,7 @@ export default function BuildLab() {
 
       {/* Frosted Glass Card Left Overlay — White, blurred, transparent */}
       <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-12 w-full py-12">
-        <div className="glass-morphism rounded-3xl p-8 sm:p-12 max-w-lg lg:max-w-xl shadow-xl border border-white/40 backdrop-blur-xl bg-white/80">
+        <div className="glass-morphism rounded-3xl p-8 sm:p-12 max-w-lg lg:max-w-xl shadow-xl border border-white/40 backdrop-blur-xl bg-white/50">
           {/* Overline badge */}
           <div className="mb-4">
             <span className="inline-block text-[11px] font-bold uppercase tracking-widest text-slate-800 border-b-2 border-slate-900 pb-0.5">
