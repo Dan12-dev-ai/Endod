@@ -1,6 +1,24 @@
 "use client";
 
+import { useState } from "react";
+
 export default function Interview() {
+  const [toggles, setToggles] = useState({ mic: false, camera: false, speaker: false, pause: false });
+
+  const toggle = (key: "mic" | "camera" | "speaker" | "pause") =>
+    setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const [activeNav, setActiveNav] = useState("live");
+  const navItems = [
+    { id: "home", label: "Home", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
+    { id: "live", label: "Live Discussion", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
+    { id: "booking", label: "Booking", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
+    { id: "appointment", label: "Appointment", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
+    { id: "followup", label: "Followup", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
+    { id: "message", label: "Message", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
+    { id: "setting", label: "Setting", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeLinecap="round" strokeLinejoin="round" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
+  ];
+
   return (
     <div className="h-screen bg-[#F6F9FA] text-slate-800 font-sans antialiased flex flex-col overflow-hidden pb-16 lg:pb-0">
       {/* ===== Main Header ===== */}
@@ -99,51 +117,23 @@ export default function Interview() {
             </button>
           </div>
           <nav className="space-y-1 overflow-y-auto flex-1 min-h-0">
-            <a className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-sm font-medium" href="#">
-              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>Home</span>
-            </a>
-            <a className="flex items-center space-x-3 px-3.5 py-2.5 rounded-2xl bg-[#E6F8F3] text-teal-800 font-bold text-sm" href="#">
-              <div className="w-7 h-7 rounded-lg bg-teal-600 text-white flex items-center justify-center">
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                </svg>
-              </div>
-              <span>Live Discussion</span>
-            </a>
-            <a className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-sm font-medium" href="#">
-              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>Booking</span>
-            </a>
-            <a className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-sm font-medium" href="#">
-              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>Appointment</span>
-            </a>
-            <a className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-sm font-medium" href="#">
-              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>Followup</span>
-            </a>
-            <a className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-sm font-medium" href="#">
-              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>Message</span>
-            </a>
-            <a className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-sm font-medium" href="#">
-              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <span>Setting</span>
-            </a>
+            {navItems.map((item) => {
+              const isActive = activeNav === item.id;
+              return (
+                <a
+                  key={item.id}
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActiveNav(item.id);
+                  }}
+                  className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-sm font-medium cursor-pointer"
+                >
+                  {item.icon}
+                  <span className={isActive ? "text-slate-900 font-semibold" : undefined}>{item.label}</span>
+                </a>
+              );
+            })}
           </nav>
           <div className="mt-auto pt-4">
             <div className="p-4 rounded-2xl bg-[#E6F8F3] border border-teal-100 text-left relative">
@@ -170,11 +160,10 @@ export default function Interview() {
           </div>
 
           {/* ===== Center Video Stage ===== */}
-          <section id="videoStage" className="relative flex-1 min-h-0 w-full rounded-2xl overflow-hidden border border-slate-300 bg-slate-200 flex items-center justify-center text-slate-400" data-purpose="video-consultation-stage">
-            <span className="text-xs font-medium">img</span>
+          <section id="videoStage" className="relative flex-1 min-h-0 w-full rounded-2xl overflow-hidden border border-slate-700 bg-black flex items-center justify-center text-slate-400" data-purpose="video-consultation-stage">
 
             {/* AI Speaking Sound Wave Signal */}
-            <div className="speaking absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center" id="vocalVisualizer">
+            <div className={`${toggles.pause ? "paused" : "speaking"} absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center`} id="vocalVisualizer">
               <div className="relative flex items-center justify-center">
                 {/* soft signal glow */}
                 <span aria-hidden="true" className="absolute -inset-10 rounded-full bg-cyan-400/10 blur-3xl"></span>
@@ -217,39 +206,43 @@ export default function Interview() {
           </section>
 
           {/* ===== Call Control Bar ===== */}
-          <section className="flex-shrink-0 bg-slate-900 text-white rounded-2xl py-3 px-4 sm:px-6 shadow-md flex items-center justify-between" data-purpose="call-controls">
+          <section className="flex-shrink-0 bg-black text-white rounded-2xl py-3 px-4 sm:px-6 shadow-md flex items-center justify-between" data-purpose="call-controls">
             <div className="flex items-center space-x-3 sm:space-x-6 mx-auto md:mx-0">
-              <button className="flex flex-col items-center group" id="micToggleBtn">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-800 group-hover:bg-slate-700 flex items-center justify-center transition" id="micIconBg">
-                  <svg className="w-4 h-4 text-slate-200" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              {/* Mic */}
+              <button type="button" aria-pressed={toggles.mic} onClick={() => toggle("mic")} className="flex flex-col items-center group">
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition ${toggles.mic ? "bg-emerald-500 text-white" : "bg-slate-800 text-white group-hover:bg-slate-700"}`}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <span className="text-[10px] sm:text-[11px] text-slate-400 mt-1">Mic</span>
+                <span className={`text-[10px] sm:text-[11px] mt-1 ${toggles.mic ? "text-emerald-400" : "text-slate-400"}`}>Mic</span>
               </button>
-              <button className="flex flex-col items-center group">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-800 group-hover:bg-slate-700 flex items-center justify-center transition">
-                  <svg className="w-4 h-4 text-slate-200" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              {/* Camera */}
+              <button type="button" aria-pressed={toggles.camera} onClick={() => toggle("camera")} className="flex flex-col items-center group">
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition ${toggles.camera ? "bg-emerald-500 text-white" : "bg-slate-800 text-white group-hover:bg-slate-700"}`}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <span className="text-[10px] sm:text-[11px] text-slate-400 mt-1">Camera</span>
+                <span className={`text-[10px] sm:text-[11px] mt-1 ${toggles.camera ? "text-emerald-400" : "text-slate-400"}`}>Camera</span>
               </button>
-              <button className="flex flex-col items-center group">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-800 group-hover:bg-slate-700 flex items-center justify-center transition">
-                  <svg className="w-4 h-4 text-slate-200" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              {/* Speaker */}
+              <button type="button" aria-pressed={toggles.speaker} onClick={() => toggle("speaker")} className="flex flex-col items-center group">
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition ${toggles.speaker ? "bg-emerald-500 text-white" : "bg-slate-800 text-white group-hover:bg-slate-700"}`}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </div>
-                <span className="text-[10px] sm:text-[11px] text-slate-400 mt-1">Speaker</span>
+                <span className={`text-[10px] sm:text-[11px] mt-1 ${toggles.speaker ? "text-emerald-400" : "text-slate-400"}`}>Speaker</span>
               </button>
-              <button className="flex flex-col items-center group">
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-slate-800 group-hover:bg-slate-700 flex items-center justify-center transition">
-                  <svg className="w-4 h-4 text-slate-200" fill="currentColor" viewBox="0 0 24 24">
+              {/* Pause */}
+              <button type="button" aria-pressed={toggles.pause} onClick={() => toggle("pause")} className="flex flex-col items-center group">
+                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition ${toggles.pause ? "bg-emerald-500 text-white" : "bg-slate-800 text-white group-hover:bg-slate-700"}`}>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
                   </svg>
                 </div>
-                <span className="text-[10px] sm:text-[11px] text-slate-400 mt-1">Pause</span>
+                <span className={`text-[10px] sm:text-[11px] mt-1 ${toggles.pause ? "text-emerald-400" : "text-slate-400"}`}>Pause</span>
               </button>
             </div>
             <button className="flex items-center space-x-2 bg-[#D92D20] hover:bg-red-700 text-white font-semibold px-4 sm:px-6 py-2.5 rounded-full transition shadow-md">
@@ -356,33 +349,6 @@ export default function Interview() {
             window.addEventListener('resize', () => {
               if (window.innerWidth >= 1024) closeDrawer();
             });
-          })();
-
-          (function initVoiceVisualizer() {
-            const visualizerEl = document.getElementById('vocalVisualizer');
-            const micToggleBtn = document.getElementById('micToggleBtn');
-            const micIconBg = document.getElementById('micIconBg');
-            let isSpeaking = true;
-
-            function updateState(speaking) {
-              isSpeaking = speaking;
-              if (isSpeaking) {
-                visualizerEl.classList.remove('paused');
-                visualizerEl.classList.add('speaking');
-                if (micIconBg) {
-                  micIconBg.classList.remove('bg-red-500/80', 'text-white');
-                  micIconBg.classList.add('bg-slate-800');
-                }
-              } else {
-                visualizerEl.classList.remove('speaking');
-                visualizerEl.classList.add('paused');
-                if (micIconBg) micIconBg.classList.add('bg-slate-700');
-              }
-            }
-
-            if (micToggleBtn) {
-              micToggleBtn.addEventListener('click', () => updateState(!isSpeaking));
-            }
           })();
 
           (function initFullscreen() {
