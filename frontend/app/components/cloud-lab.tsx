@@ -1,18 +1,19 @@
 export default function CloudLab() {
   return (
-    <section className="relative min-h-[580px] lg:h-[640px] w-full flex items-center bg-[#fff8eb] overflow-hidden" data-purpose="cloud-lab-card" id="cloud-lab">
-      {/* Culture Well Plate Background (Screenshot 7 & 8) */}
+    <section className="relative min-h-[580px] lg:h-[640px] w-full flex items-center overflow-hidden" data-purpose="cloud-lab-card" id="cloud-lab">
+      {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <img
-          alt="Multi-well laboratory petri cultures"
-          className="w-full h-full object-cover object-left lg:object-center filter saturate-150 contrast-95"
-          src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'><rect width='1600' height='900' fill='%23fed7aa'/><g fill='%23f59e0b' opacity='0.7'><circle cx='100' cy='100' r='35'/><circle cx='200' cy='100' r='35'/><circle cx='300' cy='100' r='35'/><circle cx='400' cy='100' r='35'/><circle cx='100' cy='200' r='35'/><circle cx='200' cy='200' r='35'/><circle cx='300' cy='200' r='35'/><circle cx='400' cy='200' r='35'/><circle cx='100' cy='300' r='35'/><circle cx='200' cy='300' r='35'/><circle cx='300' cy='300' r='35'/><circle cx='400' cy='300' r='35'/></g></svg>"
+          alt="Cloud lab"
+          className="w-full h-full object-cover object-center"
+          src="https://cdn.prod.website-files.com/691b94a518664e13feebd656/691c10d727d6d4e900e3285d_Ginkgo_1__May%2023%202022_179_crop2%20(1)-p-1600.avif"
         />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-black/40" />
       </div>
 
-      {/* Frosted Glass Card Right Overlay */}
+      {/* Frosted Glass Card Right Overlay — White, blurred, transparent */}
       <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-12 w-full py-12 flex justify-end">
-        <div className="glass-morphism-warm rounded-3xl p-8 sm:p-12 max-w-lg lg:max-w-xl shadow-xl border border-amber-100/70">
+        <div className="glass-morphism-warm rounded-3xl p-8 sm:p-12 max-w-lg lg:max-w-xl shadow-xl border border-white/40 backdrop-blur-xl bg-white/80">
           {/* Overline badge */}
           <div className="mb-4">
             <span className="inline-block text-[11px] font-bold uppercase tracking-widest text-slate-800 border-b-2 border-slate-900 pb-0.5">
