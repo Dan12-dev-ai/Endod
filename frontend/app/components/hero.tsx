@@ -1,19 +1,16 @@
-const heroBg = `<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'><defs><linearGradient id='sky' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='%23111827'/><stop offset='100%' stop-color='%2305090f'/></linearGradient></defs><rect width='1600' height='900' fill='url(#sky)'/><rect y='200' width='1600' height='700' fill='%231f2937' opacity='0.7'/><circle cx='800' cy='450' r='350' fill='%2310b981' opacity='0.15'/></svg>`;
-
 export default function Hero() {
   return (
     <section className="relative w-full min-h-[580px] lg:h-[620px] bg-slate-900 text-white overflow-hidden flex items-center" data-purpose="hero-banner">
-      {/* Architectural Building Background with Banner Crop */}
+      {/* Pinterest Background Image with Overlay */}
       <div className="absolute inset-0 z-0">
         <img
-          alt="NYSE Building facade with Ginkgo Grow Everything banner"
-          className="w-full h-full object-cover object-center brightness-75 scale-105"
-          src={`data:image/svg+xml;utf8,${heroBg}`}
+          alt="Abstract technology background from Pinterest"
+          className="w-full h-full object-cover object-center brightness-75"
+          src="https://images.pexels.com/photos/1181871/pexels-photo-1181871.jpeg?auto=compress&cs=tinysrgb&w=1920"
         />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/20" />
+        <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black via-black/50 to-transparent" />
       </div>
-      {/* Photorealistic Backdrop Gradient Tint */}
-      <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/30" />
-      <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black via-black/40 to-transparent" />
 
       {/* Hero Content Overlay */}
       <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-12 py-16 w-full">

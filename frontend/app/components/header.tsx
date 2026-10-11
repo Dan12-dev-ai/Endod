@@ -3,49 +3,9 @@
 export default function Header() {
   return (
     <>
-      {/* Announcement Event Bar */}
-      <div
-        className="bg-black text-white text-[11px] sm:text-[12px] font-medium tracking-wide py-2.5 px-4 sm:px-8 border-b border-white/10 flex items-center justify-between transition-all duration-300"
-        id="event-bar"
-      >
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] uppercase font-mono tracking-wider bg-white/10 text-neutral-300 border border-white/15">
-            [ EVENT ]
-          </span>
-          <span className="font-bold text-white">REAL Summit 2026</span>
-          <span className="text-neutral-400">·</span>
-          <span className="text-neutral-300">Seaport Boston</span>
-          <span className="text-neutral-400">·</span>
-          <span className="text-neutral-300">September 15</span>
-        </div>
-        <div className="flex items-center gap-4 sm:gap-6 text-[11px]">
-          <span className="hidden md:inline-block uppercase tracking-wider text-neutral-400">
-            FEATURING <span className="text-white font-semibold">DOTM</span>
-          </span>
-          <span className="hidden sm:inline-block uppercase tracking-wider text-neutral-400">
-            HAPPENING <span className="text-white font-semibold">NOW</span>
-          </span>
-          <a
-            className="font-semibold underline uppercase tracking-wider hover:text-neutral-300 transition-colors flex items-center gap-1 text-white"
-            href="#contact-section"
-          >
-            REQUEST INVITE HERE
-            <span aria-hidden="true">→</span>
-          </a>
-          <button
-            aria-label="Dismiss banner"
-            className="text-neutral-400 hover:text-white transition-colors ml-2"
-            onClick={() => { const bar = document.getElementById("event-bar"); if (bar) { bar.style.display = "none"; } }}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-            </svg>
-          </button>
-        </div>
-      </div>
 
       {/* Main Navigation Bar */}
-      <nav className="bg-black/95 text-white backdrop-blur-md px-6 lg:px-12 py-3.5 flex items-center justify-between border-b border-white/10">
+      <nav className="bg-black/95 text-white backdrop-blur-md px-6 lg:px-12 py-3.5 flex items-center justify-between border-b border-white/10 z-50">
         {/* Ginkgo Bioworks Gear Logo */}
         <a aria-label="Ginkgo Bioworks Homepage" className="flex items-center gap-3 group" href="#">
           <svg
