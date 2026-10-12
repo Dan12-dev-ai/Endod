@@ -35,18 +35,11 @@ export default function Interview() {
             </svg>
           </button>
           <div className="flex items-center space-x-2.5 sm:space-x-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-teal-500 flex items-center justify-center text-white shadow-sm flex-shrink-0">
-              <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
-                <path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            <div>
-              <div className="flex items-baseline space-x-1.5 leading-none">
-                <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900">DEDAN</span>
-                <span className="text-lg sm:text-xl font-bold text-teal-600">Health</span>
-              </div>
-              <span className="text-[10px] sm:text-xs font-medium text-teal-700 block tracking-tight mt-0.5">Your AI Doctor</span>
-            </div>
+            <img
+              alt="DEDAN Health logo"
+              className="h-12 sm:h-14 w-auto object-contain flex-shrink-0"
+              src="/endod_logo.png"
+            />
           </div>
           <div className="hidden md:flex items-center space-x-2 pl-6 border-l border-slate-200">
             <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></span>
@@ -62,12 +55,6 @@ export default function Interview() {
               <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
-          </button>
-          <button className="hidden sm:inline-flex p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors" title="Settings">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
           </button>
           <div className="flex items-center space-x-2 pl-1 sm:pl-2 py-1">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
