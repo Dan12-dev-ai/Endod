@@ -6,7 +6,7 @@ import BuildLab from './components/build-lab';
 import CloudLab from './components/cloud-lab';
 import SocialProof from './components/social-proof';
 import Pipette from './components/pipette';
-import ContactForm from './components/contact-form';
+import SocialLinks from './components/social-links';
 import Footer from './components/footer';
 
 export default function Home() {
@@ -20,7 +20,7 @@ export default function Home() {
       <CloudLab />
       <SocialProof />
       <Pipette />
-      <ContactForm />
+      <SocialLinks />
       <Footer />
     </>
   );
