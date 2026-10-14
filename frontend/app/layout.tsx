@@ -15,8 +15,9 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Ginkgo Bioworks | Autonomous Labs",
-  description: "Ginkgo Bioworks — Building the autonomous lab of the future.",
+  title: "Endod Health OS | Patients & Hospitals, Connected",
+  description:
+    "Endod Health OS — understand your symptoms, reach the right hospital faster, and arrive with a clear record. You stay in control of your health data.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

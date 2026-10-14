@@ -4,9 +4,9 @@ export default function BuildLab() {
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <img
-          alt="Autonomous lab"
+          alt="Endod AI symptom conversation"
           className="w-full h-full object-cover object-center"
-          src="https://cdn.prod.website-files.com/691b94a518664e13feebd656/691c0e8af662c0d3674a5ed2_Screenshot%202024-10-08%20at%2011.56.00%E2%80%AFAM%20(1)-p-800.avif"
+          src="/endod_hero.jpg"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-black/40" />
       </div>
@@ -17,30 +17,30 @@ export default function BuildLab() {
           {/* Overline badge */}
           <div className="mb-4">
             <span className="inline-block text-[11px] font-bold uppercase tracking-widest text-slate-800 border-b-2 border-slate-900 pb-0.5">
-              AUTONOMOUS LABS
+              ENDOD AI
             </span>
           </div>
           <h2 className="text-3xl sm:text-5xl font-serif text-[#0b1c2b] tracking-tight leading-[1.08] mb-5">
-            Build your own autonomous lab
+            Understand your symptoms in minutes
           </h2>
           <h3 className="text-lg sm:text-[21px] font-serif text-slate-800 leading-snug mb-4">
-            Autonomous labs aren&rsquo;t science fiction&mdash;they&rsquo;re already here
+            Talk or type in Amharic or English — Endod AI listens and asks the right follow-up questions
           </h3>
           <p className="text-slate-600 text-sm sm:text-base leading-relaxed mb-8">
-            We built one in our Boston HQ, now you can too.
+            Endod AI guides a calm conversation, asks clarifying questions, and turns what you share into a clear, structured summary your doctor can read before you even arrive.
           </p>
           {/* Action CTA Buttons */}
           <div className="flex flex-wrap items-center gap-3">
-            <a className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-slate-900 bg-white/80 hover:bg-white text-slate-900 text-sm font-medium transition shadow-sm group" href="#contact-section">
-              <span>Learn more</span>
+            <a className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-slate-900 bg-white/80 hover:bg-white text-slate-900 text-sm font-medium transition shadow-sm group" href="/interview">
+              <span>Start a check-up</span>
               <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center">
                 <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" />
                 </svg>
               </span>
             </a>
-            <a className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-[#0d2130] hover:bg-[#16364e] text-white text-sm font-medium transition shadow-md group" href="#contact-section">
-              <span>Book a meeting</span>
+            <a className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-[#0d2130] hover:bg-[#16364e] text-white text-sm font-medium transition shadow-md group" href="#cloud-lab">
+              <span>Find a hospital</span>
               <span className="w-5 h-5 rounded-full bg-white text-slate-900 flex items-center justify-center">
                 <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" />

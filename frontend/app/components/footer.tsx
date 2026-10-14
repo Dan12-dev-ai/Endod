@@ -4,15 +4,15 @@ export default function Footer() {
   return (
     <footer className="bg-[#111111] text-white pt-16 pb-12 border-t border-white/10" data-purpose="site-footer">
       <div className="max-w-7xl mx-auto px-6 sm:px-12">
-        {/* Top Grid: Newsletter + Ginkgo Datapoints + More from Ginkgo (Screenshot 12) */}
+        {/* Top Grid: Contact + Platform + Company */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-12 pb-16">
-          {/* Column 1: Newsletter / Curious about autonomous labs? */}
+          {/* Column 1: Get started / Ready to take control of your health? */}
           <div className="md:col-span-5 pr-4">
             <p className="text-xs uppercase font-medium tracking-wider text-neutral-400 mb-2">
               Contact Us
             </p>
             <h3 className="text-3xl sm:text-4xl font-serif text-white tracking-tight mb-8">
-              Curious about autonomous labs?
+              Ready to take control of your health?
             </h3>
             <form className="space-y-4 max-w-sm" onSubmit={() => {
               alert('Subscribed successfully!');
@@ -30,37 +30,37 @@ export default function Footer() {
                 />
               </div>
               <button className="w-full py-2.5 px-6 border border-neutral-400 text-white hover:bg-white hover:text-black transition-all text-sm font-medium tracking-wide" type="submit">
-                Submit
+                Subscribe
               </button>
             </form>
           </div>
 
-          {/* Column 2: Ginkgo Datapoints Links */}
+          {/* Column 2: Platform Links */}
           <div className="md:col-span-4">
             <p className="text-xs uppercase font-medium tracking-wider text-neutral-400 mb-4">
-              Ginkgo Datapoints
+              Platform
             </p>
             <ul className="space-y-3 text-sm text-neutral-300">
-              <li><a className="hover:text-white transition-colors" href="#bottleneck">Overview</a></li>
-              <li><a className="hover:text-white transition-colors" href="#build-own-lab">AI Services &amp; Bundles</a></li>
-              <li><a className="hover:text-white transition-colors" href="#cloud-lab">Antibody Developability</a></li>
-              <li><a className="hover:text-white transition-colors" href="#action-video">Perturbation Response Profiling</a></li>
-              <li><a className="hover:text-white transition-colors" href="#build-own-lab">Small Molecule Developability</a></li>
-              <li><a className="hover:text-white transition-colors" href="#cloud-lab">Specialized Screening (HTS)</a></li>
+              <li><a className="hover:text-white transition-colors" href="#build-own-lab">AI Symptom Assistant</a></li>
+              <li><a className="hover:text-white transition-colors" href="#cloud-lab">Hospital Directory &amp; Booking</a></li>
+              <li><a className="hover:text-white transition-colors" href="#pipette-hero-card">Treatment Plans</a></li>
+              <li><a className="hover:text-white transition-colors" href="#pipette-hero-card">Medical History</a></li>
+              <li><a className="hover:text-white transition-colors" href="#bottleneck">Consent &amp; Privacy</a></li>
+              <li><a className="hover:text-white transition-colors" href="#cloud-lab">For Hospitals</a></li>
             </ul>
           </div>
 
-          {/* Column 3: More from Ginkgo Links */}
+          {/* Column 3: Company Links */}
           <div className="md:col-span-3">
             <p className="text-xs uppercase font-medium tracking-wider text-neutral-400 mb-4">
-              More from Ginkgo
+              Company
             </p>
             <ul className="space-y-3 text-sm text-neutral-300">
               <li><a className="hover:text-white transition-colors" href="#">About</a></li>
-              <li><a className="hover:text-white transition-colors" href="#">Investor Relations</a></li>
+              <li><a className="hover:text-white transition-colors" href="#contact-section">Contact</a></li>
               <li><a className="hover:text-white transition-colors" href="#">Careers</a></li>
-              <li><a className="hover:text-white transition-colors" href="#">Ginkgo Ferment</a></li>
-              <li><a className="hover:text-white transition-colors" href="#">Grow by Ginkgo</a></li>
+              <li><a className="hover:text-white transition-colors" href="#bottleneck">Privacy &amp; Security</a></li>
+              <li><a className="hover:text-white transition-colors" href="#">Support</a></li>
             </ul>
           </div>
         </div>
@@ -68,13 +68,14 @@ export default function Footer() {
         {/* Footer Middle: Logo */}
         <div className="py-6 border-t border-neutral-800">
           <div className="flex items-center gap-3">
-            <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 100 100">
-              <path d="M50 15a35 35 0 1 0 35 35 35 35 0 0 0-35-35zm0 18a17 17 0 1 1-17 17 17 17 0 0 1 17-17z" />
-              <path clip-rule="evenodd" d="M44.5 12h11v8.2l3.4 1.4 6.8-4.7 7.8 7.8-4.7 6.8 1.4 3.4H78.5v11h-8.2l-1.4 3.4 4.7 6.8-7.8 7.8-6.8-4.7-3.4 1.4V78.5h-11v-8.2l-3.4-1.4-6.8 4.7-7.8-7.8 4.7-6.8-1.4-3.4H21.5v-11h8.2l1.4-3.4-4.7-6.8 7.8-7.8 6.8 4.7 3.4-1.4V12zm5.5 25.5a12.5 12.5 0 100 25 12.5 12.5 0 000-25z" fill-rule="evenodd" />
-            </svg>
+            <img
+              alt="ENDOD Health logo"
+              className="h-9 w-auto object-contain"
+              src="/endod_logo.png"
+            />
             <div className="leading-none">
-              <span className="block text-base font-black tracking-widest uppercase">GINKGO</span>
-              <span className="block text-[11px] font-light tracking-[0.24em] text-neutral-400 uppercase">BIOWORKS</span>
+              <span className="block text-base font-black tracking-widest uppercase">ENDOD</span>
+              <span className="block text-[11px] font-light tracking-[0.24em] text-neutral-400 uppercase">HEALTH OS</span>
             </div>
           </div>
         </div>
@@ -84,7 +85,7 @@ export default function Footer() {
           <div className="flex items-center gap-2">
             <a className="hover:text-white transition-colors" href="#">Terms &amp; Conditions</a>
             <span>|</span>
-            <span>© Copyright Ginkgo Bioworks 2025</span>
+            <span>© Copyright Endod Health OS 2025</span>
           </div>
           <div className="flex items-center gap-4">
             <span className="uppercase tracking-wider text-[11px] font-semibold text-neutral-300">FOLLOW US</span>

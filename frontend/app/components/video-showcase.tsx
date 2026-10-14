@@ -5,21 +5,21 @@ export default function VideoShowcase() {
         {/* Section Title with trailing line */}
         <div className="flex items-center gap-4 mb-8">
           <h3 className="text-xl sm:text-2xl font-bold text-[#0b1c2b] tracking-tight whitespace-nowrap">
-            See ours in action
+            See Endod AI in action
           </h3>
           <div className="w-full h-[1px] bg-stone-300" />
         </div>
 
         {/* Embedded Video Style Player Container */}
         <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black shadow-2xl border border-stone-200">
-          {/* Background scientist AR overlay visual (Screenshot 5) */}
+          {/* Background gradient overlay visual */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/70 flex items-center justify-center">
             <div className="w-full h-full bg-purple-950/40 mix-blend-screen absolute inset-0" />
             {/* AR futuristic subtitle box simulation */}
             <div className="relative z-10 px-6 max-w-2xl text-left">
               <div className="font-mono text-white text-lg sm:text-2xl lg:text-3xl font-light tracking-wide drop-shadow-md">
                 <span className="text-neutral-400 font-sans">[</span>
-                <span>Run cell free protein synthesis protocol and me<span className="text-purple-300 font-bold">a</span></span>
+                <span>I&rsquo;ve h<span className="text-purple-300 font-bold">a</span>d a fever and a cough for three days</span>
                 <span className="inline-block w-2.5 h-6 bg-purple-400 animate-pulse ml-1 align-middle" />
                 <span className="text-neutral-400 font-sans">]</span>
               </div>
@@ -35,8 +35,8 @@ export default function VideoShowcase() {
                 </svg>
               </div>
               <div>
-                <p className="text-white text-xs font-semibold drop-shadow">Introducing the Autonomous Lab</p>
-                <p className="text-neutral-300 text-[10px]">Ginkgo Bioworks</p>
+                <p className="text-white text-xs font-semibold drop-shadow">Introducing Endod AI</p>
+                <p className="text-neutral-300 text-[10px]">Endod Health OS</p>
               </div>
             </div>
             {/* Video action icons */}

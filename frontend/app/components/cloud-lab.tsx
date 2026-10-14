@@ -4,9 +4,9 @@ export default function CloudLab() {
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <img
-          alt="Cloud lab"
+          alt="Hospital directory and live crowd levels"
           className="w-full h-full object-cover object-center"
-          src="https://cdn.prod.website-files.com/691b94a518664e13feebd656/691c10d727d6d4e900e3285d_Ginkgo_1__May%2023%202022_179_crop2%20(1)-p-1600.avif"
+          src="/images/catalyst-agent.webp"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-black/40" />
       </div>
@@ -17,22 +17,22 @@ export default function CloudLab() {
           {/* Overline badge */}
           <div className="mb-4">
             <span className="inline-block text-[11px] font-bold uppercase tracking-widest text-slate-800 border-b-2 border-slate-900 pb-0.5">
-              CLOUD LAB
+              FOR HOSPITALS
             </span>
           </div>
           <h2 className="text-3xl sm:text-5xl font-serif text-[#0b1c2b] tracking-tight leading-[1.08] mb-5">
-            Try before you buy
+            Reach the right hospital, faster
           </h2>
           <h3 className="text-lg sm:text-[21px] font-serif text-slate-800 leading-snug mb-4">
-            Run your experiments on Ginkgo&rsquo;s autonomous lab in Boston, virtually
+            An interactive map of nearby hospitals paired with live crowd levels
           </h3>
           <p className="text-slate-700 text-sm sm:text-base leading-relaxed mb-8">
-            Regardless of whether your R&amp;D project is open-ended or defined, Ginkgo can help. Our Ginkgo Solutions and Ginkgo Datapoints teams work with you to understand your project and design experiments that directly address your goals.
+            Each facility reports its crowd status in real time, so you can compare wait times and book the right appointment online. Reschedule or cancel anytime, with SMS and in-app reminders to keep you on track.
           </p>
           {/* Two CTA Buttons */}
           <div className="flex flex-wrap items-center gap-3">
-            <a className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-slate-900 bg-white/80 hover:bg-white text-slate-900 text-sm font-medium transition shadow-sm group" href="#contact-section">
-              <span>Solutions</span>
+            <a className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-slate-900 bg-white/80 hover:bg-white text-slate-900 text-sm font-medium transition shadow-sm group" href="/interview">
+              <span>Find a hospital</span>
               <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center">
                 <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" />
@@ -40,7 +40,7 @@ export default function CloudLab() {
               </span>
             </a>
             <a className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-[#0d2130] hover:bg-[#16364e] text-white text-sm font-medium transition shadow-md group" href="#contact-section">
-              <span>Datapoints</span>
+              <span>Hospital Portal</span>
               <span className="w-5 h-5 rounded-full bg-white text-slate-900 flex items-center justify-center">
                 <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" />
