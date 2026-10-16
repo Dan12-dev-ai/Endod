@@ -536,6 +536,19 @@ def update_profile(
             and _email_taken(session, changes["email"], user.id)
         ):
             raise EmailInUse("Another account already uses this email address.")
+        # A verified phone and the email are how a patient signs in and
+        # recovers the account, so a profile edit may not take either away:
+        # a verified number changes only through a code (POST /users/me/phone),
+        # and the email can be removed only once a verified phone exists.
+        phone_verified = user.profile.phone_verified_at is not None
+        if "phone" in changes and changes["phone"] != user.profile.phone and phone_verified:
+            raise IdentityError(
+                "To change your verified phone number, confirm the new number with a code."
+            )
+        if "email" in changes and not changes["email"] and user.profile.email and not phone_verified:
+            raise IdentityError(
+                "You sign in with this email. Verify a phone number before removing it."
+            )
         # A new number is unproven: typing someone else's number must not
         # let it sign in to this account.
         if "phone" in changes and changes["phone"] != user.profile.phone:
