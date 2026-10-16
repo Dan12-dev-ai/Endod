@@ -109,8 +109,10 @@ def emergency_number(location: Optional[str]) -> str:
 # Text normalisation and negation
 # ---------------------------------------------------------------------------
 
+#: "never" and "without" are deliberately absent: "never had chest pain like
+#: this" and "can't climb stairs without chest pain" describe the symptom.
 _NEGATION_CUES = re.compile(
-    r"\b(no|not|without|denies|denied|never|nor|"
+    r"\b(no|not|denies|denied|nor|"
     r"(?:do|does|did)\s?n['o]?t\s+have|have\s?n['o]?t\s+(?:had|got)|"
     r"free\s+of|negative\s+for)\b"
 )
@@ -123,6 +125,8 @@ _NEGATION_BLOCKERS = frozenset({
     "their", "why", "idea", "because", "if", "when", "what", "how", "that", "which", "who",
     "so", "is", "am", "are", "was", "were", "be", "been", "can", "can't", "cannot", "now",
     "sure", "know", "think", "until", "since", "suddenly", "today", "yesterday",
+    # "no relief from chest pain", "not helping with the chest pain"
+    "relief", "help", "helping", "better", "improvement", "change", "from", "like",
 })
 _CLAUSE_SPLIT = re.compile(r"[.;!?\n]|,\s*but\b|\bbut\b|\bhowever\b|\balthough\b")
 
@@ -202,8 +206,7 @@ _EMERGENCY_RULES: Tuple[Tuple[str, List[Pattern[str]]], ...] = (
         r"overdos\w*",
         r"(?<!food )poison\w*",
         r"took (?:\d{2,}|too many|a lot of|all (?:of )?(?:my|the|his|her)) (?:\w+ )?(?:pills|tablets|capsules)",
-        r"took \d{2,} (?:paracetamol|panadol|acetaminophen|ibuprofen|aspirin|sleeping)",
-        r"\b\d{2,} (?!mg\b|mcg\b|ml\b|g\b)(?:\w+ )?(?:pills|tablets|capsules)\b",
+        r"(?:took|taken|swallowed|ate) (?:about |around |over |maybe )?\d{2,} (?:paracetamol|panadol|acetaminophen|ibuprofen|aspirin|sleeping)",
         r"swallowed (?:bleach|poison|chemicals?|kerosene|petrol|a battery|pesticide)",
         r"drank (?:bleach|poison|kerosene|petrol|pesticide)",
         r"መርዝ",
@@ -236,13 +239,15 @@ _EMERGENCY_RULES: Tuple[Tuple[str, List[Pattern[str]]], ...] = (
         r"(?:sudden(?:ly)?|can't|cannot|unable to) (?:speak|talk)",
         r"(?:arm|leg|hand) (?:is |went |feels |suddenly )?(?:weak|numb|paralys\w*|limp)",
         r"(?:weakness|numbness) (?:in|on|of) (?:one|the left|the right|his left|his right|her left|her right) (?:side|arm|leg)",
-        r"sudden (?:weakness|numbness|confusion|blindness|loss of vision)",
+        r"sudden (?:weakness|numbness|confusion|blindness|loss of vision|vision loss)",
         r"ስትሮክ", r"ፊ(?:ቴ|ቱ|ቷ) ተጣመመ", r"የፊት መጣመም", r"ሽባ",
     ])),
     ("unconscious_or_unresponsive", _compile([
         r"unconscious",
         r"unresponsive",
-        r"not respond\w*",
+        r"(?:he|she|they|baby|child|son|daughter|mother|mum|mom|father|dad|husband|wife|patient)"
+        r" (?:is |was |isn't |wasn't )?not respond\w*",
+        r"not responding to (?:me|us|his name|her name|voice|touch|pain|anything)",
         r"(?:loss of|lost) consciousness",
         r"passed out",
         r"collapsed",
@@ -265,6 +270,8 @@ _EMERGENCY_RULES: Tuple[Tuple[str, List[Pattern[str]]], ...] = (
     ])),
     ("anaphylaxis", _compile([
         r"anaphyla\w*",
+        r"(?:severe|serious|bad) allergic reaction",
+        r"allergic reaction.{0,40}(?:breath|swell|throat|tongue|lips)",
         r"(?:throat|tongue|lips?) (?:is |are )?(?:closing|swelling|swollen)",
         r"swollen (?:throat|tongue)",
     ])),
@@ -273,6 +280,15 @@ _EMERGENCY_RULES: Tuple[Tuple[str, List[Pattern[str]]], ...] = (
         r"(?:fever|headache).{0,40}stiff neck",
         r"neck (?:is )?stiff.{0,40}fever",
     ])),
+    # Escalated to emergency by the validator this module replaced; kept at
+    # that level so nothing it caught is now triaged lower.
+    ("severe_symptom", _compile([
+        r"(?:severe|worst|terrible|thunderclap|sudden severe) headache",
+        r"severe (?:abdominal|stomach|belly) pain",
+        r"severe(?:ly)? dehydrat\w*",
+        r"\bconfus(?:ed|ion)\b(?! (?:about|by|with|as to|on how))",
+        r"ከባድ የራስ ምታት",
+    ])),
     ("severe_trauma", _compile([
         r"severe (?:head injury|burns?)",
         r"head injury.{0,40}(?:vomit|unconscious|confus|sleepy)",
@@ -280,27 +296,46 @@ _EMERGENCY_RULES: Tuple[Tuple[str, List[Pattern[str]]], ...] = (
         r"electric(?:al)? shock|electrocut\w*",
         r"drown\w*",
         r"bone (?:is )?(?:sticking|poking) out",
+        r"(?:broken|fractured) bone (?:is )?(?:protruding|sticking out)",
+        r"bone (?:is )?protruding",
     ])),
 )
 
 _URGENT_RULES: Tuple[Tuple[str, List[Pattern[str]]], ...] = (
     ("high_fever", _compile([r"high fever", r"very high temperature", r"ከፍተኛ ትኩሳት"])),
-    ("severe_headache", _compile([r"(?:severe|worst|terrible|sudden) headache", r"ከባድ የራስ ምታት"])),
-    ("severe_abdominal_pain", _compile([r"severe (?:abdominal|stomach|belly) pain"])),
     ("dehydration", _compile([
         r"(?:can't|cannot|unable to) keep (?:any )?(?:fluids|water|anything) down",
-        r"(?:severely |very )?dehydrat\w*",
+        r"dehydrat\w*",
         r"(?:not|no|hasn't|hasn't been) (?:peeing|urinating|passing urine)",
     ])),
     ("persistent_vomiting", _compile([r"(?:persistent|constant|non-?stop) vomiting", r"vomit\w* everything"])),
     ("bloody_diarrhoea", _compile([r"blood(?:y)? (?:in (?:the |my )?)?(?:diarrh\w*|stool)"])),
-    ("confusion", _compile([r"\bconfus\w*", r"disoriented"])),
-    ("severe_pain", _compile([r"severe pain", r"unbearable pain"])),
-    ("spreading_infection", _compile([r"spreading redness", r"red streak\w*"])),
+    ("disoriented", _compile([r"disoriented"])),
+    ("severe_pain", _compile([r"severe pain", r"unbearable pain", r"pain not (?:relieved|helped|going away)"])),
+    ("spreading_infection", _compile([
+        r"spreading redness", r"red streak\w*", r"increasing swelling",
+        r"\bpus\b", r"foul(?:-smelling)? (?:discharge|smell)",
+    ])),
+    ("difficulty_swallowing", _compile([
+        r"(?:difficulty|trouble|pain(?:ful)?|problems?) (?:when )?swallow\w*",
+        r"(?:can't|cannot|unable to) swallow",
+    ])),
+    ("rapid_heartbeat", _compile([
+        r"(?:rapid|racing|fast|pounding) (?:heart ?beat|heart rate|pulse)",
+        r"heart (?:is )?(?:racing|pounding)", r"palpitations?",
+    ])),
+    ("stiff_neck", _compile([r"stiff neck", r"neck (?:is )?stiff"])),
+    ("worsening", _compile([r"worsening symptoms?", r"symptoms? (?:are |is )?(?:getting )?worse"])),
 )
 
 _FEVER = _compile([
-    r"fever\w*", r"febrile", r"(?:high|raised|very high) temperature", r"hot to (?:the )?touch", r"ትኩሳት",
+    r"fever\w*", r"\bfebrile\b", r"(?:high|raised|very high) temperature", r"hot to (?:the )?touch", r"ትኩሳት",
+])
+
+_RASH = _compile([r"\brash\b", r"spots? (?:that )?(?:don't|do not|won't) fade"])
+_OLDER_HINT = _compile([r"\belderly\b", r"\bold (?:man|woman|person|lady)\b"])
+_IMMUNOCOMPROMISED = _compile([
+    r"immuno(?:compromised|suppressed)", r"\bhiv\b", r"\baids\b", r"chemo\w*", r"transplant",
 ])
 
 _STIFF_NECK = _compile([r"stiff neck", r"neck (?:is )?stiff", r"can't (?:bend|move) (?:my|his|her) neck"])
@@ -316,13 +351,16 @@ _PREGNANCY_HINT = _compile([r"pregnan\w*", r"weeks? pregnant", r"expecting a bab
 _CHILD_DANGER_SIGNS = _compile([
     r"(?:not|not able to|unable to|can't|cannot|won't|refus\w* to) (?:drink|breastfeed|breast ?feed|feed|suck)",
     r"(?:vomit\w*|throws? up) everything",
-    r"(?:very |unusually )?(?:sleepy|drowsy|lethargic|floppy|limp)",
+    r"\b(?:very|unusually|extremely|abnormally|too) (?:sleepy|drowsy)\b",
+    r"\b(?:lethargic|floppy)\b",
+    r"(?:is|went|gone|feels|looks|seems|became) (?:all )?limp\b",
     r"hard to wake|difficult to wake",
 ])
 _POOR_FEEDING = _compile([r"(?:not|isn't|hasn't been|won't|refus\w* to) (?:eat\w*|feed\w*)", r"no appetite", r"lost (?:his|her|their) appetite"])
 
 _PREGNANCY_DANGER_SIGNS = _compile([
-    r"bleed\w*",
+    # Not a nosebleed or bleeding gums, which are common in pregnancy.
+    r"(?<!nose )(?<!gums )(?<!gum )\bbleed\w*",
     r"severe (?:abdominal|stomach|belly) pain",
     r"(?:severe|bad|terrible) headache",
     r"blurr\w* vision|vision (?:is )?blurr\w*",
@@ -444,13 +482,24 @@ def assess(
     if temperature is not None:
         if temperature >= 41:
             result.raise_to("emergency", "emergency:very_high_temperature", f"{temperature:.1f}C")
-        elif temperature >= 39:
+        elif temperature >= 38.8:  # 102 F is 38.9 C
             result.raise_to("urgent", "urgent:high_temperature", f"{temperature:.1f}C")
     fever_days = _fever_days(normalised) if fever else None
     if fever:
         stiff_neck = _find(_STIFF_NECK, clauses)
         if stiff_neck:
             result.raise_to("emergency", "emergency:meningitis_signs", stiff_neck)
+        rash = _find(_RASH, clauses)
+        if rash:
+            # Fever with a rash can be meningococcal disease; with a high
+            # fever it is treated as an emergency.
+            high = (temperature is not None and temperature >= 38.8) or "high fever" in normalised
+            if high:
+                result.raise_to("emergency", "emergency:high_fever_with_rash", rash)
+            else:
+                result.raise_to("urgent", "urgent:fever_with_rash", rash)
+        if _find(_IMMUNOCOMPROMISED, clauses):
+            result.raise_to("urgent", "urgent:fever_when_immunocompromised", fever)
 
     # --- Age ---------------------------------------------------------------
     months = _age_in_months_from_text(normalised)
@@ -483,7 +532,10 @@ def assess(
     elif fever and fever_days is not None and fever_days >= 3:
         result.raise_to("see_doctor_soon", "soon:prolonged_fever", fever)
 
-    if age_years is not None and age_years >= 75 and (fever or result.urgency != "routine"):
+    # Age given as a field, in the text ("my 80-year-old father"), or as
+    # "elderly".
+    older_adult = (months is not None and months >= 75 * 12) or bool(_find(_OLDER_HINT, clauses))
+    if older_adult and (fever or result.urgency != "routine"):
         result.raise_to("urgent", "urgent:older_adult_with_symptoms", fever)
 
     # --- Pregnancy ---------------------------------------------------------

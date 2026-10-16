@@ -159,3 +159,15 @@ class TestResponseTransformer:
         response = model_said(label)
         safety = response_transformer._build_safety(response, None)
         assert safety.urgency.value == expected
+
+
+def test_parse_error_never_lowers_the_models_emergency():
+    """Review: a bad later field used to overwrite the model's "emergency"."""
+    from providers.gemini_provider import GeminiProvider
+
+    provider = GeminiProvider.__new__(GeminiProvider)
+    provider.model_name = "gemini-test"
+    raw = '{"urgency": "emergency", "confidence_score": "high", "recommended_next_step": "Call 907 now."}'
+    result = provider._parse_response(SimpleNamespace(text=raw), Modality.TEXT)
+    assert result.urgency == "emergency"
+    assert result.recommended_next_step == "Call 907 now."

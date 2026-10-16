@@ -154,3 +154,77 @@ class TestEmergencyNumbers:
 )
 def test_negation_does_not_hide_emergencies(text):
     assert assess(text).urgency == "emergency", text
+
+
+# --- No regression against the keyword lists this module replaced -----------
+# Every phrase the old safety validator or offline engine escalated must still
+# reach at least the same level.
+_OLD_EMERGENCY = [
+    # safety_validator.EMERGENCY_KEYWORDS
+    "chest pain", "difficulty breathing", "shortness of breath", "severe bleeding",
+    "loss of consciousness", "unconscious", "stroke symptoms", "heart attack",
+    "severe allergic reaction", "anaphylaxis", "suicidal", "confusion",
+    "slurred speech", "facial drooping", "arm weakness", "severe headache",
+    "high fever with rash", "seizure", "severe abdominal pain", "vomiting blood",
+    "black tarry stools", "severe dehydration", "unable to wake", "coughing blood",
+    "sudden vision loss", "severe burns", "electric shock", "drowning",
+    "poisoning", "overdose", "severe head injury", "broken bone protruding",
+    # offline_provider._EMERGENCY_PATTERNS
+    "can't breathe", "stroke", "facial droop", "blue lips", "stiff neck and fever",
+]
+_OLD_URGENT = [
+    # safety_validator.URGENT_KEYWORDS and offline_provider._URGENT_PATTERNS
+    "worsening symptoms", "high fever", "severe pain", "bloody diarrhea",
+    "difficulty swallowing", "rapid heartbeat", "stiff neck", "persistent vomiting",
+    "unable to keep fluids down", "signs of dehydration", "pregnant with bleeding",
+    "newborn with fever", "elderly with confusion", "immunocompromised with fever",
+    "spreading redness", "increasing swelling", "pus or foul discharge",
+    "fever above 39", "fever above 102", "pain not relieved by otc",
+    "rash and fever", "fever and rash", "dehydrated",
+]
+
+
+@pytest.mark.parametrize("phrase", _OLD_EMERGENCY)
+def test_no_regression_old_emergency_phrases(phrase):
+    assert assess(f"I have {phrase}").urgency == "emergency", phrase
+
+
+@pytest.mark.parametrize("phrase", _OLD_URGENT)
+def test_no_regression_old_urgent_phrases(phrase):
+    result = assess(f"I have {phrase}")
+    assert urgency_rank(result.urgency) >= urgency_rank("urgent"), (phrase, result.reasons)
+
+
+# --- Automated review (Qodo) on PR #2 ----------------------------------------
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I've never had chest pain like this before",
+        "I can't climb the stairs without chest pain",
+        "no relief from the chest pain",
+        "I have a severe allergic reaction",
+        "My 80-year-old father has a fever and seems confused",
+    ],
+)
+def test_review_cases_that_must_escalate(text):
+    assert urgency_rank(assess(text).urgency) >= urgency_rank("urgent"), text
+
+
+def test_older_adult_age_in_text_with_fever_is_urgent():
+    assert urgency_rank(assess("My 80-year-old father has a fever").urgency) >= urgency_rank("urgent")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "my 2 month old is afebrile and feeding well",
+        "I am pregnant and had a small nosebleed",
+        "my son is limping after he fell",
+        "my fever is not responding to paracetamol",
+        "the doctor gave me 20 tablets of amoxicillin",
+        "my daughter is sleepy after a long day",
+        "I am a bit confused about how to take my medicine",
+    ],
+)
+def test_review_cases_that_must_not_be_emergencies(text):
+    assert assess(text).urgency != "emergency", (text, assess(text).reasons)

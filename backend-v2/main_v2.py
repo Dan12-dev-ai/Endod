@@ -1221,10 +1221,11 @@ async def get_clinical_guidance(request: ClinicalGuidanceRequest):
         for med in structured_response.medication_information:
             verification = medication_safety_service.get_pharmacy_verification_workflow(med.medication_class)
             structured_response.medication_verification.extend([
+                # `package_check_items` is a list of plain strings.
                 MedicationVerificationItem(
-                    field=item["field"],
-                    description=item["description"],
-                    why_important=item.get("why_important", "Important for safety"),
+                    field=item,
+                    description=f"Check the package for: {item}",
+                    why_important="Confirms you received the right medicine, strength and quality.",
                 )
                 for item in verification.get("package_check_items", [])
             ])

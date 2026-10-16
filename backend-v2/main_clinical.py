@@ -581,7 +581,7 @@ def create_app(settings = None) -> FastAPI:
                 # them (an emergency is still reported as one).
                 logger.error(
                     "Analysis %s: provider failed (%s); using offline rules",
-                    request_id, type(provider_exc).__name__,
+                    request_id, type(provider_exc).__name__, exc_info=provider_exc,
                 )
                 from providers.models import TextAnalysisRequest
                 from providers.offline_provider import OfflineProvider

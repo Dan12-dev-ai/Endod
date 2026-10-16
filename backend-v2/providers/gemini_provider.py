@@ -18,6 +18,8 @@ from typing import Any, Dict, List, Optional
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
+import clinical_triage
+
 from .models import (
     Modality,
     ProviderCapabilities,
@@ -319,12 +321,15 @@ class GeminiProvider(MultimodalAIProvider):
             # model contract's "routine".
             result.raw_response = str(e)
             result.safety_flags.append(f"provider_response_unreadable:{type(e).__name__}")
-            result.urgency = "see_doctor_soon"
+            # Escalate only: the model may already have said "emergency"
+            # before a later field failed to parse.
+            result.urgency = clinical_triage.max_urgency(result.urgency, "see_doctor_soon")
             result.requires_professional_review = True
-            result.recommended_next_step = (
-                "We could not complete this assessment. Please see a clinician, "
-                "and seek emergency care if your symptoms are severe."
-            )
+            if not result.recommended_next_step:
+                result.recommended_next_step = (
+                    "We could not complete this assessment. Please see a clinician, "
+                    "and seek emergency care if your symptoms are severe."
+                )
         return result
     
     def _populate_from_dict(self, result: AnalysisResponse, data: Dict[str, Any]):
