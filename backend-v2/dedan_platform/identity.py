@@ -752,7 +752,11 @@ def update_consent(
             raise UserNotFound("Account not found.")
         consent = user.consent
         for field, value in changes.items():
-            setattr(consent, field, bool(value))
+            # Strictly true/false: bool("false") is True, and consent must
+            # never be granted by a string.
+            if not isinstance(value, bool):
+                raise IdentityError(f"{field} must be true or false.")
+            setattr(consent, field, value)
 
         now = utcnow()
         if any(bool(v) for v in changes.values()):

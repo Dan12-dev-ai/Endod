@@ -111,7 +111,7 @@ def browse_facilities(
 
 
 @router.get("/care/facilities/{facility_id}")
-def read_facility(facility_id: str) -> Dict[str, Any]:
+def read_facility(facility_id: str, user_id: str = Depends(current_user_id)) -> Dict[str, Any]:
     facility = cn.get_facility(facility_id)
     if facility is None:
         # 404 rather than 403: a wrong-owner request must not confirm the

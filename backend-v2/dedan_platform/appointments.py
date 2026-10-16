@@ -68,6 +68,10 @@ class AppointmentError(RuntimeError):
     """Appointment operation failed."""
 
 
+class AppointmentNotFound(AppointmentError):
+    """No such appointment for this patient (404, whatever the operation)."""
+
+
 VISIT_MODES = ("in_person", "telehealth")
 #: Arrival windows, as local [start, end) hours in the appointment's timezone.
 TIME_WINDOWS = {"exact": None, "morning": (8, 12), "afternoon": (12, 17), "evening": (17, 21)}
@@ -460,6 +464,9 @@ def update_status(
     """
     if target_status not in EventStatus.ALL:
         raise AppointmentError(f"Unknown status '{target_status}'.")
+    if target_status == EventStatus.RESCHEDULED:
+        # Needs a new time and fresh reminders; only `reschedule` does both.
+        raise AppointmentError("To reschedule, use the reschedule endpoint with the new time.")
 
     with session_scope() as session:
         appointment = session.scalar(
@@ -468,7 +475,7 @@ def update_status(
             )
         )
         if appointment is None:
-            raise AppointmentError("Appointment not found.")
+            raise AppointmentNotFound("Appointment not found.")
         _transition(appointment, target_status)
         update_appointment_event(session, user_id, appointment_id, target_status)
         session.flush()
@@ -498,7 +505,8 @@ def update_status(
                 "appointment_id": appointment_id,
                 "record": {
                     "facility_name": payload.get("location"),
-                    "department": payload["appointment_type"].replace("_", " ").title(),
+                    "department": payload.get("department")
+                    or payload["appointment_type"].replace("_", " ").title(),
                     "medications": [],
                 },
             },
@@ -544,7 +552,7 @@ def reschedule(
             )
         )
         if appointment is None:
-            raise AppointmentError("Appointment not found.")
+            raise AppointmentNotFound("Appointment not found.")
         _require_no_overlap(
             session, user_id, new_time, appointment.duration_minutes or 30,
             appointment.provider_id, exclude_id=appointment.id,
@@ -594,14 +602,17 @@ def list_appointments(
     upcoming_only: bool = False,
     limit: int = 50,
 ) -> List[Dict[str, Any]]:
-    """Appointments for one user, newest first."""
+    """Appointments for one user: newest first, or soonest first when
+    ``upcoming_only`` (active ones in the future)."""
     limit = max(1, min(int(limit or 50), 200))
     with session_scope() as session:
         stmt = select(Appointment).where(Appointment.user_id == user_id)
         if upcoming_only:
             stmt = stmt.where(
                 Appointment.scheduled_at >= utcnow(),
-                Appointment.status.notin_([EventStatus.CANCELLED, EventStatus.COMPLETED]),
-            )
-        stmt = stmt.order_by(Appointment.scheduled_at.desc()).limit(limit)
+                Appointment.status.notin_(list(TERMINAL_STATUSES)),
+            ).order_by(Appointment.scheduled_at.asc())
+        else:
+            stmt = stmt.order_by(Appointment.scheduled_at.desc())
+        stmt = stmt.limit(limit)
         return [_to_payload(a) for a in session.scalars(stmt)]

@@ -71,6 +71,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     EXEMPT_PATHS = frozenset({"/api/health", "/health", "/docs", "/redoc", "/openapi.json"})
+    #: Static portal files: a page load fetches many, and they cost nothing.
+    STATIC_SUFFIXES = (".js", ".css", ".png", ".jpg", ".jpeg", ".svg", ".ico", ".woff", ".woff2", ".webp")
+
+    def _is_exempt(self, request: Request) -> bool:
+        path = request.url.path
+        if path in self.EXEMPT_PATHS:
+            return True
+        return request.method == "GET" and path.lower().endswith(self.STATIC_SUFFIXES) and not (
+            path.startswith(("/api/", "/users/", "/auth/", "/dedan/"))
+        )
 
     def __init__(self, app: ASGIApp, requests_per_window: int = 30, window_seconds: int = 60):
         super().__init__(app)
@@ -110,7 +120,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return True
 
     async def dispatch(self, request: Request, call_next):
-        if request.url.path in self.EXEMPT_PATHS:
+        if self._is_exempt(request):
             return await call_next(request)
         if not self.hit(self.client_identity(request)):
             return JSONResponse(

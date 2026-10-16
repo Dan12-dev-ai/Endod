@@ -191,6 +191,9 @@ async def periodic_cleanup():
             logger.error(f"Periodic cleanup error: {e}")
 
 
+_PRIVATE_IMAGE_FIELDS = frozenset({"stored_filename", "content_hash", "session_id"})
+
+
 class ConsultationRequest(BaseModel):
     """What the patient describes; everything else comes from their profile."""
 
@@ -284,8 +287,8 @@ def create_app(settings = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(settings.CORS_ORIGINS or []),
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "X-API-Key", "Content-Type"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "X-API-Key", "Content-Type", "X-Correlation-ID"],
         expose_headers=["X-Process-Time", "Retry-After"],
         max_age=600,
     )
@@ -502,6 +505,7 @@ def create_app(settings = None) -> FastAPI:
                 "details": exc.detail if isinstance(exc.detail, dict) else None,
                 "timestamp": time.time(),
             },
+            headers=getattr(exc, "headers", None),
         )
 
     @app.exception_handler(RequestValidationError)
@@ -565,12 +569,10 @@ def create_app(settings = None) -> FastAPI:
             session_id = request.get("session_id")
             if not base64_data:
                 raise HTTPException(status_code=400, detail="image_data is required")
-            try:
-                file_content = base64.b64decode(base64_data, validate=True)
-            except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail="image_data is not valid base64")
+            if not isinstance(base64_data, str):
+                raise HTTPException(status_code=400, detail="image_data must be a base64 string")
             return await run_in_threadpool(
-                image_service.validate_and_store, file_content, filename, session_id
+                image_service.validate_and_store_base64, base64_data, filename, session_id
             )
         except HTTPException:
             raise
@@ -585,7 +587,8 @@ def create_app(settings = None) -> FastAPI:
         metadata = image_service.get_metadata(image_id)
         if not metadata:
             raise HTTPException(status_code=404, detail="Image not found")
-        return metadata
+        # Storage internals and the session link are not the caller's business.
+        return {k: v for k, v in metadata.items() if k not in _PRIVATE_IMAGE_FIELDS}
 
     @app.get("/api/images/{image_id}/preview")
     async def get_image_preview(image_id: str):
@@ -792,7 +795,9 @@ def create_app(settings = None) -> FastAPI:
             raise
         except Exception as e:
             logger.error(f"Analysis error {request_id}: {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Analysis failed. Reference: {request_id}"
+            )
 
     from dedan_platform import identity as platform_identity
     from dedan_platform.api_profile import current_user_id as platform_current_user

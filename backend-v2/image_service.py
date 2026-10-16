@@ -216,9 +216,9 @@ class ImageService:
                 pass
 
         try:
-            file_content = base64.b64decode(base64_data)
-        except Exception as e:
-            raise ImageValidationError("Invalid base64 encoding", errors=[str(e)])
+            file_content = base64.b64decode(base64_data, validate=True)
+        except Exception:
+            raise ImageValidationError("Invalid base64 encoding", errors=["image_data is not valid base64"])
 
         return self.validate_and_store(file_content, filename, session_id)
 

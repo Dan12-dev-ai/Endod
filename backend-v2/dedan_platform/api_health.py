@@ -27,6 +27,8 @@ router = APIRouter(tags=["timeline", "appointments"])
 def _error(exc: Exception) -> HTTPException:
     if isinstance(exc, tl.TimelineError):
         return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, appt.AppointmentNotFound):
+        return HTTPException(status_code=404, detail=str(exc))
     if isinstance(exc, appt.AppointmentError):
         return HTTPException(status_code=400, detail=str(exc))
     return HTTPException(status_code=400, detail=str(exc))
