@@ -143,6 +143,28 @@ def reminder_offsets_for(appointment: Appointment, user_preferences: Optional[st
 _PAST_TOLERANCE = timedelta(minutes=5)
 
 
+#: Status changes the patient is told about in the app inbox.
+_STATUS_MESSAGES = {
+    EventStatus.CONFIRMED: ("appointment_confirmed", "Appointment confirmed"),
+    EventStatus.CANCELLED: ("appointment_cancelled", "Appointment cancelled"),
+}
+
+
+def _notify(user_id: str, kind: str, title: str, payload: Dict[str, Any]) -> None:
+    """Inbox item for an appointment change (never fails the change)."""
+    from dedan_platform import inbox
+    from dedan_platform.email_provider import format_appointment_time
+
+    when = format_appointment_time({
+        "scheduled_at": payload.get("scheduled_at"), "timezone": payload.get("timezone"),
+    })
+    place = f" at {payload['location']}" if payload.get("location") else ""
+    inbox.add_item(
+        user_id, "appointments", kind, title, body=f"{when}{place}.",
+        link_screen="appointment", link_id=payload.get("appointment_id"),
+    )
+
+
 def _lock_booking(session: Session, keys: List[str]) -> None:
     """Serialise bookings that could clash, until this transaction ends.
 
@@ -287,6 +309,7 @@ def create_appointment(
         correlation_id=correlation_id,
     )
 
+    _notify(user_id, "appointment_booked", "Appointment booked", payload)
     return {
         "appointment": payload,
         # Count of reminders the *policy* calls for. Nothing is enqueued here:
@@ -368,6 +391,9 @@ def update_status(
             correlation_id=correlation_id,
         )
     payload["reminders_cancelled"] = cancelled_reminders
+    if target_status in _STATUS_MESSAGES:
+        kind, title = _STATUS_MESSAGES[target_status]
+        _notify(user_id, kind, title, payload)
     return payload
 
 
@@ -417,6 +443,7 @@ def reschedule(
     # instant, so re-arming against the new time creates new rows rather than
     # colliding with these.
     payload["reminders_cancelled"] = notifications.cancel_for_appointment(appointment_id)
+    _notify(user_id, "appointment_rescheduled", "Appointment moved", payload)
     return payload
 
 
