@@ -102,4 +102,41 @@ class TestOnboarding:
     def test_prefer_not_to_say(self, client, auth):
         client.patch("/users/me/consent", headers=auth, json={"treatment_processing": True})
         hp = client.patch("/users/me/health-profile", headers=auth, json={"sex": "Prefer not to say"}).json()
-        assert hp["sex"] == "prefer_not_to_say"
+        assert hp["sex"] == "undisclosed"  # fits the 16-character column
+
+
+class TestReviewFindings:
+    """Automated review (Qodo) of PR #11."""
+
+    def test_a_chosen_nickname_survives_name_edits(self, client, auth):
+        client.patch("/users/me", headers=auth, json={"display_name": "Abi"})
+        me = client.patch("/users/me", headers=auth, json={"first_name": "Abebech"}).json()
+        assert me["display_name"] == "Abi"
+
+    def test_clearing_name_parts_clears_the_derived_name(self, client, auth):
+        me = client.patch("/users/me", headers=auth, json={"first_name": None, "last_name": None}).json()
+        assert me["display_name"] is None
+
+    def test_long_name_parts_fit_the_display_name(self, client, auth):
+        resp = client.patch("/users/me", headers=auth, json={
+            "first_name": "a" * 60, "middle_name": "b" * 60, "last_name": "c" * 60,
+        })
+        assert resp.status_code == 200
+        assert len(resp.json()["display_name"]) <= 120
+
+    def test_garbage_after_a_date_is_rejected(self, client, auth):
+        client.patch("/users/me/consent", headers=auth, json={"treatment_processing": True})
+        assert client.patch("/users/me/health-profile", headers=auth,
+                            json={"date_of_birth": "2000-01-15garbage"}).status_code == 400
+
+    def test_undisclosed_sex_fits_the_column(self, client, auth):
+        from dedan_platform.models import HealthProfile
+
+        client.patch("/users/me/consent", headers=auth, json={"treatment_processing": True})
+        stored = client.patch("/users/me/health-profile", headers=auth, json={"sex": "prefer_not_to_say"}).json()["sex"]
+        assert len(stored) <= HealthProfile.__table__.c.sex.type.length
+
+    @pytest.mark.parametrize("goals", [[{"x": 1}], [["symptoms"]], [1]])
+    def test_malformed_goal_lists_are_400(self, client, auth, goals):
+        assert client.patch("/users/me/preferences", headers=auth,
+                            json={"onboarding_goals": goals}).status_code == 400

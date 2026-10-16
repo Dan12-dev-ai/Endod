@@ -454,6 +454,12 @@ def _flush_checking_email(session: Session) -> None:
         raise
 
 
+def _derived_name(profile) -> Optional[str]:
+    """First, middle and last name joined, within the display-name column."""
+    parts = (profile.first_name, profile.middle_name, profile.last_name)
+    return " ".join(p for p in parts if p)[:120].rstrip() or None
+
+
 def _validate_profile_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
     """Type- and range-check a profile patch.
 
@@ -528,11 +534,18 @@ def update_profile(
         # let it sign in to this account.
         if "phone" in changes and changes["phone"] != user.profile.phone:
             user.profile.phone_verified_at = None
+        derived_before = _derived_name(user.profile)
         for field, value in changes.items():
             setattr(user.profile, field, value)
-        if "display_name" not in changes and {"first_name", "middle_name", "last_name"} & set(changes):
-            parts = (user.profile.first_name, user.profile.middle_name, user.profile.last_name)
-            user.profile.display_name = " ".join(p for p in parts if p) or user.profile.display_name
+        # The display name follows the name parts only while it *is* the name
+        # parts (or empty): a nickname the patient chose is never overwritten,
+        # and clearing the parts clears a derived name instead of leaving it.
+        if (
+            "display_name" not in changes
+            and {"first_name", "middle_name", "last_name"} & set(changes)
+            and (user.profile.display_name or None) in (None, derived_before)
+        ):
+            user.profile.display_name = _derived_name(user.profile)
         _record_event(
             session, user.id, "profile_updated", correlation_id,
             # Field names only: an audit log must not become a second copy of
@@ -583,7 +596,11 @@ def update_preferences(
         goals = changes["onboarding_goals"] or []
         if isinstance(goals, str):
             goals = [g.strip() for g in goals.split(",") if g.strip()]
-        if not isinstance(goals, list) or not set(goals) <= set(ONBOARDING_GOALS):
+        if (
+            not isinstance(goals, list)
+            or not all(isinstance(g, str) for g in goals)
+            or not set(goals) <= set(ONBOARDING_GOALS)
+        ):
             raise IdentityError(f"onboarding_goals must be a list of {list(ONBOARDING_GOALS)}.")
         changes = {**changes, "onboarding_goals": ",".join(dict.fromkeys(goals)) or None}
     if "care_search_radius_km" in changes:
@@ -613,7 +630,9 @@ _HEALTH_FIELDS = {
     "date_of_birth", "age_range",
 }
 
-SEX_VALUES = ("female", "male", "other", "prefer_not_to_say")
+SEX_VALUES = ("female", "male", "other", "undisclosed")
+#: Accepted spellings, normalised to SEX_VALUES (the column holds 16 chars).
+_SEX_ALIASES = {"prefer_not_to_say": "undisclosed", "not_stated": "undisclosed"}
 #: Onboarding age buckets.
 AGE_RANGES = ("0-20", "21-40", "41-60", "61-80", "81+")
 BLOOD_TYPES = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
@@ -640,6 +659,7 @@ def _validate_health_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
     clean = dict(changes)
     if "sex" in clean and clean["sex"] is not None:
         sex = str(clean["sex"]).strip().lower().replace(" ", "_")
+        sex = _SEX_ALIASES.get(sex, sex)
         if sex not in SEX_VALUES:
             raise IdentityError(f"sex must be one of {list(SEX_VALUES)}.")
         clean["sex"] = sex
@@ -651,8 +671,11 @@ def _validate_health_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
             raise IdentityError(f"blood_type must be one of {list(BLOOD_TYPES)}.")
         clean["blood_type"] = blood
     if "date_of_birth" in clean and clean["date_of_birth"] is not None:
+        raw = str(clean["date_of_birth"]).strip()
         try:
-            born = date.fromisoformat(str(clean["date_of_birth"])[:10])
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+                raise ValueError(raw)
+            born = date.fromisoformat(raw)
         except ValueError as exc:
             raise IdentityError("date_of_birth must be a date like 1990-05-17.") from exc
         today = utcnow().date()
