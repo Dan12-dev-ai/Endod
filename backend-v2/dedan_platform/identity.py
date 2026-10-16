@@ -28,6 +28,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from dedan_platform.db import new_uuid, session_scope
+from dedan_platform.phone import normalise_ethiopian_mobile
 from dedan_platform.models import (
     Consent, HealthProfile, Preferences, Profile, User, UserEvent,
     generate_dedan_user_id, utcnow,
@@ -54,6 +55,10 @@ class InvalidDedanId(IdentityError):
 
 class EmailInUse(IdentityError):
     """Another account already uses this email address."""
+
+
+class PhoneInUse(IdentityError):
+    """Another account already signs in with this verified phone."""
 
 
 class UserNotFound(IdentityError):
@@ -97,9 +102,13 @@ def create_user(
     phone: Optional[str] = None,
     locale: str = "en",
     timezone_name: str = "UTC",
-    country_code: str = "KE",
+    country_code: str = "ET",
+    phone_verified: bool = False,
 ) -> Dict[str, Any]:
     """Create an account with its full domain set and a unique DEDAN ID.
+
+    ``phone_verified`` is only for callers that have just proved the patient
+    holds ``phone`` (`phone_auth`); a verified phone can be used to sign in.
 
     Every supporting record is created up front so no later code path has to
     handle a half-provisioned account (a missing `Preferences` row would
@@ -113,6 +122,7 @@ def create_user(
         user = _allocate_user(session)
         user.profile = Profile(
             display_name=display_name, email=email, phone=phone,
+            phone_verified_at=utcnow() if phone and phone_verified else None,
             locale=locale, timezone=timezone_name, country_code=country_code,
         )
         user.preferences = Preferences(language=locale)
@@ -221,8 +231,41 @@ def find_user_by_email(email: str) -> Optional[User]:
     return matches[0]
 
 
+def find_user_by_phone(phone_e164: str) -> Optional[User]:
+    """The account that signs in with this verified phone, if exactly one does."""
+    if not phone_e164:
+        return None
+    with session_scope() as session:
+        matches = session.scalars(
+            _load_user(
+                select(User)
+                .join(User.profile)
+                .where(Profile.phone == phone_e164)
+                .where(Profile.phone_verified_at.is_not(None))
+            )
+        ).unique().all()
+    if len(matches) != 1:
+        if matches:
+            logger.warning("ambiguous_phone_login count=%d", len(matches))
+        return None
+    return matches[0]
+
+
+def set_verified_phone(internal_user_id: str, phone_e164: str) -> Dict[str, Any]:
+    """Record that this account proved it holds ``phone_e164``."""
+    with session_scope() as session:
+        user = session.scalar(_load_user(select(User).where(User.id == internal_user_id)))
+        if user is None:
+            raise UserNotFound("Account not found.")
+        user.profile.phone = phone_e164
+        user.profile.phone_verified_at = utcnow()
+        _record_event(session, user.id, "phone_verified")
+        _flush_checking_email(session)
+        return _profile_payload(user)
+
+
 def resolve_user(identifier: str) -> Optional[User]:
-    """Resolve a sign-in identifier that may be a DEDAN ID or an email address.
+    """Resolve a sign-in identifier: DEDAN ID, verified phone, or email.
 
     Tries the public ID first, then the email. Both branches load the full domain
     graph so callers can read `user.profile` and `user.credential` safely once
@@ -238,6 +281,9 @@ def resolve_user(identifier: str) -> Optional[User]:
         except InvalidDedanId:  # pragma: no cover - guarded by the regex above
             user = None
     if user is None:
+        phone = normalise_ethiopian_mobile(value)
+        if phone:
+            return find_user_by_phone(phone)
         user = find_user_by_email(value)
     return user
 
@@ -259,6 +305,7 @@ def _profile_payload(user: User, include_health: bool = False) -> Dict[str, Any]
         "display_name": getattr(profile, "display_name", None),
         "email": getattr(profile, "email", None),
         "phone": getattr(profile, "phone", None),
+        "phone_verified": getattr(profile, "phone_verified_at", None) is not None,
         "locale": getattr(profile, "locale", "en"),
         "timezone": getattr(profile, "timezone", "UTC"),
         "country_code": getattr(profile, "country_code", "KE"),
@@ -346,7 +393,9 @@ def normalise_phone(value: Any) -> Optional[str]:
         return None
     if not isinstance(value, str) or not _PHONE_RE.match(value.strip()):
         raise IdentityError("Enter a valid phone number.")
-    return value.strip()
+    # Ethiopian mobiles are stored in E.164, the form verification uses, so
+    # re-saving "0911 234 567" keeps a verified "+251911234567" verified.
+    return normalise_ethiopian_mobile(value) or value.strip()
 
 
 def _normalise_email(value: Any) -> str:
@@ -364,11 +413,17 @@ def _email_taken(session: Session, email: str, exclude_user_id: Optional[str] = 
 
 
 def _flush_checking_email(session: Session) -> None:
-    """Flush, turning a lost race on the unique email index into `EmailInUse`."""
+    """Flush, turning a lost race on a unique index into `EmailInUse` or
+    `PhoneInUse`."""
     try:
         session.flush()
     except IntegrityError as exc:
-        if "email" in str(exc).lower():
+        # The database's own message only: `str(exc)` also contains the SQL,
+        # whose INSERT names both columns, so it cannot tell them apart.
+        message = str(getattr(exc, "orig", exc)).lower()
+        if "phone" in message:
+            raise PhoneInUse("An account already signs in with this phone number.") from exc
+        if "email" in message:
             raise EmailInUse("An account with this email address already exists.") from exc
         raise
 
@@ -440,6 +495,10 @@ def update_profile(
             and _email_taken(session, changes["email"], user.id)
         ):
             raise EmailInUse("Another account already uses this email address.")
+        # A new number is unproven: typing someone else's number must not
+        # let it sign in to this account.
+        if "phone" in changes and changes["phone"] != user.profile.phone:
+            user.profile.phone_verified_at = None
         for field, value in changes.items():
             setattr(user.profile, field, value)
         _record_event(
