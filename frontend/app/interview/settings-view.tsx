@@ -48,6 +48,10 @@ const COUNTRIES = [
   { value: "TZ", label: "Tanzania" },
 ];
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
+const DEFAULT_RADIUS_KM = 15;
+// The backend accepts 1-200 km.
+const RADIUS_MIN_KM = 5;
+const RADIUS_MAX_KM = 200;
 
 const inputClass = "w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border";
 const labelClass = "block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5";
@@ -80,7 +84,11 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  // Phone: changed only by confirming the new number with an SMS code.
+  const [phoneStep, setPhoneStep] = useState<"idle" | "number" | "code">("idle");
+  const [newPhone, setNewPhone] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   // Location
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
@@ -95,25 +103,33 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
   const [showPasswords, setShowPasswords] = useState(false);
   // Health card
   const [health, setHealth] = useState<HealthProfile | null>(null);
+  const [healthError, setHealthError] = useState("");
   const [cardVisible, setCardVisible] = useState(false);
   const [bloodType, setBloodType] = useState("");
   const [allergies, setAllergies] = useState("");
   const [emergencyName, setEmergencyName] = useState("");
   const [emergencyPhone, setEmergencyPhone] = useState("");
 
-  const applyProfile = useCallback((p: Profile) => {
-    setProfile(p);
+  // Each section's form is filled from the server separately, so saving one
+  // section never discards unsaved edits in another.
+  const applyPersonal = useCallback((p: Profile) => {
     setFirstName(p.first_name ?? "");
     setLastName(p.last_name ?? "");
     setEmail(p.email ?? "");
-    setPhone(p.phone ?? "");
+  }, []);
+  const applyLocation = useCallback((p: Profile) => {
     setAddress(p.address_line ?? "");
     setCity(p.city ?? "");
     setRegion(p.region ?? "");
     setPostalCode(p.postal_code ?? "");
     setCountry(p.country_code ?? "ET");
-    setRadius(p.preferences.care_search_radius_km ?? 15);
+    setRadius(p.preferences.care_search_radius_km ?? DEFAULT_RADIUS_KM);
   }, []);
+  const applyProfile = useCallback((p: Profile) => {
+    setProfile(p);
+    applyPersonal(p);
+    applyLocation(p);
+  }, [applyPersonal, applyLocation]);
 
   const applyHealth = useCallback((h: HealthProfile) => {
     setHealth(h);
@@ -126,8 +142,11 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
   const loadHealth = useCallback(async () => {
     try {
       applyHealth(await api<HealthProfile>("users/me/health-profile"));
-    } catch {
-      setHealth(null); // 403 without consent: the card section says so.
+      setHealthError("");
+    } catch (error) {
+      setHealth(null);
+      // 403 means no consent (the section says so); anything else is a failure.
+      setHealthError(error instanceof ApiError && error.status === 403 ? "" : message(error, "Unable to load your health details."));
     }
   }, [applyHealth]);
 
@@ -153,9 +172,10 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     try {
       const updated = await api<Profile>("users/me", {
         method: "PATCH",
-        body: { first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim() || null, phone: phone.trim() || null },
+        body: { first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim() || null },
       });
-      applyProfile(updated);
+      setProfile(updated);
+      applyPersonal(updated);
       onProfileChange(updated);
       onToast("Profile Saved", "Your personal details were saved.");
     } catch (error) {
@@ -176,11 +196,66 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
           postal_code: postalCode.trim() || null, country_code: country,
         },
       });
-      await api("users/me/preferences", { method: "PATCH", body: { care_search_radius_km: radius } });
-      applyProfile({ ...updated, preferences: { ...updated.preferences, care_search_radius_km: radius } });
-      onToast("Location Updated", "Your location details were saved.");
+      setProfile(updated);
+      let radiusSaved = true;
+      if (radius !== (updated.preferences.care_search_radius_km ?? DEFAULT_RADIUS_KM)) {
+        try {
+          await api("users/me/preferences", { method: "PATCH", body: { care_search_radius_km: radius } });
+          setProfile({ ...updated, preferences: { ...updated.preferences, care_search_radius_km: radius } });
+        } catch {
+          radiusSaved = false;
+        }
+      }
+      onToast(
+        radiusSaved ? "Location Updated" : "Partly saved",
+        radiusSaved ? "Your location details were saved." : "Your address was saved, but the care radius was not. Please try again.",
+      );
     } catch (error) {
       onToast("Could not save", message(error, "Please check the details and try again."));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** POST to an /api/auth route handler; throws ApiError with its message. */
+  const authCall = async (path: string, body: Record<string, unknown>) => {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.ok) throw new ApiError(data.error ?? "Something went wrong. Please try again.", response.status);
+    return data;
+  };
+
+  const sendPhoneCode = async () => {
+    setBusy("phone");
+    setPhoneError("");
+    try {
+      await authCall("/api/auth/send-otp", { phone: newPhone.trim() });
+      setPhoneCode("");
+      setPhoneStep("code");
+    } catch (error) {
+      setPhoneError(message(error, "Unable to send the code."));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const confirmPhone = async () => {
+    setBusy("phone");
+    setPhoneError("");
+    try {
+      await authCall("/api/auth/verify-otp", { phone: newPhone.trim(), code: phoneCode });
+      const linked = await authCall("/api/auth/link-phone", {});
+      const updated = linked.profile as Profile;
+      setProfile(updated);
+      onProfileChange(updated);
+      setPhoneStep("idle");
+      onToast("Phone Verified", "You can now sign in and get reminders with this number.");
+    } catch (error) {
+      setPhoneError(message(error, "Unable to confirm the number."));
     } finally {
       setBusy(null);
     }
@@ -229,8 +304,16 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       const consent = await api<Profile["consent"]>("users/me/consent", { method: "PATCH", body: { [field]: value } });
       setProfile((p) => (p ? { ...p, consent: { ...p.consent, ...consent } } : p));
       if (field === "treatment_processing") {
-        if (value) await loadHealth();
-        else setHealth(null);
+        if (value) {
+          await loadHealth();
+        } else {
+          applyHealth({ blood_type: null, allergies: [], emergency_contact_name: null, emergency_contact_phone: null });
+          setHealth(null);
+          onToast(
+            "Consent Withdrawn",
+            "Endod won't store new health information. What you already saved is kept; contact support to have it deleted.",
+          );
+        }
       }
     } catch (error) {
       setProfile(previous);
@@ -294,7 +377,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     { id: "req-upper", label: "Uppercase Letter", met: /[A-Z]/.test(newPassword) },
     { id: "req-lower", label: "Lowercase Letter", met: /[a-z]/.test(newPassword) },
   ];
-  const phoneVerified = profile.phone_verified && phone.trim() === (profile.phone ?? "");
+  const phoneVerified = profile.phone_verified;
   const hasConsent = profile.consent.treatment_processing;
 
   const toggle = (id: string, checked: boolean, onChange: (value: boolean) => void, label: string, hint: string) => (
@@ -356,18 +439,40 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
               <div>
                 <label className={labelClass} htmlFor="phone-number">Phone Number</label>
                 <div className="relative">
-                  <input id="phone-number" type="tel" maxLength={32} value={phone} onChange={(e) => setPhone(e.target.value)} className={`${inputClass} pr-24`} />
-                  {phone.trim() && (
+                  <input id="phone-number" readOnly type="tel" value={profile.phone ? formatPhoneDisplay(profile.phone) : ""} placeholder="No phone yet" className="w-full text-sm rounded-xl bg-slate-50 border-slate-200 text-slate-600 py-2.5 px-3.5 pr-24 border" />
+                  {profile.phone && (
                     <span data-purpose="phone-status" className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold px-2 py-0.5 rounded-md ${phoneVerified ? "text-emerald-600 bg-emerald-50" : "text-amber-700 bg-amber-50"}`}>
                       {phoneVerified ? "Verified" : "Not verified"}
                     </span>
                   )}
                 </div>
-                {phone.trim() && !phoneVerified && (
-                  <p className="text-[11px] text-slate-500 mt-1">An unverified number can&apos;t be used to sign in or receive reminders.</p>
+                {phoneStep === "idle" && (
+                  <button type="button" data-purpose="change-phone" onClick={() => { setPhoneStep("number"); setNewPhone(""); setPhoneError(""); }} className="mt-1.5 text-[11px] font-semibold text-emerald-700 hover:underline">
+                    {profile.phone ? (phoneVerified ? "Change number" : "Verify a number") : "Add a phone number"}
+                  </button>
                 )}
               </div>
             </div>
+            {phoneStep !== "idle" && (
+              <div data-purpose="phone-change" className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                <p className="text-xs text-slate-600">
+                  We&apos;ll text a code to the new number. Once confirmed, it replaces your current one for sign-in and reminders.
+                </p>
+                {phoneStep === "number" ? (
+                  <div className="flex gap-2">
+                    <input id="new-phone" type="tel" maxLength={32} value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="09XXXXXXXX" className={inputClass} />
+                    <button type="button" disabled={busy !== null || !newPhone.trim()} onClick={() => void sendPhoneCode()} className={saveClass}>Send code</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input id="phone-code" inputMode="numeric" maxLength={6} value={phoneCode} onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, ""))} placeholder="6-digit code" className={inputClass} />
+                    <button type="button" disabled={busy !== null || phoneCode.length !== 6} onClick={() => void confirmPhone()} className={saveClass}>Confirm</button>
+                  </div>
+                )}
+                {phoneError && <p data-purpose="phone-error" className="text-xs text-red-600" role="alert">{phoneError}</p>}
+                <button type="button" onClick={() => setPhoneStep("idle")} className="text-[11px] text-slate-500 hover:underline">Cancel</button>
+              </div>
+            )}
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
               <button type="submit" disabled={busy !== null} className={saveClass}>Save Changes</button>
             </div>
@@ -411,9 +516,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-700" htmlFor="radius-slider">Preferred Healthcare Radius</label>
                 <span className="text-xs font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-0.5 rounded-full">Within {radius} km</span>
               </div>
-              <input id="radius-slider" max={100} min={5} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-emerald-600 h-2 bg-slate-200 rounded-lg cursor-pointer" />
+              <input id="radius-slider" max={RADIUS_MAX_KM} min={RADIUS_MIN_KM} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-emerald-600 h-2 bg-slate-200 rounded-lg cursor-pointer" />
               <div className="flex justify-between text-[11px] text-slate-400 mt-1">
-                <span>5 km</span><span>50 km</span><span>100 km</span>
+                <span>{RADIUS_MIN_KM} km</span><span>100 km</span><span>{RADIUS_MAX_KM} km</span>
               </div>
             </div>
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
@@ -524,7 +629,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
             </div>
           )}
 
-          {!hasConsent || !health ? (
+          {healthError ? (
+            <p data-purpose="card-load-error" className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl p-3" role="alert">{healthError}</p>
+          ) : !hasConsent || !health ? (
             <p data-purpose="card-needs-consent" className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">
               Blood group, allergies and emergency contact are health information. Turn on
               &quot;Store my health information&quot; above to add them.

@@ -175,12 +175,14 @@ export default function RecordsView({ highlightTarget, onToast, onOpenSettings }
                 )}
                 {records.map((record) => {
                   const when = formatDate(record.occurred_at);
+                  // Visits the patient added are date-only: no made-up time.
+                  const dateOnly = record.source === "patient";
                   const target = `record-${record.record_id}`;
                   return (
                     <tr key={record.record_id} data-purpose={target} className={`transition-colors even:bg-slate-50/40 hover:bg-emerald-50/60 ${highlightTarget === target ? "bg-emerald-50 ring-2 ring-inset ring-emerald-300" : ""}`}>
                       <td className="px-5 py-4 align-middle">
                         <div className="font-semibold text-slate-900 whitespace-nowrap">{when.date}</div>
-                        <div className="text-[11px] text-slate-400">{when.time}</div>
+                        {!dateOnly && <div className="text-[11px] text-slate-400">{when.time}</div>}
                       </td>
                       <td className="px-5 py-4 align-middle">
                         <div className="font-semibold text-slate-900">{record.facility_name ?? "—"}</div>

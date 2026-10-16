@@ -13,6 +13,8 @@ test.describe('Interview — Medical Records', () => {
     await setHealthConsent(page.request, true);
     const facility = `Black Lion ${Date.now().toString(36)}`;
     await openSection(page, 'Medical Record', 'medical-record-view');
+    // The summary footer appears once the records have loaded.
+    await expect(page.locator('[data-purpose="active-follow-ups"]')).toBeVisible();
     const visitsBefore = Number(await page.locator('[data-purpose="stat-total-visits"] p').last().textContent());
 
     await page.locator('[data-purpose="add-record"]').click();
