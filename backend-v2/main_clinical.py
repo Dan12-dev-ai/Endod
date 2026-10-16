@@ -90,6 +90,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+#: How long shutdown waits for an in-flight reminder send to finish.
+WORKER_SHUTDOWN_GRACE_SECONDS = float(os.getenv("NOTIFICATION_SHUTDOWN_GRACE_SECONDS", "30"))
+
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
@@ -154,13 +157,19 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("Shutting down DEDAN Health Clinical API")
         # Signal and await, rather than cancelling: an in-flight delivery is
-        # given the chance to finish and record its outcome. The join is bounded
-        # so a wedged SMTP call cannot block shutdown indefinitely.
-        for task, stop in ((worker_task, worker_stop), (cleanup_task, None)):
-            if task is None:
+        # given the chance to finish and record its outcome (the worker checks
+        # the stop flag between jobs). The wait is bounded so a wedged SMTP call
+        # cannot block shutdown indefinitely. Cancelling straight away, as this
+        # used to, left the job in PROCESSING to be re-sent after recovery.
+        if worker_task is not None:
+            worker_stop.set()
+            try:
+                await asyncio.wait_for(worker_task, timeout=WORKER_SHUTDOWN_GRACE_SECONDS)
+            except (asyncio.TimeoutError, asyncio.CancelledError, Exception):  # noqa: B014
+                pass
+        for task in (worker_task, cleanup_task):
+            if task is None or task.done():
                 continue
-            if stop is not None:
-                stop.set()
             task.cancel()
             try:
                 await task

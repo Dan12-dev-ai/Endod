@@ -110,6 +110,10 @@ def build_provider() -> SmsProvider:
     api_key = os.getenv("SMSETHIOPIA_API_KEY", "").strip()
     if api_key:
         return SmsEthiopiaProvider(api_key)
-    if os.getenv("ENVIRONMENT", "development").strip().lower() == "production":
+    from app.core.config import get_settings
+
+    # The process environment first, then settings, which also read `.env`.
+    environment = os.getenv("ENVIRONMENT") or get_settings().ENVIRONMENT
+    if environment.strip().lower() == "production":
         raise SmsNotConfiguredError("SMSETHIOPIA_API_KEY is not set; SMS cannot be sent.")
     return ConsoleSmsProvider()
