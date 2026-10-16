@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { loadHealthCard, type HealthCardInfo } from "../health-card/health-card-data";
+import { healthCardFromProfile, loadHealthCard, type HealthCardInfo } from "../health-card/health-card-data";
 import AppointmentsView from "./appointments-view";
 import BookingView from "./booking-view";
 import NotificationsView from "./notifications-view";
+import RecordsView from "./records-view";
+import SettingsView from "./settings-view";
 import { logout } from "../lib/api";
 
 export default function Interview() {
@@ -28,7 +30,7 @@ export default function Interview() {
     { id: "setting", label: "Setting", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeLinecap="round" strokeLinejoin="round" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
   ];
 
-  // ===== Settings page state =====
+  // ===== Toast (any screen) =====
   const [toast, setToast] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false,
     title: "",
@@ -49,35 +51,6 @@ export default function Interview() {
     setToast((prev) => ({ ...prev, visible: false }));
   };
 
-  // Profile form
-  const [firstName, setFirstName] = useState("Daniel");
-  const [lastName, setLastName] = useState("Everett");
-  const [email, setEmail] = useState("daniel.everett@healthmail.com");
-  const [phone, setPhone] = useState("+1 (617) 555-0198");
-
-  // Location form
-  const [address, setAddress] = useState("742 Evergreen Terrace");
-  const [city, setCity] = useState("Boston");
-  const [stateRegion, setStateRegion] = useState("MA");
-  const [zipcode, setZipcode] = useState("02115");
-  const [country, setCountry] = useState("US");
-  const [radius, setRadius] = useState(15);
-
-  // Password form
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showCurrentPw, setShowCurrentPw] = useState(false);
-  const [showNewPw, setShowNewPw] = useState(false);
-  const [showConfirmPw, setShowConfirmPw] = useState(false);
-
-  // Digital Health Card
-  const [cardVisible, setCardVisible] = useState(false);
-  const [cardBloodGroup, setCardBloodGroup] = useState("O+");
-  const [cardAllergies, setCardAllergies] = useState("Penicillin");
-  const [cardEmergencyContact, setCardEmergencyContact] = useState("");
-  const [cardEmergencyPhone, setCardEmergencyPhone] = useState("");
-
   // Digital Health Card data: the signed-in patient's profile, the same
   // source as the /health-card route.
   const [healthCard, setHealthCard] = useState<HealthCardInfo | null>(null);
@@ -85,75 +58,13 @@ export default function Interview() {
     let cancelled = false;
     loadHealthCard()
       .then((hc) => {
-        if (cancelled) return;
-        setHealthCard(hc);
-        setFirstName(hc.firstName);
-        setLastName(hc.lastName);
-        setPhone(hc.phone === "—" ? "" : hc.phone);
+        if (!cancelled) setHealthCard(hc);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, []);
-
-  // Password strength
-  const passwordStrength = (val: string) => {
-    let score = 0;
-    if (val.length >= 8) score++;
-    if (/[A-Z]/.test(val)) score++;
-    if (/[0-9]/.test(val)) score++;
-    if (/[^A-Za-z0-9]/.test(val)) score++;
-    return score;
-  };
-
-  const handlePasswordUpdate = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPassword.length < 8) {
-      showToast("Password Error", "Password must be at least 8 characters.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      showToast("Mismatch", "Passwords do not match. Please re-enter.");
-      return;
-    }
-    showToast("Security Credentials Updated", "Your account password has been safely updated.");
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-  };
-
-  const autoDetectLocation = () => {
-    showToast("Detecting GPS...", "Fetching location from browser geolocation service...");
-    setTimeout(() => {
-      setAddress("100 Longwood Ave");
-      setCity("Boston");
-      setStateRegion("MA");
-      setZipcode("02115");
-      showToast("Location Detected", "Coordinates resolved: Boston Medical District.");
-    }, 700);
-  };
-
-  const strengthScore = passwordStrength(newPassword);
-  const strengthLabels = ["None", "Weak", "Fair", "Good", "Strong"];
-  const strengthColors = ["text-slate-400", "text-rose-500", "text-amber-500", "text-teal-600", "text-emerald-600"];
-  const strengthBarColors = ["bg-slate-200", "bg-rose-500", "bg-amber-500", "bg-teal-500", "bg-emerald-500"];
-
-  const passwordReqs = [
-    { id: "req-length", label: "8+ Characters", met: newPassword.length >= 8 },
-    { id: "req-upper", label: "Uppercase Letter", met: /[A-Z]/.test(newPassword) },
-    { id: "req-number", label: "One Number", met: /[0-9]/.test(newPassword) },
-    { id: "req-symbol", label: "Special Symbol", met: /[^A-Za-z0-9]/.test(newPassword) },
-  ];
-
-  // ===== Medical Record page state =====
-  // (simplified: static list, no modal state needed)
-
-  // Reset medical record state when navigating away
-  const prevActiveNavRef3 = useRef(activeNav);
-  useEffect(() => {
-    prevActiveNavRef3.current = activeNav;
-  }, [activeNav]);
 
   // ===== Notification page state =====
   // A notification opens another screen and highlights its card there.
@@ -174,33 +85,6 @@ export default function Interview() {
     }
     prevActiveNavRef4.current = activeNav;
   }, [activeNav]);
-
-  // Reset settings state when navigating away from settings
-  const prevActiveNavRef = useRef(activeNav);
-  useEffect(() => {
-    if (prevActiveNavRef.current !== activeNav && activeNav !== "setting") {
-      setFirstName(healthCard?.firstName || "Daniel");
-      setLastName(healthCard?.lastName || "Everett");
-      setEmail("daniel.everett@healthmail.com");
-      setPhone(healthCard?.phone || "+1 (617) 555-0198");
-      setAddress("742 Evergreen Terrace");
-      setCity("Boston");
-      setStateRegion("MA");
-      setZipcode("02115");
-      setCountry("US");
-      setRadius(15);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setCardVisible(false);
-      setCardBloodGroup("O+");
-      setCardAllergies("Penicillin");
-      setCardEmergencyContact("");
-      setCardEmergencyPhone("");
-      dismissToast();
-    }
-    prevActiveNavRef.current = activeNav;
-  }, [activeNav, healthCard]);
 
   // ===== Refs for DOM interactions (drawer & fullscreen) =====
   const mobileMenuBtnRef = useRef<HTMLButtonElement>(null);
@@ -346,7 +230,7 @@ export default function Interview() {
             </div>
             <div className="text-left text-xs leading-tight hidden xs:block sm:block">
               <div className="font-bold text-slate-800 flex items-center">
-                {firstName} {lastName}
+                {healthCard?.fullName ?? ""}
                 <svg className="w-3.5 h-3.5 text-slate-500 ml-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -432,307 +316,9 @@ export default function Interview() {
           {/* ===== Booking View ===== */}
           {activeNav === "booking" && <BookingView patientId={healthCard?.userId ?? ""} onToast={showToast} />}
 
-          {/* ===== Settings View (New Design) ===== */}
+          {/* ===== Settings View ===== */}
           {activeNav === "setting" && (
-            <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto">
-              <div className="max-w-5xl mx-auto space-y-6 py-6">
-                {/* Page Header */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2">
-                  <div>
-                    <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Account Settings</h1>
-                    <p className="text-sm text-slate-500 mt-1">Update your personal details, location preferences, and security credentials.</p>
-                  </div>
-                  <div className="inline-flex items-center gap-2 self-start md:self-auto px-3.5 py-1.5 rounded-full bg-white border border-slate-200 text-xs text-slate-600 shadow-xs">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span>Account Status: <strong className="text-slate-800">Verified &amp; Secure</strong></span>
-                  </div>
-                </div>
-
-
-                {/* Section 1: General Profile */}
-                <section data-purpose="user-profile-section" id="general-profile" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-900">Personal Information</h2>
-                      <p className="text-xs sm:text-sm text-slate-500">Manage your clinical name, verified Patient ID, and contact points.</p>
-                    </div>
-                    <span className="self-start sm:self-auto px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-200">
-                      {healthCard?.userId ?? "DE482731"} - Verified Patient
-                    </span>
-                  </div>
-
-                  {/* Profile Form */}
-                  <form onSubmit={(e) => { e.preventDefault(); showToast("Profile Saved", "Personal details saved and synced."); }} className="space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="first-name">First Name</label>
-                        <input id="first-name" required type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="last-name">Last Name</label>
-                        <input id="last-name" required type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="patient-id-field">System Patient ID</label>
-                        <input id="patient-id-field" readOnly type="text" value={healthCard?.userId ?? "DE482731"} className="w-full text-sm rounded-xl bg-slate-50 border-slate-200 text-slate-500 py-2.5 px-3.5 cursor-not-allowed border" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="email-address">Email Address</label>
-                        <div className="relative">
-                          <input id="email-address" required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 pr-24 shadow-xs text-slate-900 border" />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd" /></svg>
-                            Verified
-                          </span>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="phone-number">Phone Number</label>
-                        <div className="relative">
-                          <input id="phone-number" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 pr-24 shadow-xs text-slate-900 border" />
-                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd" /></svg>
-                            Verified
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                      <button type="submit" className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
-                        Save Changes
-                      </button>
-                    </div>
-                  </form>
-                </section>
-
-                {/* Section 2: Location & Region */}
-                <section data-purpose="location-settings-section" id="location-region" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-900">Location &amp; Emergency Region</h2>
-                      <p className="text-xs sm:text-sm text-slate-500">Used to match nearby partner hospitals, dispatch emergency triage, and estimate clinic travel time.</p>
-                    </div>
-                    <button type="button" onClick={autoDetectLocation} className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 text-xs font-semibold transition-all shadow-xs">
-                      <svg className="w-4 h-4 text-emerald-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>
-                      <span>Detect Current Location</span>
-                    </button>
-                  </div>
-                  <form onSubmit={(e) => { e.preventDefault(); showToast("Location Updated", "Emergency and partner clinic radius refreshed."); }} className="space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div className="md:col-span-2">
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="address-line">Street Address</label>
-                        <input id="address-line" required type="text" value={address} onChange={(e) => setAddress(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="city">City</label>
-                        <input id="city" required type="text" value={city} onChange={(e) => setCity(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="state">State / Province</label>
-                        <input id="state" required type="text" value={stateRegion} onChange={(e) => setStateRegion(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="zipcode">ZIP / Postal Code</label>
-                        <input id="zipcode" type="text" value={zipcode} onChange={(e) => setZipcode(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="country">Country / Region</label>
-                        <select id="country" value={country} onChange={(e) => setCountry(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border">
-                          <option value="US">United States</option>
-                          <option value="CA">Canada</option>
-                          <option value="GB">United Kingdom</option>
-                          <option value="AU">Australia</option>
-                        </select>
-                      </div>
-                    </div>
-                    {/* Radius Slider */}
-                    <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-bold uppercase tracking-wider text-slate-700" htmlFor="radius-slider">Preferred Healthcare Radius</label>
-                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-0.5 rounded-full">Within {radius} miles</span>
-                      </div>
-                      <input id="radius-slider" max={50} min={5} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-emerald-600 h-2 bg-slate-200 rounded-lg cursor-pointer" />
-                      <div className="flex justify-between text-[11px] text-slate-400 mt-1">
-                        <span>5 mi (Strict Local)</span>
-                        <span>25 mi</span>
-                        <span>50 mi (Regional Support)</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                      <button type="submit" className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
-                        Update Location
-                      </button>
-                    </div>
-                  </form>
-                </section>
-
-                {/* Section 3: Password & Security */}
-                <section data-purpose="security-settings-section" id="password-security" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-                  <div className="border-b border-slate-100 pb-4">
-                    <h2 className="text-lg font-bold text-slate-900">Password &amp; Security</h2>
-                    <p className="text-xs sm:text-sm text-slate-500">Ensure your clinical account is protected with a secure password and multi-factor authentication.</p>
-                  </div>
-                  <form onSubmit={handlePasswordUpdate} className="space-y-5">
-                    <div>
-                      <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="current-password">Current Password</label>
-                      <div className="relative">
-                        <input id="current-password" placeholder="••••••••••••" required type={showCurrentPw ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 pr-10 shadow-xs text-slate-900 border" />
-                        <button type="button" aria-label="Toggle password view" onClick={() => setShowCurrentPw(!showCurrentPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>
-                        </button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="new-password">New Password</label>
-                        <div className="relative">
-                          <input id="new-password" placeholder="Enter new strong password" required type={showNewPw ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 pr-10 shadow-xs text-slate-900 border" />
-                          <button type="button" aria-label="Toggle password view" onClick={() => setShowNewPw(!showNewPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>
-                          </button>
-                        </div>
-                        {/* Strength Meter */}
-                        <div className="mt-2.5">
-                          <div className="flex items-center justify-between text-xs mb-1">
-                            <span className="text-slate-500">Strength:</span>
-                            <span id="strength-label" className={`font-semibold ${strengthColors[strengthScore]}`}>{strengthLabels[strengthScore]}</span>
-                          </div>
-                          <div className="grid grid-cols-4 gap-1.5 h-1.5">
-                            {[0, 1, 2, 3].map((i) => (
-                              <div key={i} className={`rounded-full transition-colors ${i < strengthScore ? strengthBarColors[strengthScore] : "bg-slate-200"}`} />
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="confirm-password">Confirm New Password</label>
-                        <div className="relative">
-                          <input id="confirm-password" placeholder="Re-type new password" required type={showConfirmPw ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 pr-10 shadow-xs text-slate-900 border" />
-                          <button type="button" aria-label="Toggle password view" onClick={() => setShowConfirmPw(!showConfirmPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} /></svg>
-                          </button>
-                        </div>
-                        {confirmPassword && (
-                          <div id="match-indicator" className={`text-[11px] mt-1.5 font-semibold ${newPassword === confirmPassword ? "text-emerald-600" : "text-rose-500"}`}>
-                            {newPassword === confirmPassword ? "✓ Passwords match" : "✕ Passwords do not match"}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {/* Requirements Checklist */}
-                    <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {passwordReqs.map((req) => (
-                        <div key={req.id} className={`flex items-center gap-1.5 ${req.met ? "text-emerald-600" : "text-slate-400"}`}>
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} /></svg>
-                          <span>{req.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                      <button type="submit" className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
-                        Update Password
-                      </button>
-                    </div>
-                  </form>
-                </section>
-
-                {/* Section 4: Digital Health Card */}
-                <section data-purpose="digital-card-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
-                    <div>
-                      <h2 className="text-lg font-bold text-slate-900">Digital Health Card</h2>
-                      <p className="text-xs sm:text-sm text-slate-500">Customize the details shown on your ENDOD digital health card.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setCardVisible(!cardVisible)}
-                      className="self-start sm:self-auto px-3.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold border border-emerald-200 transition-colors"
-                    >
-                      {cardVisible ? "Hide Card Preview" : "Show Card Preview"}
-                    </button>
-                  </div>
-
-                  {cardVisible && (
-                    /* Card Preview */
-                    <div data-purpose="card-preview" className="relative bg-gradient-to-br from-[#1e3a2e] to-[#1e5852] rounded-2xl p-6 text-white overflow-hidden">
-                      <div className="absolute inset-0 opacity-5">
-                        <svg className="w-full h-full" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <circle cx="200" cy="200" r="50" stroke="currentColor" strokeWidth="0.5" />
-                          <circle cx="200" cy="200" r="120" stroke="currentColor" strokeWidth="0.3" />
-                        </svg>
-                      </div>
-                      <div className="relative mb-6">
-                        <span className="text-2xl font-extrabold tracking-tight">al<span className="text-[#6ee7b7]">lia</span></span>
-                      </div>
-                      <div className="relative mb-4">
-                        <span className="text-xs font-semibold text-[#94e0c0] uppercase tracking-wider">Digital Health ID</span>
-                      </div>
-                      <div className="relative mb-1">
-                        <h3 className="text-2xl font-bold font-serif text-white">{healthCard?.fullName ?? `${firstName} ${lastName}`}</h3>
-                      </div>
-                      <div className="relative mb-6">
-                        <span className="text-base font-semibold text-[#94e0c0]">{healthCard?.userId ?? "DE482731"}</span>
-                      </div>
-                      <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div>
-                          <span className="text-[10px] font-semibold text-[#94a3a8] uppercase tracking-wider">Phone</span>
-                          <p className="text-sm font-semibold text-white mt-1">{healthCard?.phone ?? phone}</p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-semibold text-[#94a3a8] uppercase tracking-wider">Blood Group</span>
-                          <p className="text-sm font-semibold text-white mt-1">{cardBloodGroup || "—"}</p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-semibold text-[#94a3a8] uppercase tracking-wider">Allergies</span>
-                          <p className="text-sm font-semibold text-white mt-1">{cardAllergies || "None"}</p>
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-semibold text-[#94a3a8] uppercase tracking-wider">Emergency</span>
-                          <p className="text-sm font-semibold text-white mt-1">{cardEmergencyContact || "—"}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Card Edit Form */}
-                  <form onSubmit={(e) => { e.preventDefault(); showToast("Card Updated", "Digital health card details saved."); }} className="space-y-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="blood-group">Blood Group</label>
-                        <select id="blood-group" value={cardBloodGroup} onChange={(e) => setCardBloodGroup(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border">
-                          <option value="">Not specified</option>
-                          <option value="A+">A+</option>
-                          <option value="A-">A-</option>
-                          <option value="B+">B+</option>
-                          <option value="B-">B-</option>
-                          <option value="O+">O+</option>
-                          <option value="O-">O-</option>
-                          <option value="AB+">AB+</option>
-                          <option value="AB-">AB-</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="allergies">Known Allergies</label>
-                        <input id="allergies" type="text" value={cardAllergies} onChange={(e) => setCardAllergies(e.target.value)} placeholder="e.g. Penicillin, Latex..." className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="emergency-contact">Emergency Contact Name</label>
-                        <input id="emergency-contact" type="text" value={cardEmergencyContact} onChange={(e) => setCardEmergencyContact(e.target.value)} placeholder="Full name" className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border" />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="emergency-phone">Emergency Contact Phone</label>
-                        <input id="emergency-phone" type="tel" value={cardEmergencyPhone} onChange={(e) => setCardEmergencyPhone(e.target.value)} placeholder="+1 (617) 555-0199" className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border" />
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                      <button type="submit" className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2">
-                        Save Card Details
-                      </button>
-                    </div>
-                  </form>
-                </section>
-              </div>
-            </div>
+            <SettingsView onToast={showToast} onProfileChange={(profile) => setHealthCard(healthCardFromProfile(profile))} />
           )}
 
           {/* ===== Toast Notification (any screen) ===== */}
@@ -752,191 +338,16 @@ export default function Interview() {
           {/* ===== Appointment View ===== */}
           {activeNav === "appointment" && <AppointmentsView highlightTarget={highlightTarget} onToast={showToast} />}
 
-          {/* ===== Medical Record View (New Design) ===== */}
+          {/* ===== Medical Record View ===== */}
           {activeNav === "followup" && (
-            <div data-purpose="medical-record-view" className="flex-1 min-h-0 overflow-y-auto">
-              <div className="max-w-5xl mx-auto space-y-6 pb-6">
-
-                {/* Page Title */}
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                  <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Medical Records</h1>
-                    <p className="text-sm text-slate-500 mt-1">Your complete treatment history — visits, diagnoses, medications, and follow-up schedules.</p>
-                  </div>
-                  <span data-purpose="records-count" className="inline-flex items-center gap-2 self-start rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
-                    </span>
-                    3 Verified Records
-                  </span>
-                </div>
-
-                {/* Summary Strip */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                  <div data-purpose="stat-total-visits" className="bg-white rounded-2xl border border-slate-200 card-shadow p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                          <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Visits</p>
-                        <p className="text-xl font-bold text-slate-900 leading-tight tabular-nums">3</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div data-purpose="stat-hospitals" className="bg-white rounded-2xl border border-slate-200 card-shadow p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                          <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Hospitals Visited</p>
-                        <p className="text-xl font-bold text-emerald-700 leading-tight tabular-nums">3</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div data-purpose="stat-drugs" className="bg-white rounded-2xl border border-slate-200 card-shadow p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center flex-shrink-0">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                          <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" strokeLinecap="round" strokeLinejoin="round" />
-                          <path d="m8.5 8.5 7 7" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Drugs Used</p>
-                        <p className="text-xl font-bold text-slate-900 leading-tight tabular-nums">2</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Medical Records Table */}
-                <div data-purpose="medical-records-table" className="bg-white rounded-2xl border border-slate-200 card-shadow overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm border-collapse">
-                      <thead>
-                        <tr className="bg-gradient-to-r from-slate-50 via-slate-50 to-emerald-50/40 border-b-2 border-slate-200">
-                          <th className="text-left px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-2">
-                              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              Date
-                            </span>
-                          </th>
-                          <th className="text-left px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-2">
-                              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                <path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              Hospital
-                            </span>
-                          </th>
-                          <th className="text-left px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-2">
-                              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                <path d="M22 12h-4l-3 9L9 3l-3 9H2" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              Disease
-                            </span>
-                          </th>
-                          <th className="text-left px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-2">
-                              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                <path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" strokeLinecap="round" strokeLinejoin="round" />
-                                <path d="m8.5 8.5 7 7" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              Drug
-                            </span>
-                          </th>
-                          <th className="text-left px-5 py-4 text-[11px] font-bold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-2">
-                              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                                <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
-                              Followup
-                            </span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {/* Row 1 */}
-                        <tr data-purpose="record-1" className={`group transition-colors even:bg-slate-50/40 hover:bg-emerald-50/60 ${highlightTarget === "record-1" ? "bg-emerald-50 ring-2 ring-inset ring-emerald-300" : ""}`}>
-                          <td className="px-5 py-4 align-middle">
-                            <div className="font-semibold text-slate-900 whitespace-nowrap">Aug 24, 2026</div>
-                            <div className="text-[11px] text-slate-400">9:00 AM</div>
-                          </td>
-                          <td className="px-5 py-4 align-middle">
-                            <div className="font-semibold text-slate-900">Apex Heart &amp; Health Institute</div>
-                            <div className="text-[11px] text-emerald-600 font-medium">Cardiology Center</div>
-                          </td>
-                          <td className="px-5 py-4 align-middle text-slate-700">Chest Discomfort</td>
-                          <td className="px-5 py-4 align-middle text-slate-700">Atorvastatin 20mg</td>
-                          <td className="px-5 py-4 align-middle">
-                            <div className="font-bold text-emerald-700">7 days</div>
-                            <div className="text-[11px] text-slate-400">Follow-up in 7 days</div>
-                          </td>
-                        </tr>
-
-                        {/* Row 2 */}
-                        <tr data-purpose="record-2" className={`group transition-colors even:bg-slate-50/40 hover:bg-emerald-50/60 ${highlightTarget === "record-2" ? "bg-emerald-50 ring-2 ring-inset ring-emerald-300" : ""}`}>
-                          <td className="px-5 py-4 align-middle">
-                            <div className="font-semibold text-slate-900 whitespace-nowrap">May 19, 2026</div>
-                            <div className="text-[11px] text-slate-400">8:00 AM</div>
-                          </td>
-                          <td className="px-5 py-4 align-middle">
-                            <div className="font-semibold text-slate-900">City Care Diagnostics Center</div>
-                            <div className="text-[11px] text-blue-600 font-medium">Diagnostic Lab</div>
-                          </td>
-                          <td className="px-5 py-4 align-middle text-slate-700">Blood Panel Screening</td>
-                          <td className="px-5 py-4 align-middle text-slate-400">None</td>
-                          <td className="px-5 py-4 align-middle">
-                            <div className="font-medium text-slate-500">No follow-up</div>
-                          </td>
-                        </tr>
-
-                        {/* Row 3 */}
-                        <tr data-purpose="record-3" className={`group transition-colors even:bg-slate-50/40 hover:bg-emerald-50/60 ${highlightTarget === "record-3" ? "bg-emerald-50 ring-2 ring-inset ring-emerald-300" : ""}`}>
-                          <td className="px-5 py-4 align-middle">
-                            <div className="font-semibold text-slate-900 whitespace-nowrap">Jan 14, 2026</div>
-                            <div className="text-[11px] text-slate-400">10:00 AM</div>
-                          </td>
-                          <td className="px-5 py-4 align-middle">
-                            <div className="font-semibold text-slate-900">Walgreens Pharmacy #4102</div>
-                            <div className="text-[11px] text-purple-600 font-medium">Prescription Fulfillment</div>
-                          </td>
-                          <td className="px-5 py-4 align-middle text-slate-700">Seasonal Bronchitis</td>
-                          <td className="px-5 py-4 align-middle text-slate-700">Azithromycin 500mg</td>
-                          <td className="px-5 py-4 align-middle">
-                            <div className="font-bold text-purple-700">5 days</div>
-                            <div className="text-[11px] text-slate-400">Course completed</div>
-                          </td>
-                        </tr>
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-slate-50/80 border-t-2 border-slate-200">
-                          <td className="px-5 py-3.5 text-[11px] font-bold uppercase tracking-wider text-slate-500" colSpan={4}>
-                            3 Records
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <span className="text-xs font-semibold text-emerald-700">
-                              1 Active Follow-up
-                            </span>
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-
-              </div>
-            </div>
+            <RecordsView
+              highlightTarget={highlightTarget}
+              onToast={showToast}
+              onOpenSettings={() => {
+                setHighlightTarget(null);
+                setActiveNav("setting");
+              }}
+            />
           )}
 
           {/* ===== Notification View ===== */}
