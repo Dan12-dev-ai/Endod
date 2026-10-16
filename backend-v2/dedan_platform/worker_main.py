@@ -81,6 +81,12 @@ def main(argv: list[str] | None = None) -> int:
         summary = worker.run_once(limit=worker.WORKER_BATCH_SIZE)
         logger.info("single_pass_complete", extra=summary)
         print(summary)
+        # Non-zero so a CronJob shows the run as failed: 2 when delivery is
+        # blocked by configuration, 1 when reminders failed permanently.
+        if summary.get("blocked"):
+            return 2
+        if summary.get("FAILED"):
+            return 1
         return 0
 
     logger.info(
