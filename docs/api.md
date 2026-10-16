@@ -295,8 +295,10 @@ No health data is included here.
 ### `PATCH /users/me`
 
 Fields: `display_name` (1-120), `first_name`/`middle_name`/`last_name` (max
-60), `email` (valid, unique), `phone` (6-32 chars; changing it clears
-`phone_verified`), `locale` (`en` or `am-ET` form), `timezone` (IANA name),
+60), `email` (valid, unique; it cannot be removed while the account has no
+verified phone, since it is then the only way to sign in), `phone` (6-32 chars;
+a **verified** phone cannot be changed here, only through a code and
+`POST /users/me/phone`; changing an unverified one keeps it unverified), `locale` (`en` or `am-ET` form), `timezone` (IANA name),
 `country_code` (2 letters), `address_line` (200), `city` (100), `region`
 (100), `postal_code` (20). Empty string or `null` clears an optional field.
 Changing name parts recomputes `display_name` unless the user set a custom
