@@ -105,6 +105,8 @@ def register(body: RegisterRequest) -> Dict[str, Any]:
     try:
         created = identity.create_user(
             display_name=display_name,
+            first_name=body.first_name,
+            last_name=body.last_name,
             email=email,
             phone=phone,
             locale=body.locale or "en",
@@ -256,13 +258,13 @@ def complete_phone_signup(body: PhoneCompleteRequest) -> Dict[str, Any]:
     `created` in the response says which happened, so the client can send a
     new patient to onboarding and a returning one straight into the app.
     """
-    name = " ".join(part.strip() for part in (body.first_name, body.last_name) if part and part.strip())
     try:
         return phone_auth.complete(
             body.verification_token,
             body.password,
             body.password_confirmation,
-            display_name=name or None,
+            first_name=body.first_name,
+            last_name=body.last_name,
         )
     except cred.PasswordPolicyError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

@@ -20,7 +20,7 @@ import logging
 import re
 import secrets
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -104,6 +104,8 @@ def create_user(
     timezone_name: str = "UTC",
     country_code: str = "ET",
     phone_verified: bool = False,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create an account with its full domain set and a unique DEDAN ID.
 
@@ -122,6 +124,8 @@ def create_user(
         user = _allocate_user(session)
         user.profile = Profile(
             display_name=display_name, email=email, phone=phone,
+            first_name=(first_name or "").strip()[:60] or None,
+            last_name=(last_name or "").strip()[:60] or None,
             phone_verified_at=utcnow() if phone and phone_verified else None,
             locale=locale, timezone=timezone_name, country_code=country_code,
         )
@@ -308,12 +312,19 @@ def _profile_payload(user: User, include_health: bool = False) -> Dict[str, Any]
         "created_at": user.created_at.isoformat(),
         "is_active": user.is_active,
         "display_name": getattr(profile, "display_name", None),
+        "first_name": getattr(profile, "first_name", None),
+        "middle_name": getattr(profile, "middle_name", None),
+        "last_name": getattr(profile, "last_name", None),
+        "address_line": getattr(profile, "address_line", None),
+        "city": getattr(profile, "city", None),
+        "region": getattr(profile, "region", None),
+        "postal_code": getattr(profile, "postal_code", None),
         "email": getattr(profile, "email", None),
         "phone": getattr(profile, "phone", None),
         "phone_verified": getattr(profile, "phone_verified_at", None) is not None,
         "locale": getattr(profile, "locale", "en"),
         "timezone": getattr(profile, "timezone", "UTC"),
-        "country_code": getattr(profile, "country_code", "KE"),
+        "country_code": getattr(profile, "country_code", "ET"),
         "preferences": {
             "language": getattr(prefs, "language", "en"),
             "voice_preference": getattr(prefs, "voice_preference", None),
@@ -323,6 +334,9 @@ def _profile_payload(user: User, include_health: bool = False) -> Dict[str, Any]
             "sms_notifications": getattr(prefs, "sms_notifications", False),
             "push_notifications": getattr(prefs, "push_notifications", True),
             "reminder_offsets": getattr(prefs, "reminder_offsets", "604800,86400,3600"),
+            "preferred_contact_window": getattr(prefs, "preferred_contact_window", None),
+            "onboarding_goals": _split_list(getattr(prefs, "onboarding_goals", None)),
+            "care_search_radius_km": getattr(prefs, "care_search_radius_km", None),
         },
         "consent": {
             "treatment_processing": getattr(consent, "treatment_processing", False),
@@ -344,8 +358,12 @@ def _profile_payload(user: User, include_health: bool = False) -> Dict[str, Any]
     }
     if include_health:
         hp = user.health_profile
+        dob = getattr(hp, "date_of_birth", None)
         payload["health_profile"] = {
             "sex": getattr(hp, "sex", None),
+            "date_of_birth": dob.date().isoformat() if dob else None,
+            "age_range": getattr(hp, "age_range", None),
+            "age_years": age_years(hp),
             "allergies": _split_list(getattr(hp, "allergies", None)),
             "medications": _split_list(getattr(hp, "medications", None)),
             "conditions": _split_list(getattr(hp, "conditions", None)),
@@ -384,6 +402,14 @@ def get_health_profile_payload(internal_user_id: str) -> Dict[str, Any]:
 
 _PROFILE_FIELDS = {
     "display_name", "email", "phone", "locale", "timezone", "country_code",
+    "first_name", "middle_name", "last_name",
+    "address_line", "city", "region", "postal_code",
+}
+
+#: Optional free-text fields: (max length).
+_PROFILE_TEXT_LIMITS = {
+    "first_name": 60, "middle_name": 60, "last_name": 60,
+    "address_line": 200, "city": 100, "region": 100, "postal_code": 20,
 }
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$")
@@ -433,6 +459,12 @@ def _flush_checking_email(session: Session) -> None:
         raise
 
 
+def _derived_name(profile) -> Optional[str]:
+    """First, middle and last name joined, within the display-name column."""
+    parts = (profile.first_name, profile.middle_name, profile.last_name)
+    return " ".join(p for p in parts if p)[:120].rstrip() or None
+
+
 def _validate_profile_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
     """Type- and range-check a profile patch.
 
@@ -444,7 +476,7 @@ def _validate_profile_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
 
     clean: Dict[str, Any] = {}
     for field, value in changes.items():
-        if field in {"display_name", "email", "phone"} and (
+        if field in {"display_name", "email", "phone", *_PROFILE_TEXT_LIMITS} and (
             value is None or (isinstance(value, str) and not value.strip())
         ):
             clean[field] = None
@@ -467,6 +499,9 @@ def _validate_profile_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
                 ZoneInfo(value)
             except (ZoneInfoNotFoundError, ValueError) as exc:
                 raise IdentityError("Unknown timezone.") from exc
+        elif field in _PROFILE_TEXT_LIMITS:
+            if len(value) > _PROFILE_TEXT_LIMITS[field]:
+                raise IdentityError(f"'{field}' must be at most {_PROFILE_TEXT_LIMITS[field]} characters.")
         elif field == "country_code":
             if not re.fullmatch(r"[A-Za-z]{2}", value):
                 raise IdentityError("Country code must be two letters, e.g. 'ET'.")
@@ -504,8 +539,18 @@ def update_profile(
         # let it sign in to this account.
         if "phone" in changes and changes["phone"] != user.profile.phone:
             user.profile.phone_verified_at = None
+        derived_before = _derived_name(user.profile)
         for field, value in changes.items():
             setattr(user.profile, field, value)
+        # The display name follows the name parts only while it *is* the name
+        # parts (or empty): a nickname the patient chose is never overwritten,
+        # and clearing the parts clears a derived name instead of leaving it.
+        if (
+            "display_name" not in changes
+            and {"first_name", "middle_name", "last_name"} & set(changes)
+            and (user.profile.display_name or None) in (None, derived_before)
+        ):
+            user.profile.display_name = _derived_name(user.profile)
         _record_event(
             session, user.id, "profile_updated", correlation_id,
             # Field names only: an audit log must not become a second copy of
@@ -520,7 +565,11 @@ _PREFERENCE_FIELDS = {
     "language", "voice_preference", "voice_gender", "theme",
     "email_notifications", "sms_notifications", "push_notifications",
     "reminder_offsets", "preferred_contact_window",
+    "onboarding_goals", "care_search_radius_km",
 }
+
+#: What onboarding offers ("What are you looking for?").
+ONBOARDING_GOALS = ("symptoms", "hospitals", "appointments", "treatment", "history")
 
 
 def update_preferences(
@@ -548,6 +597,21 @@ def update_preferences(
             get_voice(changes["voice_preference"])
         except VoiceUnavailableError as exc:
             raise IdentityError(str(exc)) from exc
+    if "onboarding_goals" in changes:
+        goals = changes["onboarding_goals"] or []
+        if isinstance(goals, str):
+            goals = [g.strip() for g in goals.split(",") if g.strip()]
+        if (
+            not isinstance(goals, list)
+            or not all(isinstance(g, str) for g in goals)
+            or not set(goals) <= set(ONBOARDING_GOALS)
+        ):
+            raise IdentityError(f"onboarding_goals must be a list of {list(ONBOARDING_GOALS)}.")
+        changes = {**changes, "onboarding_goals": ",".join(dict.fromkeys(goals)) or None}
+    if "care_search_radius_km" in changes:
+        radius = changes["care_search_radius_km"]
+        if radius is not None and (not isinstance(radius, int) or isinstance(radius, bool) or not 1 <= radius <= 200):
+            raise IdentityError("care_search_radius_km must be a whole number from 1 to 200.")
 
     with session_scope() as session:
         user = session.scalar(
@@ -568,7 +632,65 @@ def update_preferences(
 _HEALTH_FIELDS = {
     "sex", "allergies", "medications", "conditions", "blood_type",
     "emergency_contact_name", "emergency_contact_phone",
+    "date_of_birth", "age_range",
 }
+
+SEX_VALUES = ("female", "male", "other", "undisclosed")
+#: Accepted spellings, normalised to SEX_VALUES (the column holds 16 chars).
+_SEX_ALIASES = {"prefer_not_to_say": "undisclosed", "not_stated": "undisclosed"}
+#: Onboarding age buckets.
+AGE_RANGES = ("0-20", "21-40", "41-60", "61-80", "81+")
+BLOOD_TYPES = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
+
+
+def age_years(health_profile) -> Optional[int]:
+    """Age from the date of birth, else the middle of the age range."""
+    dob = getattr(health_profile, "date_of_birth", None)
+    if dob is not None:
+        today = utcnow().date()
+        born = dob.date()
+        return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+    age_range = getattr(health_profile, "age_range", None)
+    if age_range:
+        low, _, high = age_range.rstrip("+").partition("-")
+        return (int(low) + int(high)) // 2 if high else int(low) + 5
+    return None
+
+
+def _validate_health_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
+    """Type- and range-check health fields, which used to be stored as given."""
+    from datetime import date
+
+    clean = dict(changes)
+    if "sex" in clean and clean["sex"] is not None:
+        sex = str(clean["sex"]).strip().lower().replace(" ", "_")
+        sex = _SEX_ALIASES.get(sex, sex)
+        if sex not in SEX_VALUES:
+            raise IdentityError(f"sex must be one of {list(SEX_VALUES)}.")
+        clean["sex"] = sex
+    if "age_range" in clean and clean["age_range"] is not None and clean["age_range"] not in AGE_RANGES:
+        raise IdentityError(f"age_range must be one of {list(AGE_RANGES)}.")
+    if "blood_type" in clean and clean["blood_type"] is not None:
+        blood = str(clean["blood_type"]).strip().upper()
+        if blood not in BLOOD_TYPES:
+            raise IdentityError(f"blood_type must be one of {list(BLOOD_TYPES)}.")
+        clean["blood_type"] = blood
+    if "date_of_birth" in clean and clean["date_of_birth"] is not None:
+        raw = str(clean["date_of_birth"]).strip()
+        try:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+                raise ValueError(raw)
+            born = date.fromisoformat(raw)
+        except ValueError as exc:
+            raise IdentityError("date_of_birth must be a date like 1990-05-17.") from exc
+        today = utcnow().date()
+        if born > today or today.year - born.year > 130:
+            raise IdentityError("date_of_birth is not a plausible date of birth.")
+        clean["date_of_birth"] = datetime(born.year, born.month, born.day, tzinfo=timezone.utc)
+    for field, limit in (("emergency_contact_name", 120), ("emergency_contact_phone", 32)):
+        if clean.get(field) is not None and len(str(clean[field])) > limit:
+            raise IdentityError(f"{field} must be at most {limit} characters.")
+    return clean
 
 
 def update_health_profile(
@@ -580,6 +702,7 @@ def update_health_profile(
     unknown = set(changes) - _HEALTH_FIELDS
     if unknown:
         raise IdentityError(f"Unsupported health fields: {sorted(unknown)}")
+    changes = _validate_health_changes(changes)
     with session_scope() as session:
         user = session.scalar(
             _load_user(select(User).where(User.id == internal_user_id))

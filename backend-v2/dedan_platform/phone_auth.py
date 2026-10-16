@@ -301,7 +301,8 @@ def complete(
     verification_token: str,
     password: str,
     password_confirmation: Optional[str] = None,
-    display_name: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create the account (or reset its password) and sign the patient in.
 
@@ -324,7 +325,9 @@ def complete(
     if created:
         try:
             result = identity.create_user(
-                display_name=(display_name or "").strip() or None,
+                display_name=" ".join(n.strip() for n in (first_name, last_name) if n and n.strip()) or None,
+                first_name=first_name,
+                last_name=last_name,
                 phone=phone,
                 phone_verified=True,
                 locale="en",

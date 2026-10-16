@@ -86,6 +86,17 @@ _COLUMN_MIGRATIONS: Tuple[ColumnMigration, ...] = (
     ColumnMigration("credentials", "password_changed_at", "TIMESTAMP WITH TIME ZONE"),
     # Proof the patient holds the phone; only verified phones sign in.
     ColumnMigration("profiles", "phone_verified_at", "TIMESTAMP WITH TIME ZONE"),
+    # Onboarding and settings fields used by the Next.js frontend.
+    ColumnMigration("profiles", "first_name", "VARCHAR(60)"),
+    ColumnMigration("profiles", "middle_name", "VARCHAR(60)"),
+    ColumnMigration("profiles", "last_name", "VARCHAR(60)"),
+    ColumnMigration("profiles", "address_line", "VARCHAR(200)"),
+    ColumnMigration("profiles", "city", "VARCHAR(100)"),
+    ColumnMigration("profiles", "region", "VARCHAR(100)"),
+    ColumnMigration("profiles", "postal_code", "VARCHAR(20)"),
+    ColumnMigration("health_profiles", "age_range", "VARCHAR(16)"),
+    ColumnMigration("preferences", "onboarding_goals", "VARCHAR(200)"),
+    ColumnMigration("preferences", "care_search_radius_km", "INTEGER"),
 )
 
 #: (index name, table, columns). Created only if absent.
