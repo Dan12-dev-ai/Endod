@@ -1,8 +1,10 @@
 """
 Gemini Provider Implementation
 
-Implements the MultimodalAIProvider interface for Google's Gemini models.
-Uses the current google-generativeai SDK with structured output support.
+Implements the MultimodalAIProvider interface for Google's Gemini models,
+using the `google-genai` SDK. (`google-generativeai`, used before, reached end
+of life and warned on every start; its default model, gemini-1.5-pro, is
+retired.)
 """
 
 from __future__ import annotations
@@ -15,8 +17,9 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google import genai
+from google.genai import errors as genai_errors
+from google.genai import types
 
 import clinical_triage
 
@@ -46,83 +49,94 @@ from .models import (
 )
 
 
+def _env_price(name: str) -> Optional[float]:
+    value = os.getenv(name, "").strip()
+    try:
+        return float(value) if value else None
+    except ValueError:
+        return None
+
+
+def _strip_code_fence(text: str) -> str:
+    """Remove a surrounding ```json ... ``` fence, if present."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[1] if "\n" in stripped else ""
+        if stripped.rstrip().endswith("```"):
+            stripped = stripped.rstrip()[:-3]
+    return stripped
+
+
 class GeminiProvider(MultimodalAIProvider):
     """
     Google Gemini provider for multimodal AI analysis.
-    
-    Supports:
-    - Text analysis (gemini-1.5-pro, gemini-1.5-flash)
-    - Image analysis (vision)
-    - Multimodal analysis (text + image)
-    - Structured output via response_schema
-    - Medical safety settings
+
+    Supports text, image and combined analysis with JSON output. Model ids are
+    configured (`AI_*_MODEL`, `GEMINI_MODEL`); the `*-latest` aliases follow
+    Google's current model of each class.
     """
-    
-    # Model configurations
+
+    #: Limits used for capability reporting. Pricing is not tracked here:
+    #: Google's price list changes, so cost estimates were stale guesses.
     MODELS = {
-        "gemini-1.5-pro": {
-            "context_window": 2_000_000,
-            "max_output_tokens": 8192,
-            "cost_per_1k_input": 0.00125,
-            "cost_per_1k_output": 0.005,
-            "cost_per_image": 0.000125,
-        },
-        "gemini-1.5-flash": {
-            "context_window": 1_000_000,
-            "max_output_tokens": 8192,
-            "cost_per_1k_input": 0.000075,
-            "cost_per_1k_output": 0.0003,
-            "cost_per_image": 0.0000375,
-        },
-        "gemini-1.0-pro-vision": {
-            "context_window": 16384,
-            "max_output_tokens": 2048,
-            "cost_per_1k_input": 0.0005,
-            "cost_per_1k_output": 0.0015,
-            "cost_per_image": 0.0025,
-        },
+        "gemini-flash-lite-latest": {"context_window": 1_000_000, "max_output_tokens": 8192},
+        "gemini-flash-latest": {"context_window": 1_000_000, "max_output_tokens": 8192},
+        "gemini-pro-latest": {"context_window": 1_000_000, "max_output_tokens": 8192},
     }
-    
+    DEFAULT_MODEL = "gemini-flash-latest"
+
+    #: Roles a client may put in conversation history. Anything else (e.g. a
+    #: client-supplied "system") is treated as patient text, so history cannot
+    #: be used to inject instructions.
+    _ROLE_LABELS = {"user": "PATIENT", "patient": "PATIENT", "assistant": "ASSISTANT", "model": "ASSISTANT"}
+
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         super().__init__(config)
-        
-        # Configuration
+        config = config or {}
+
         self.api_key = config.get("api_key") or os.getenv("GEMINI_API_KEY")
-        self.model_name = config.get("model", "gemini-1.5-pro")
+        self.model_name = config.get("model") or self.DEFAULT_MODEL
         self.temperature = config.get("temperature", 0.3)
         self.max_tokens = config.get("max_tokens")
-        self.timeout_seconds = config.get("timeout_seconds", 60.0)
+        self.timeout_seconds = float(config.get("timeout_seconds", 60.0))
+        self._price_in = _env_price("GEMINI_PRICE_INPUT_PER_1M")
+        self._price_out = _env_price("GEMINI_PRICE_OUTPUT_PER_1M")
         self.max_retries = config.get("max_retries", 3)
         self.retry_delay = config.get("retry_delay_seconds", 1.0)
-        
+
         if not self.api_key:
             raise ProviderInvalidRequestError(
                 "gemini", self.model_name,
                 "GEMINI_API_KEY not configured"
             )
-        
-        # Configure the SDK
-        genai.configure(api_key=self.api_key)
-        
-        # Safety settings for medical content
-        self.safety_settings = {
-            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-        }
-        
-        # Initialize model
-        self._model = genai.GenerativeModel(
-            model_name=self.model_name,
-            safety_settings=self.safety_settings,
-            generation_config=genai.GenerationConfig(
-                temperature=self.temperature,
-                max_output_tokens=self.max_tokens or self.MODELS.get(self.model_name, {}).get("max_output_tokens", 8192),
-                response_mime_type="application/json",
-            )
+
+        # The request timeout is enforced by the client; previously no timeout
+        # was passed and a hung call blocked the request forever.
+        self._client = genai.Client(
+            api_key=self.api_key,
+            http_options=types.HttpOptions(timeout=int(self.timeout_seconds * 1000)),
         )
-    
+
+        # Medical content: DANGEROUS_CONTENT only blocks high-probability
+        # harm. At medium, questions about overdoses or self-harm -- the very
+        # messages that most need a careful answer -- were refused.
+        threshold = types.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+        self.safety_settings = [
+            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold=threshold),
+            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold=threshold),
+            types.SafetySetting(category=types.HarmCategory.HARM_CATEGORY_HARASSMENT, threshold=threshold),
+            types.SafetySetting(
+                category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold=types.HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            ),
+        ]
+        self._config = types.GenerateContentConfig(
+            temperature=self.temperature,
+            max_output_tokens=self.max_tokens or self.MODELS.get(self.model_name, {}).get("max_output_tokens", 8192),
+            response_mime_type="application/json",
+            safety_settings=self.safety_settings,
+        )
+
     @property
     def provider_name(self) -> str:
         return "gemini"
@@ -203,10 +217,9 @@ class GeminiProvider(MultimodalAIProvider):
             if request.system_prompt:
                 prompt_parts.append(request.system_prompt)
             for turn in request.conversation_history:
-                role = turn.get("role", "user")
                 content = turn.get("content", "")
                 if content:
-                    prompt_parts.append(f"[{role.upper()}]: {content}")
+                    prompt_parts.append(f"[{self._role_label(turn.get('role'))}]: {content}")
             if request.text:
                 prompt_parts.append(f"[PATIENT]: {request.text}")
             prompt_parts.extend(image_parts)
@@ -234,62 +247,79 @@ class GeminiProvider(MultimodalAIProvider):
         if request.system_prompt:
             parts.append(request.system_prompt)
         for turn in request.conversation_history:
-            role = turn.get("role", "user")
             content = turn.get("content", "")
             if content:
-                parts.append(f"[{role.upper()}]: {content}")
+                parts.append(f"[{self._role_label(turn.get('role'))}]: {content}")
         parts.append(f"[PATIENT]: {request.text}")
         if request.patient_context:
             parts.append(f"[CONTEXT]: {json.dumps(request.patient_context)}")
         return "\n\n".join(parts)
     
-    async def _prepare_images(self, images: List[ImageInput]) -> List[Dict[str, Any]]:
-        """Convert ImageInput objects to Gemini-compatible parts."""
+    def _role_label(self, role: Any) -> str:
+        return self._ROLE_LABELS.get(str(role or "user").lower(), "PATIENT")
+
+    async def _prepare_images(self, images: List[ImageInput]) -> List[types.Part]:
+        """Convert ImageInput objects to Gemini parts."""
         parts = []
         for img in images:
             if img.image_data:
-                image_bytes = base64.b64decode(img.image_data)
-                parts.append({"mime_type": img.mime_type, "data": image_bytes})
+                parts.append(types.Part.from_bytes(
+                    data=base64.b64decode(img.image_data), mime_type=img.mime_type
+                ))
             elif img.image_url:
                 raise ProviderInvalidRequestError(
                     self.provider_name, self.model_name,
                     "Image URLs not supported directly; use base64 image_data"
                 )
         return parts
-    
+
+    @staticmethod
+    def _blocked(response: Any) -> bool:
+        feedback = getattr(response, "prompt_feedback", None)
+        if feedback is not None and getattr(feedback, "block_reason", None):
+            return True
+        candidates = getattr(response, "candidates", None) or []
+        return bool(candidates) and getattr(candidates[0], "finish_reason", None) == types.FinishReason.SAFETY
+
     async def _generate_with_retry(self, prompt: Any) -> Any:
-        """Generate content with retry logic."""
-        last_error = None
+        """Generate content, retrying only transient failures."""
+        last_error: Optional[Exception] = None
         for attempt in range(self.max_retries):
             try:
-                loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(
-                    None, lambda: self._model.generate_content(prompt)
+                response = await self._client.aio.models.generate_content(
+                    model=self.model_name, contents=prompt, config=self._config,
                 )
-                if response.candidates and response.candidates[0].finish_reason == 3:
+            except genai_errors.APIError as exc:
+                code = getattr(exc, "code", None) or 0
+                if code == 429:
+                    last_error = ProviderRateLimitError(self.provider_name, self.model_name)
+                elif code >= 500:
+                    last_error = ProviderUnavailableError(self.provider_name, self.model_name)
+                else:
+                    # 4xx: a bad key, an unknown model, an invalid request.
+                    # Retrying cannot fix it; unavailable lets the factory fall
+                    # back to another provider.
+                    raise ProviderUnavailableError(self.provider_name, self.model_name) from exc
+            except (asyncio.TimeoutError, TimeoutError) as exc:
+                last_error = ProviderTimeoutError(self.provider_name, self.model_name, self.timeout_seconds)
+                last_error.__cause__ = exc
+            except Exception as exc:  # network errors from the HTTP client
+                if "timeout" in type(exc).__name__.lower():
+                    last_error = ProviderTimeoutError(self.provider_name, self.model_name, self.timeout_seconds)
+                else:
+                    last_error = ProviderUnavailableError(self.provider_name, self.model_name)
+                last_error.__cause__ = exc
+            else:
+                if self._blocked(response):
+                    # Not retried: a blocked prompt is blocked every time.
                     raise ProviderSafetyError(
-                        self.provider_name, self.model_name,
-                        "Response blocked by safety filter"
+                        self.provider_name, self.model_name, "Response blocked by safety filter"
                     )
                 return response
-            except ProviderSafetyError:
-                # A blocked prompt is blocked every time; retrying only delays
-                # the patient's answer.
-                raise
-            except Exception as e:
-                last_error = e
-                if attempt < self.max_retries - 1:
-                    await asyncio.sleep(self.retry_delay * (2 ** attempt))
-                else:
-                    break
-        if "quota" in str(last_error).lower() or "rate" in str(last_error).lower():
-            raise ProviderRateLimitError(self.provider_name, self.model_name)
-        elif "timeout" in str(last_error).lower():
-            raise ProviderTimeoutError(self.provider_name, self.model_name, self.timeout_seconds)
-        elif "unavailable" in str(last_error).lower() or "503" in str(last_error):
-            raise ProviderUnavailableError(self.provider_name, self.model_name)
-        raise ProviderError(f"Generation failed: {last_error}", self.provider_name, self.model_name)
-    
+            if attempt < self.max_retries - 1:
+                await asyncio.sleep(self.retry_delay * (2 ** attempt))
+        raise last_error
+
     def _parse_response(self, response: Any, modality: Modality) -> AnalysisResponse:
         """Parse Gemini response into structured AnalysisResponse."""
         result = AnalysisResponse(
@@ -299,6 +329,9 @@ class GeminiProvider(MultimodalAIProvider):
         )
         try:
             response_text = response.text if hasattr(response, 'text') else str(response)
+            if response_text is None:
+                raise ValueError("empty or blocked response")
+            response_text = _strip_code_fence(response_text)
             if response_text.strip().startswith('{'):
                 data = json.loads(response_text)
                 self._populate_from_dict(result, data)
@@ -392,10 +425,7 @@ class GeminiProvider(MultimodalAIProvider):
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
         )
-        model_info = self.MODELS.get(self.model_name, {})
-        input_cost = (prompt_tokens / 1000) * model_info.get("cost_per_1k_input", 0)
-        output_cost = (completion_tokens / 1000) * model_info.get("cost_per_1k_output", 0)
-        tokens.estimated_cost_usd = input_cost + output_cost
+        tokens.estimated_cost_usd = self.estimate_cost(tokens)
         self.record_request(latency_ms, tokens)
     
     def _record_error(self, error: Exception, start_time: float):
@@ -403,23 +433,28 @@ class GeminiProvider(MultimodalAIProvider):
         latency_ms = int((time.time() - start_time) * 1000)
         self.record_request(latency_ms, TokenUsage(), str(error))
     
+    @property
+    def pricing_configured(self) -> bool:
+        return self._price_in is not None and self._price_out is not None
+
     def estimate_cost(self, tokens: TokenUsage) -> float:
-        """Estimate cost for token usage."""
-        model_info = self.MODELS.get(self.model_name, {})
-        input_cost = (tokens.prompt_tokens / 1000) * model_info.get("cost_per_1k_input", 0)
-        output_cost = (tokens.completion_tokens / 1000) * model_info.get("cost_per_1k_output", 0)
-        image_cost = tokens.image_tokens * model_info.get("cost_per_image", 0)
-        return input_cost + output_cost + image_cost
+        """Cost from operator-configured prices (USD per 1M tokens).
+
+        No built-in price table: Google's prices change and the old table was
+        stale. Without configured prices the cost is unknown, which the audit
+        log records as such (see `pricing_configured`), not as zero.
+        """
+        if not self.pricing_configured:
+            return 0.0
+        return (tokens.prompt_tokens * self._price_in + tokens.completion_tokens * self._price_out) / 1_000_000
     
     async def health_check(self) -> bool:
-        """Check if Gemini API is accessible."""
+        """Check that the configured model answers."""
         try:
-            test_model = genai.GenerativeModel("gemini-1.5-flash")
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                lambda: test_model.generate_content("test", 
-                    generation_config=genai.GenerationConfig(max_output_tokens=5))
+            await self._client.aio.models.generate_content(
+                model=self.model_name,
+                contents="ping",
+                config=types.GenerateContentConfig(max_output_tokens=5),
             )
             return True
         except Exception:

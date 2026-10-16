@@ -279,15 +279,26 @@ class OpenAIProvider(MultimodalAIProvider):
     
     async def _call_api(self, messages: List[ChatCompletionMessageParam], request: Any) -> Any:
         """Call OpenAI API with structured output."""
+        import openai
+
         response_format = {"type": "json_object"} if request.response_schema else {"type": "text"}
-        response = await self._client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens or self.MODELS.get(self.model_name, {}).get("max_output_tokens"),
-            response_format=response_format,
-        )
-        return response
+        try:
+            return await self._client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens or self.MODELS.get(self.model_name, {}).get("max_output_tokens"),
+                response_format=response_format,
+            )
+        # SDK errors are mapped onto the provider contract so the factory can
+        # fall back (it only falls back on these types). Unmapped, a bad key or
+        # an outage surfaced as a 500.
+        except openai.RateLimitError as exc:
+            raise ProviderRateLimitError(self.provider_name, self.model_name) from exc
+        except openai.APITimeoutError as exc:
+            raise ProviderTimeoutError(self.provider_name, self.model_name, self.timeout_seconds) from exc
+        except openai.APIError as exc:
+            raise ProviderUnavailableError(self.provider_name, self.model_name) from exc
     
     def _parse_response(self, response: Any, modality: Modality) -> AnalysisResponse:
         """Parse OpenAI response into structured AnalysisResponse."""
