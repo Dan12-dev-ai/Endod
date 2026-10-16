@@ -79,7 +79,11 @@ def read_timeline_event(
 def delete_timeline_event(
     event_id: str, user_id: str = Depends(current_user_id)
 ) -> Dict[str, Any]:
-    if not tl.delete_event(user_id, event_id):
+    try:
+        deleted = tl.delete_event(user_id, event_id)
+    except tl.ProtectedEventError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
     return {"deleted": True, "event_id": event_id}
 
@@ -147,7 +151,7 @@ def create_appointment(
     # the reminder policy. This previously re-queried the row inline here and
     # passed `None` for preferences, which silently discarded the user's
     # configured reminder times.
-    queued = scheduler.schedule_reminders(
+    queued = scheduler.schedule_all_channels(
         user_id=user_id,
         appointment_id=result["appointment"]["appointment_id"],
         correlation_id=request.headers.get("X-Correlation-ID"),

@@ -102,9 +102,36 @@ class TestReading:
         for n in range(5):
             inbox.add_item(user.id, "messages", "note", f"Message {n}")
         page = client.get("/users/me/inbox?limit=3", headers=auth).json()
-        assert len(page["items"]) == 3 and page["next_before"]
-        rest = client.get("/users/me/inbox", headers=auth, params={"before": page["next_before"]}).json()
-        assert len(rest["items"]) == 2
+        assert len(page["items"]) == 3 and page["next_cursor"]
+        rest = client.get("/users/me/inbox", headers=auth, params={"cursor": page["next_cursor"]}).json()
+        assert len(rest["items"]) == 2 and rest["next_cursor"] is None
+
+    def test_paging_with_identical_timestamps_loses_nothing(self, client):
+        from sqlalchemy import update
+
+        from dedan_platform import identity, inbox
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import InboxItem, utcnow
+
+        auth = register(client, "a@example.com")
+        user = identity.find_user_by_email("a@example.com")
+        for n in range(5):
+            inbox.add_item(user.id, "messages", "note", f"Message {n}")
+        with session_scope() as session:
+            session.execute(update(InboxItem).values(created_at=utcnow()))
+        seen, cursor = [], None
+        for _ in range(5):
+            params = {"limit": 2, **({"cursor": cursor} if cursor else {})}
+            page = client.get("/users/me/inbox", headers=auth, params=params).json()
+            seen += [i["id"] for i in page["items"]]
+            cursor = page["next_cursor"]
+            if not cursor:
+                break
+        assert len(seen) == 5 and len(set(seen)) == 5
+
+    def test_bad_cursor_is_400(self, client):
+        auth = register(client, "a@example.com")
+        assert client.get("/users/me/inbox?cursor=not-a-cursor", headers=auth).status_code == 400
 
     def test_bad_category_is_400(self, client):
         auth = register(client, "a@example.com")

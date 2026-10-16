@@ -7,7 +7,6 @@ the authenticated account, and another patient's item id answers 404.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -23,11 +22,11 @@ def list_inbox(
     category: Optional[str] = Query(default=None, description="appointments | records | messages | security"),
     unread_only: bool = False,
     limit: int = Query(default=50, ge=1, le=inbox.MAX_PAGE),
-    before: Optional[datetime] = Query(default=None, description="next_before from the previous page"),
+    cursor: Optional[str] = Query(default=None, max_length=200, description="next_cursor from the previous page"),
     user_id: str = Depends(current_user_id),
 ) -> Dict[str, Any]:
     try:
-        return inbox.list_items(user_id, category, unread_only, limit, before)
+        return inbox.list_items(user_id, category, unread_only, limit, cursor)
     except inbox.InboxError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

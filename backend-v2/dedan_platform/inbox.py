@@ -9,13 +9,15 @@ action it describes: an inbox failure is logged, not raised.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 
-from dedan_platform.db import ensure_aware, session_scope
+from dedan_platform.db import ensure_aware, ensure_utc, session_scope
 from dedan_platform.models import InboxItem, utcnow
 
 logger = logging.getLogger(__name__)
@@ -67,14 +69,37 @@ def _payload(item: InboxItem) -> Dict[str, Any]:
     }
 
 
+def _encode_cursor(item: InboxItem) -> str:
+    raw = f"{ensure_aware(item.created_at).isoformat()}|{item.id}"
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
+
+
+def _decode_cursor(cursor: str) -> Tuple[datetime, str]:
+    """(created_at, id) of the last item on the previous page."""
+    try:
+        raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
+        when, item_id = raw.split("|", 1)
+        created_at = datetime.fromisoformat(when)
+        if created_at.tzinfo is None or not item_id:
+            raise ValueError(raw)
+        return ensure_utc(created_at), item_id
+    except (binascii.Error, UnicodeDecodeError, ValueError, OverflowError) as exc:
+        raise InboxError("cursor is not valid; use next_cursor from the previous page.") from exc
+
+
 def list_items(
     user_id: str,
     category: Optional[str] = None,
     unread_only: bool = False,
     limit: int = 50,
-    before: Optional[datetime] = None,
+    cursor: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Newest first, excluding dismissed items, plus unread counts."""
+    """Newest first, excluding dismissed items, plus unread counts.
+
+    Paged by an opaque keyset cursor over (created_at, id), so items that
+    share a timestamp are neither skipped nor repeated across pages.
+    """
+    after = _decode_cursor(cursor) if cursor else None
     if category is not None and category not in CATEGORIES:
         raise InboxError(f"category must be one of {list(CATEGORIES)}")
     limit = max(1, min(limit, MAX_PAGE))
@@ -85,8 +110,12 @@ def list_items(
             query = query.where(InboxItem.category == category)
         if unread_only:
             query = query.where(InboxItem.read_at.is_(None))
-        if before is not None:
-            query = query.where(InboxItem.created_at < before)
+        if after is not None:
+            created_at, item_id = after
+            query = query.where(or_(
+                InboxItem.created_at < created_at,
+                and_(InboxItem.created_at == created_at, InboxItem.id < item_id),
+            ))
         rows = session.scalars(
             query.order_by(InboxItem.created_at.desc(), InboxItem.id.desc()).limit(limit + 1)
         ).all()
@@ -96,9 +125,10 @@ def list_items(
             .group_by(InboxItem.category)
         ).all())
         items = [_payload(item) for item in rows[:limit]]
+        next_cursor = _encode_cursor(rows[limit - 1]) if len(rows) > limit else None
     return {
         "items": items,
-        "next_before": items[-1]["created_at"] if len(rows) > limit else None,
+        "next_cursor": next_cursor,
         "unread_count": sum(unread.values()),
         "unread_by_category": {c: unread.get(c, 0) for c in CATEGORIES},
     }

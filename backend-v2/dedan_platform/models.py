@@ -166,6 +166,11 @@ class Profile(Base):
     # Display name only. Never an email: an email in a general profile is a
     # correlator that defeats pseudonymisation of the health record.
     display_name: Mapped[Optional[str]] = mapped_column(String(120))
+    # The onboarding form asks for these separately; `display_name` is derived
+    # from them unless the patient sets it explicitly.
+    first_name: Mapped[Optional[str]] = mapped_column(String(60))
+    middle_name: Mapped[Optional[str]] = mapped_column(String(60))
+    last_name: Mapped[Optional[str]] = mapped_column(String(60))
     email: Mapped[Optional[str]] = mapped_column(String(255), index=True)
     phone: Mapped[Optional[str]] = mapped_column(String(32))
     #: Set when the patient proved they hold `phone` with an SMS code. Only a
@@ -174,7 +179,12 @@ class Profile(Base):
     phone_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     locale: Mapped[str] = mapped_column(String(8), default="en", nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
-    country_code: Mapped[str] = mapped_column(String(2), default="KE", nullable=False)
+    country_code: Mapped[str] = mapped_column(String(2), default="ET", nullable=False)
+    # Used to find nearby care. Optional; never shared beyond this account.
+    address_line: Mapped[Optional[str]] = mapped_column(String(200))
+    city: Mapped[Optional[str]] = mapped_column(String(100))
+    region: Mapped[Optional[str]] = mapped_column(String(100))
+    postal_code: Mapped[Optional[str]] = mapped_column(String(20))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
@@ -212,6 +222,10 @@ class Preferences(Base):
         String(64), default="604800,86400,3600", nullable=False
     )
     preferred_contact_window: Mapped[Optional[str]] = mapped_column(String(64))
+    #: What the patient wants from DEDAN (onboarding), comma-separated ids.
+    onboarding_goals: Mapped[Optional[str]] = mapped_column(String(200))
+    #: How far to search for care, in kilometres.
+    care_search_radius_km: Mapped[Optional[int]] = mapped_column(Integer)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
@@ -236,6 +250,9 @@ class HealthProfile(Base):
     )
     date_of_birth: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     sex: Mapped[Optional[str]] = mapped_column(String(16))
+    #: When the exact date of birth is not given (onboarding asks for a
+    #: range), e.g. "21-40". Age-dependent safety rules use it as a fallback.
+    age_range: Mapped[Optional[str]] = mapped_column(String(16))
     # JSON columns rather than a fixed schema: the clinical vocabulary differs
     # per condition, and a rigid table would need a migration per new field.
     allergies: Mapped[Optional[str]] = mapped_column(Text)
