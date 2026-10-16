@@ -38,12 +38,10 @@ numpy>=1.26                     # providers/image_validation.py: brightness,
 # --- AI provider adapters ---------------------------------------------------
 # Imported by providers/gemini_provider.py and providers/openai_provider.py.
 # Both are only *called* in live mode; importing them in offline mode is safe.
-# `google-generativeai` (the legacy SDK) has no Live API at all: its `Client`
-# exposes no `.live` attribute, so a realtime session cannot be opened with it.
-# Native duplex requires `google-genai`, whose `live.AsyncLive` provides the
-# bidirectional session.
-google-generativeai>=0.8      # legacy text/image path
-google-genai>=1.0             # CURRENT SDK — required for realtime live duplex
+# `google-genai` is Google's current SDK, used for text, images and (when
+# installed) the realtime live-voice session. The legacy `google-generativeai`
+# is end-of-life and no longer used.
+google-genai>=1.0
 openai>=1.30
 
 # --- Persistence ------------------------------------------------------------

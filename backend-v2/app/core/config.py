@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = Field(default=None, description="OpenAI API key")
     ANTHROPIC_API_KEY: Optional[str] = Field(default=None, description="Anthropic API key")
     DEFAULT_AI_PROVIDER: str = Field(default="gemini", description="Default AI provider: gemini, openai, anthropic")
-    GEMINI_MODEL: str = Field(default="gemini-1.5-pro", description="Gemini model to use")
+    GEMINI_MODEL: str = Field(default="gemini-flash-latest", description="Gemini model to use")
     OPENAI_MODEL: str = Field(default="gpt-4o", description="OpenAI model to use")
     ANTHROPIC_MODEL: str = Field(default="claude-3-5-sonnet-20241022", description="Anthropic model to use")
 

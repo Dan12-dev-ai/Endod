@@ -25,6 +25,18 @@ from .offline_provider import OfflineProvider
 # Registration is deferred to factory initialization to avoid import-time instantiation issues
 
 
+#: Current model per provider and capability, unless AI_<KIND>_MODEL is set.
+_DEFAULT_MODELS = {
+    "gemini": {
+        "TEXT": "gemini-flash-lite-latest",
+        "VISION": "gemini-flash-latest",
+        "MULTIMODAL": "gemini-flash-latest",
+    },
+    "openai": {"TEXT": "gpt-4o-mini", "VISION": "gpt-4o", "MULTIMODAL": "gpt-4o"},
+}
+_KEY_VARS = {"gemini": "GEMINI_API_KEY", "openai": "OPENAI_API_KEY"}
+
+
 class ProviderFactory:
     """
     Factory for creating and managing AI provider instances.
@@ -79,6 +91,15 @@ class ProviderFactory:
             cls._has_usable_credential(gemini) or cls._has_usable_credential(openai)
         )
 
+    @classmethod
+    def _default_live_provider(cls) -> str:
+        """The provider whose credential is configured; Gemini when both are."""
+        if cls._has_usable_credential(os.getenv("GEMINI_API_KEY")):
+            return "gemini"
+        if cls._has_usable_credential(os.getenv("OPENAI_API_KEY")):
+            return "openai"
+        return "gemini"
+
     def _load_from_env(self) -> MultimodalConfig:
         """Load configuration from environment variables.
 
@@ -86,30 +107,33 @@ class ProviderFactory:
         provider so no live network call can be attempted.
         """
         offline = self._should_use_offline()
-        text_name = "offline" if offline else os.getenv("AI_TEXT_PROVIDER", "openai")
-        vision_name = "offline" if offline else os.getenv("AI_VISION_PROVIDER", "gemini")
-        mm_name = "offline" if offline else os.getenv("AI_MULTIMODAL_PROVIDER", "gemini")
+
+        def slot(kind: str, temperature_var: str, default_temperature: str, **extra) -> ProviderConfig:
+            """One capability slot, with the key and model of *its* provider.
+
+            Text used to default to OpenAI even when only a Gemini key was
+            configured (every text request then failed with a 401), and the
+            vision slots were handed whichever key existed, possibly the other
+            provider's.
+            """
+            if offline:
+                return ProviderConfig(provider="offline", model="dedan-rules-v1", **extra)
+            provider = os.getenv(f"AI_{kind}_PROVIDER", "").strip().lower() or self._default_live_provider()
+            return ProviderConfig(
+                provider=provider,
+                model=os.getenv(f"AI_{kind}_MODEL") or _DEFAULT_MODELS.get(provider, {}).get(kind),
+                api_key=os.getenv(_KEY_VARS.get(provider, "")),
+                temperature=float(os.getenv(temperature_var, default_temperature)),
+                **extra,
+            )
 
         return MultimodalConfig(
-            text_provider=ProviderConfig(
-                provider=text_name,
-                model="dedan-rules-v1" if offline else os.getenv("AI_TEXT_MODEL", "gpt-4o-mini"),
-                api_key=os.getenv("OPENAI_API_KEY"),
-                temperature=float(os.getenv("AI_TEMPERATURE", "0.3")),
+            text_provider=slot(
+                "TEXT", "AI_TEMPERATURE", "0.3",
                 max_tokens=int(os.getenv("AI_MAX_TOKENS", "0")) or None,
             ),
-            vision_provider=ProviderConfig(
-                provider=vision_name,
-                model="dedan-rules-v1" if offline else os.getenv("AI_VISION_MODEL", "gemini-1.5-pro"),
-                api_key=os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY"),
-                temperature=float(os.getenv("AI_VISION_TEMPERATURE", "0.2")),
-            ),
-            multimodal_provider=ProviderConfig(
-                provider=mm_name,
-                model="dedan-rules-v1" if offline else os.getenv("AI_MULTIMODAL_MODEL", "gemini-1.5-pro"),
-                api_key=os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY"),
-                temperature=float(os.getenv("AI_MULTIMODAL_TEMPERATURE", "0.3")),
-            ),
+            vision_provider=slot("VISION", "AI_VISION_TEMPERATURE", "0.2"),
+            multimodal_provider=slot("MULTIMODAL", "AI_MULTIMODAL_TEMPERATURE", "0.3"),
             enable_fallback=os.getenv("AI_ENABLE_FALLBACK", "true").lower() == "true",
             fallback_providers=os.getenv("AI_FALLBACK_PROVIDERS", "").split(",") if os.getenv("AI_FALLBACK_PROVIDERS") else [],
             max_cost_per_request_usd=float(os.getenv("AI_MAX_COST_PER_REQUEST", "1.0")),
