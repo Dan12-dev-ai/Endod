@@ -156,7 +156,9 @@ def record_care_navigation(
                 "symptom_count": len(body.symptoms),
             },
         )
-    except Exception as exc:
+    except ValueError as exc:
+        # Input problems only. Anything else is a server fault: it goes to the
+        # generic 500 handler instead of echoing internal (database) errors.
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

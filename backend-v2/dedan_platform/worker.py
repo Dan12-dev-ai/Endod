@@ -36,6 +36,7 @@ from dedan_platform.email_provider import (
     EmailNotConfiguredError, EmailProviderError, build_provider, render_appointment_reminder,
 )
 from dedan_platform.models import NotificationChannel, NotificationStatus
+from dedan_platform import sms_provider as sms
 
 logger = logging.getLogger(__name__)
 
@@ -57,16 +58,74 @@ WORKER_RECONCILE_ON_START = _env_flag("NOTIFICATION_RECONCILE_ON_START", True)
 WORKER_RECONCILE_INTERVAL = float(os.getenv("NOTIFICATION_RECONCILE_INTERVAL_SECONDS", "3600"))
 
 
-def deliver_one(job: Dict[str, Any], provider=None) -> str:
+def _stale_reason(job: Dict[str, Any]) -> Optional[str]:
+    """Why a queued reminder must no longer be sent, or None.
+
+    Checked immediately before every send, because things change between
+    queueing and delivery: the patient may opt out or change the phone or
+    email (which could now belong to someone else), and the appointment may
+    have been cancelled or moved -- a job already being processed when that
+    happened was not covered by the cancellation.
+    """
+    from sqlalchemy import select
+
+    from dedan_platform import identity, scheduler
+    from dedan_platform.db import ensure_aware, session_scope
+    from dedan_platform.models import Appointment
+    from dedan_platform.appointments import TERMINAL_STATUSES
+
+    payload = job.get("payload") or {}
+    appointment_id = job.get("appointment_id") or payload.get("appointment_id")
+    if appointment_id:
+        with session_scope() as session:
+            row = session.execute(
+                select(Appointment.status, Appointment.scheduled_at)
+                .where(Appointment.id == appointment_id)
+            ).first()
+        if row is None or row.status in TERMINAL_STATUSES:
+            return "appointment_inactive"
+        queued_for = payload.get("scheduled_at")
+        if queued_for and ensure_aware(row.scheduled_at) != datetime.fromisoformat(queued_for):
+            return "appointment_time_changed"
+    try:
+        profile = identity.get_profile_payload(job["user_id"])
+    except identity.UserNotFound:
+        return "account_not_found"
+    if scheduler.current_destination(job.get("channel", NotificationChannel.EMAIL), profile) != job.get("destination"):
+        return "destination_changed_or_opted_out"
+    return None
+
+
+def _deliver_sms(job: Dict[str, Any], provider) -> str:
+    attempt = job.get("attempts", 0) + 1
+    try:
+        message_id = provider.send(job["destination"], sms.render_sms_reminder(job.get("payload") or {}))
+    except sms.SmsProviderError as exc:
+        return notifications.mark_failed(job["id"], str(exc), attempt)
+    except Exception as exc:
+        return notifications.mark_failed(job["id"], f"{type(exc).__name__}", attempt)
+    notifications.mark_sent(job["id"], provider_message_id=message_id)
+    return "SENT"
+
+
+def deliver_one(job: Dict[str, Any], provider=None, sms_provider=None) -> str:
     """Attempt one job. Returns the resulting status.
 
     Separated from `run_once` so a test can drive a single job deterministically
-    without racing the queue.
+    without racing the queue. ``provider`` sends email, ``sms_provider`` SMS.
     """
-    if job.get("channel", NotificationChannel.EMAIL) != NotificationChannel.EMAIL:
-        # Only email has a transport here. Handing an SMS or push job to the
-        # email provider used a phone number or user id as an email address.
-        notifications.mark_skipped(job["id"], f"channel_not_supported:{job.get('channel')}")
+    channel = job.get("channel", NotificationChannel.EMAIL)
+    if channel in (NotificationChannel.EMAIL, NotificationChannel.SMS):
+        reason = _stale_reason(job)
+        if reason:
+            notifications.mark_skipped(job["id"], reason)
+            return NotificationStatus.SKIPPED
+    if channel == NotificationChannel.SMS:
+        return _deliver_sms(job, sms_provider or sms.build_provider())
+    if channel != NotificationChannel.EMAIL:
+        # No transport for push/in-app yet. Never hand these to the email
+        # provider, which would use a user id as an email address.
+        notifications.mark_skipped(job["id"], f"channel_not_supported:{channel}")
         return NotificationStatus.SKIPPED
 
     provider = provider or build_provider()
@@ -99,6 +158,7 @@ def run_once(
     provider=None,
     now: Optional[datetime] = None,
     should_stop: Optional[Callable[[], bool]] = None,
+    sms_provider=None,
 ) -> Dict[str, int]:
     """Process up to ``limit`` due notifications.
 
@@ -114,11 +174,28 @@ def run_once(
     a reminder's due time instead of waiting 24 hours for it. `should_stop` is
     checked between jobs so shutdown never interrupts a send.
     """
+    # Each channel is delivered only if its transport is configured; the
+    # other channel's jobs are not claimed and wait in the queue. (A missing
+    # mail server used to stop every reminder, including SMS.)
+    channels = []
     try:
         provider = provider or build_provider()
+        channels.append(NotificationChannel.EMAIL)
     except EmailNotConfiguredError as exc:
-        # Nothing is claimed: the reminders stay queued until mail is configured.
-        logger.error("notification_delivery_blocked: %s", exc)
+        logger.error("notification_delivery_blocked channel=email: %s", exc)
+    try:
+        sms_provider = sms_provider or sms.build_provider()
+        channels.append(NotificationChannel.SMS)
+    except sms.SmsNotConfiguredError as exc:
+        logger.error("notification_delivery_blocked channel=sms: %s", exc)
+    # Channels without a transport are claimed only to be closed as SKIPPED,
+    # so they do not sit in the queue forever.
+    channels.extend(
+        c for c in NotificationChannel.ALL
+        if c not in (NotificationChannel.EMAIL, NotificationChannel.SMS)
+    )
+    blocked = 2 - sum(c in channels for c in (NotificationChannel.EMAIL, NotificationChannel.SMS))
+    if blocked == 2:
         return {"claimed": 0, "recovered_stale": 0, "SENT": 0, "RETRYING": 0, "FAILED": 0,
                 "blocked": 1}
     recovered = notifications.recover_stale_jobs(now=now)
@@ -126,14 +203,16 @@ def run_once(
     counts: Dict[str, int] = {"SENT": 0, "RETRYING": 0, "FAILED": 0}
     claimed = 0
     while claimed < limit and not (should_stop and should_stop()):
-        jobs = notifications.claim_due_jobs(limit=1, now=now)
+        jobs = notifications.claim_due_jobs(limit=1, now=now, channels=channels)
         if not jobs:
             break
         claimed += 1
-        result = deliver_one(jobs[0], provider)
+        result = deliver_one(jobs[0], provider, sms_provider)
         counts[result] = counts.get(result, 0) + 1
 
     summary = {"claimed": claimed, "recovered_stale": recovered, **counts}
+    if blocked:
+        summary["blocked_channels"] = blocked
     logger.info("notification_batch_complete", extra=summary)
     return summary
 

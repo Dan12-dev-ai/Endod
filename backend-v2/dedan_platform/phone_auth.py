@@ -40,7 +40,7 @@ from dedan_platform import credentials, identity
 from dedan_platform.db import new_uuid, session_scope
 from dedan_platform.models import PhoneVerification, utcnow
 from dedan_platform.phone import mask, normalise_ethiopian_mobile
-from dedan_platform.sms_provider import SmsProvider, SmsProviderError, build_provider
+from dedan_platform.sms_provider import BRAND_NAME, SmsProvider, SmsProviderError, build_provider
 from realtime.auth import AuthError, decode_token, issue_token, signing_secret
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ OTP_MAX_PER_CLIENT_PER_HOUR = int(os.getenv("OTP_MAX_PER_CLIENT_PER_HOUR", "30")
 #: How long a verified code may be used to set the password.
 VERIFICATION_TOKEN_TTL_SECONDS = int(os.getenv("PHONE_VERIFICATION_TTL", "900"))
 VERIFICATION_SCOPE = "phone_verification"
-BRAND_NAME = os.getenv("SMS_BRAND_NAME", "Endod Health")
+
 
 
 class PhoneAuthError(RuntimeError):
@@ -301,7 +301,8 @@ def complete(
     verification_token: str,
     password: str,
     password_confirmation: Optional[str] = None,
-    display_name: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create the account (or reset its password) and sign the patient in.
 
@@ -324,7 +325,9 @@ def complete(
     if created:
         try:
             result = identity.create_user(
-                display_name=(display_name or "").strip() or None,
+                display_name=" ".join(n.strip() for n in (first_name, last_name) if n and n.strip()) or None,
+                first_name=first_name,
+                last_name=last_name,
                 phone=phone,
                 phone_verified=True,
                 locale="en",

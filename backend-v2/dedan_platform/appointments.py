@@ -25,12 +25,12 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from dedan_platform.db import ensure_aware, ensure_utc, new_uuid, session_scope
 from dedan_platform.models import Appointment, EventStatus, HealthEventType, utcnow
-from dedan_platform.timeline import record_event
+from dedan_platform.timeline import record_event, update_appointment_event
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +143,61 @@ def reminder_offsets_for(appointment: Appointment, user_preferences: Optional[st
 _PAST_TOLERANCE = timedelta(minutes=5)
 
 
+def _lock_booking(session: Session, keys: List[str]) -> None:
+    """Serialise bookings that could clash, until this transaction ends.
+
+    Without it, two simultaneous requests for the same patient or provider
+    could both find the slot free and both insert. On PostgreSQL this takes a
+    transaction-scoped advisory lock per key (in a fixed order, so two
+    requests cannot deadlock). SQLite serialises writers itself but not the
+    preceding read, so it is suitable for single-user development only.
+    """
+    if session.bind is None or session.bind.dialect.name != "postgresql":
+        return
+    from sqlalchemy import text
+
+    for key in sorted(set(keys)):
+        lock_id = int.from_bytes(hashlib.sha256(key.encode()).digest()[:8], "big", signed=True)
+        session.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": lock_id})
+
+
+def _require_no_overlap(
+    session: Session,
+    user_id: str,
+    start: datetime,
+    duration_minutes: int,
+    provider_id: Optional[str],
+    exclude_id: Optional[str] = None,
+) -> None:
+    """Refuse a booking that overlaps another active one.
+
+    Two kinds of clash: the patient cannot be in two appointments at once, and
+    a provider cannot be booked twice for the same time. Both used to be
+    accepted.
+    """
+    _lock_booking(session, [f"patient:{user_id}"] + ([f"provider:{provider_id}"] if provider_id else []))
+    end = start + timedelta(minutes=duration_minutes)
+    window_start = start - timedelta(minutes=480)  # longest allowed duration
+    owner = Appointment.user_id == user_id
+    if provider_id:
+        owner = or_(owner, Appointment.provider_id == provider_id)
+    query = select(Appointment).where(
+        owner,
+        Appointment.status.not_in(list(TERMINAL_STATUSES)),
+        Appointment.scheduled_at < end,
+        Appointment.scheduled_at > window_start,
+    )
+    if exclude_id:
+        query = query.where(Appointment.id != exclude_id)
+    for other in session.scalars(query):
+        other_start = ensure_aware(other.scheduled_at)
+        other_end = other_start + timedelta(minutes=other.duration_minutes or 30)
+        if other_start < end and start < other_end:
+            if other.user_id == user_id:
+                raise AppointmentError("You already have an appointment at that time.")
+            raise AppointmentError("That time is no longer available. Please choose another.")
+
+
 def _require_future(when: datetime) -> None:
     if when < utcnow() - _PAST_TOLERANCE:
         raise AppointmentError("Appointments must be scheduled in the future.")
@@ -192,7 +247,9 @@ def create_appointment(
     _require_future(scheduled_at)
     meeting_url = _validate_meeting_url(meeting_url)
 
+    duration = max(5, min(int(duration_minutes or 30), 480))
     with session_scope() as session:
+        _require_no_overlap(session, user_id, scheduled_at, duration, provider_id)
         appointment = Appointment(
             id=new_uuid(),
             user_id=user_id,
@@ -200,7 +257,7 @@ def create_appointment(
             appointment_type=appointment_type,
             provider_id=provider_id,
             organization_id=organization_id,
-            duration_minutes=max(5, min(int(duration_minutes or 30), 480)),
+            duration_minutes=duration,
             location=location,
             meeting_url=meeting_url,
             notes=notes,
@@ -287,6 +344,7 @@ def update_status(
         if appointment is None:
             raise AppointmentError("Appointment not found.")
         _transition(appointment, target_status)
+        update_appointment_event(session, user_id, appointment_id, target_status)
         session.flush()
         payload = _to_payload(appointment)
 
@@ -351,8 +409,15 @@ def reschedule(
         )
         if appointment is None:
             raise AppointmentError("Appointment not found.")
+        _require_no_overlap(
+            session, user_id, new_time, appointment.duration_minutes or 30,
+            appointment.provider_id, exclude_id=appointment.id,
+        )
         _transition(appointment, EventStatus.RESCHEDULED)
         appointment.scheduled_at = new_time
+        update_appointment_event(
+            session, user_id, appointment_id, EventStatus.RESCHEDULED, occurred_at=new_time
+        )
         session.flush()
         payload = _to_payload(appointment)
 
