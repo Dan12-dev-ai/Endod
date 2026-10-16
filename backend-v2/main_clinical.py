@@ -40,7 +40,9 @@ import time
 import base64
 import uuid
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 from fastapi import FastAPI, Request, HTTPException, status, Depends, BackgroundTasks, UploadFile, File, Form
@@ -187,6 +189,77 @@ async def periodic_cleanup():
                 logger.info(f"Periodic cleanup: removed {deleted} expired images")
         except Exception as e:
             logger.error(f"Periodic cleanup error: {e}")
+
+
+class ConsultationRequest(BaseModel):
+    """What the patient describes; everything else comes from their profile."""
+
+    # Unknown fields (e.g. a patient_age meant for someone else) are an error,
+    # not silently ignored.
+    model_config = ConfigDict(extra="forbid")
+
+    symptom_description: str = Field(..., min_length=10, max_length=3000)
+    symptom_duration: Optional[str] = Field(default=None, max_length=200)
+    symptom_severity: Optional[Literal["mild", "moderate", "severe"]] = None
+    image_ids: List[str] = Field(default_factory=list, max_length=10)
+    voice_transcript: Optional[str] = Field(default=None, max_length=5000)
+    #: Fits the timeline's conversation_id column.
+    session_id: Optional[str] = Field(default=None, max_length=64)
+    conversation_history: List[Dict[str, str]] = Field(default_factory=list, max_length=50)
+    pregnant: bool = False
+
+
+#: Languages the analysis pipeline answers in; other profile languages fall
+#: back to English rather than failing the consultation.
+_ANALYSIS_LANGUAGES = {"en", "sw", "am", "es", "fr"}
+
+
+def _record_consultation(user_id: str, result: Dict[str, Any]) -> None:
+    """Timeline entries for a consultation (never fails the consultation)."""
+    try:
+        from dedan_platform.models import EventStatus, HealthEventType
+        from dedan_platform.timeline import record_event
+
+        safety = result.get("safety") or {}
+        urgency = safety.get("urgency", "routine")
+        explanations = [e.get("label") for e in result.get("possible_explanations") or [] if e.get("label")]
+    except Exception:  # noqa: BLE001
+        logger.exception("consultation_timeline_not_recorded")
+        return
+    # The safety alert is written first and on its own, so a failure writing
+    # the conversation entry can never drop it.
+    if urgency == "emergency":
+        try:
+            record_event(
+                user_id=user_id,
+                event_type=HealthEventType.SAFETY_ALERT,
+                title="Emergency care recommended",
+                description=safety.get("emergency_message"),
+                status=EventStatus.COMPLETED,
+                source="dedan",
+                conversation_id=result.get("session_id"),
+                metadata={"response_id": result.get("response_id")},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("consultation_safety_alert_not_recorded error=%s", type(exc).__name__)
+    try:
+        record_event(
+            user_id=user_id,
+            event_type=HealthEventType.AI_CONVERSATION,
+            title="AI consultation",
+            description=f"Urgency: {urgency}",
+            status=EventStatus.COMPLETED,
+            source="dedan",
+            conversation_id=result.get("session_id"),
+            metadata={
+                "response_id": result.get("response_id"),
+                "urgency": urgency,
+                "possible_explanations": explanations[:3],
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        # Type only: the exception text can carry the bound health details.
+        logger.error("consultation_timeline_not_recorded error=%s", type(exc).__name__)
 
 
 def create_app(settings = None) -> FastAPI:
@@ -720,6 +793,64 @@ def create_app(settings = None) -> FastAPI:
         except Exception as e:
             logger.error(f"Analysis error {request_id}: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+    from dedan_platform import identity as platform_identity
+    from dedan_platform.api_profile import current_user_id as platform_current_user
+
+    @app.post("/users/me/consultations", response_model=dict)
+    async def consult(
+        body: ConsultationRequest,
+        background_tasks: BackgroundTasks,
+        user_id: str = Depends(platform_current_user),
+    ):
+        """AI consultation for the signed-in patient.
+
+        Same analysis and safety pipeline as `/api/analyze`, but the patient
+        details come from the stored profile -- age (from the date of birth
+        or age range), sex, location, allergies, medications, conditions and
+        language -- so the age- and risk-based safety rules always see them.
+        The result is recorded on the patient's timeline.
+
+        It is always about the account holder: their conditions, medicines and
+        allergies are used and the result goes on their record, so it takes
+        no age or sex override (asking for a child needs a dependent profile).
+        """
+        profile = await run_in_threadpool(platform_identity.get_profile_payload, user_id)
+        if not profile["consent"]["treatment_processing"]:
+            raise HTTPException(status_code=403, detail="Consent to store health information is required.")
+        health = await run_in_threadpool(platform_identity.get_health_profile_payload, user_id)
+
+        age = health.get("age_years")
+        if age is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Add your age (date of birth or age range) to your health profile first.",
+            )
+        sex = {"female": "female", "male": "male"}.get(health.get("sex") or "", "other")
+        language = profile.get("preferences", {}).get("language") or "en"
+        location = ", ".join(p for p in (profile.get("city"), profile.get("country_code")) if p) or None
+
+        analyze_request = AnalyzeRequest(
+            patient_age=age,
+            patient_sex=sex,
+            patient_location=location,
+            patient_pregnant=body.pregnant,
+            patient_chronic_conditions=health.get("conditions") or [],
+            patient_medications=health.get("medications") or [],
+            patient_allergies=health.get("allergies") or [],
+            patient_language=language if language in _ANALYSIS_LANGUAGES else "en",
+            symptom_description=body.symptom_description,
+            symptom_duration=body.symptom_duration,
+            symptom_severity=body.symptom_severity,
+            image_ids=body.image_ids,
+            voice_transcript=body.voice_transcript,
+            session_id=body.session_id,
+            conversation_history=body.conversation_history,
+            consent=True,
+        )
+        result = await analyze(analyze_request, background_tasks)
+        await run_in_threadpool(_record_consultation, user_id, result)
+        return result
 
     @app.get("/api/health", response_model=HealthCheckResponse)
     async def health_check():
