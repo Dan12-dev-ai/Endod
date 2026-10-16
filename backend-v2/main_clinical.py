@@ -40,7 +40,9 @@ import time
 import base64
 import uuid
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 from fastapi import FastAPI, Request, HTTPException, status, Depends, BackgroundTasks, UploadFile, File, Form
@@ -187,6 +189,60 @@ async def periodic_cleanup():
                 logger.info(f"Periodic cleanup: removed {deleted} expired images")
         except Exception as e:
             logger.error(f"Periodic cleanup error: {e}")
+
+
+class ConsultationRequest(BaseModel):
+    """What the patient describes; everything else comes from their profile."""
+
+    symptom_description: str = Field(..., min_length=10, max_length=3000)
+    symptom_duration: Optional[str] = Field(default=None, max_length=200)
+    symptom_severity: Optional[Literal["mild", "moderate", "severe"]] = None
+    image_ids: List[str] = Field(default_factory=list, max_length=10)
+    voice_transcript: Optional[str] = Field(default=None, max_length=5000)
+    session_id: Optional[str] = Field(default=None, max_length=100)
+    conversation_history: List[Dict[str, str]] = Field(default_factory=list, max_length=50)
+    pregnant: bool = False
+    #: Overrides for this consultation only (e.g. asking for a child).
+    patient_age: Optional[int] = Field(default=None, ge=0, le=150)
+    patient_sex: Optional[Literal["male", "female", "other"]] = None
+
+
+def _record_consultation(user_id: str, result: Dict[str, Any]) -> None:
+    """Timeline entries for a consultation (never fails the consultation)."""
+    try:
+        from dedan_platform.models import EventStatus, HealthEventType
+        from dedan_platform.timeline import record_event
+
+        safety = result.get("safety") or {}
+        urgency = safety.get("urgency", "routine")
+        explanations = [e.get("label") for e in result.get("possible_explanations") or [] if e.get("label")]
+        record_event(
+            user_id=user_id,
+            event_type=HealthEventType.AI_CONVERSATION,
+            title="AI consultation",
+            description=f"Urgency: {urgency}",
+            status=EventStatus.COMPLETED,
+            source="dedan",
+            conversation_id=result.get("session_id"),
+            metadata={
+                "response_id": result.get("response_id"),
+                "urgency": urgency,
+                "possible_explanations": explanations[:3],
+            },
+        )
+        if urgency == "emergency":
+            record_event(
+                user_id=user_id,
+                event_type=HealthEventType.SAFETY_ALERT,
+                title="Emergency care recommended",
+                description=safety.get("emergency_message"),
+                status=EventStatus.COMPLETED,
+                source="dedan",
+                conversation_id=result.get("session_id"),
+                metadata={"response_id": result.get("response_id")},
+            )
+    except Exception:  # noqa: BLE001
+        logger.exception("consultation_timeline_not_recorded")
 
 
 def create_app(settings = None) -> FastAPI:
@@ -716,6 +772,59 @@ def create_app(settings = None) -> FastAPI:
         except Exception as e:
             logger.error(f"Analysis error {request_id}: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+    from dedan_platform import identity as platform_identity
+    from dedan_platform.api_profile import current_user_id as platform_current_user
+
+    @app.post("/users/me/consultations", response_model=dict)
+    async def consult(
+        body: ConsultationRequest,
+        background_tasks: BackgroundTasks,
+        user_id: str = Depends(platform_current_user),
+    ):
+        """AI consultation for the signed-in patient.
+
+        Same analysis and safety pipeline as `/api/analyze`, but the patient
+        details come from the stored profile -- age (from the date of birth
+        or age range), sex, location, allergies, medications, conditions and
+        language -- so the age- and risk-based safety rules always see them.
+        The result is recorded on the patient's timeline.
+        """
+        profile = platform_identity.get_profile_payload(user_id)
+        if not profile["consent"]["treatment_processing"]:
+            raise HTTPException(status_code=403, detail="Consent to store health information is required.")
+        health = platform_identity.get_health_profile_payload(user_id)
+
+        age = body.patient_age if body.patient_age is not None else health.get("age_years")
+        if age is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Add your age (date of birth or age range) to your health profile first.",
+            )
+        sex = body.patient_sex or {"female": "female", "male": "male"}.get(health.get("sex") or "", "other")
+        location = ", ".join(p for p in (profile.get("city"), profile.get("country_code")) if p) or None
+
+        analyze_request = AnalyzeRequest(
+            patient_age=age,
+            patient_sex=sex,
+            patient_location=location,
+            patient_pregnant=body.pregnant,
+            patient_chronic_conditions=health.get("conditions") or [],
+            patient_medications=health.get("medications") or [],
+            patient_allergies=health.get("allergies") or [],
+            patient_language=profile.get("preferences", {}).get("language", "en"),
+            symptom_description=body.symptom_description,
+            symptom_duration=body.symptom_duration,
+            symptom_severity=body.symptom_severity,
+            image_ids=body.image_ids,
+            voice_transcript=body.voice_transcript,
+            session_id=body.session_id,
+            conversation_history=body.conversation_history,
+            consent=True,
+        )
+        result = await analyze(analyze_request, background_tasks)
+        _record_consultation(user_id, result)
+        return result
 
     @app.get("/api/health", response_model=HealthCheckResponse)
     async def health_check():
