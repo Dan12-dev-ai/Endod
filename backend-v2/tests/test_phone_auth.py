@@ -256,12 +256,42 @@ class TestPasswordReset:
 
 
 class TestProfilePhoneChanges:
-    def test_changing_phone_removes_verification(self, client, sms):
+    def test_a_verified_phone_is_not_changed_by_a_profile_edit(self, client, sms):
+        # Changing it here would silently end phone sign-in and recovery;
+        # a new number goes through a code (POST /users/me/phone).
         token = sign_up(client, sms)["access_token"]
         resp = client.patch("/users/me", headers={"Authorization": token}, json={"phone": "0922 111 222"})
-        assert resp.json()["phone_verified"] is False
+        assert resp.status_code == 400 and "code" in resp.json()["detail"]
+        me = client.get("/users/me", headers={"Authorization": token}).json()
+        assert me["phone"] == "+251911234567" and me["phone_verified"] is True
+        login = client.post("/auth/login", json={"identifier": PHONE, "password": PASSWORD})
+        assert login.status_code == 200
+
+    def test_an_unverified_phone_can_be_edited_and_stays_unverified(self, client, sms):
+        token = client.post("/auth/register", json={
+            "first_name": "E", "last_name": "M", "email": "em@example.com", "phone": "0933 000 111",
+            "password": PASSWORD, "password_confirmation": PASSWORD,
+        }).json()["access_token"]
+        resp = client.patch("/users/me", headers={"Authorization": token}, json={"phone": "0922 111 222"})
+        assert resp.status_code == 200 and resp.json()["phone_verified"] is False
         login = client.post("/auth/login", json={"identifier": "0922111222", "password": PASSWORD})
         assert login.status_code == 401
+
+    def test_the_only_sign_in_email_cannot_be_removed(self, client, sms):
+        token = client.post("/auth/register", json={
+            "first_name": "E", "last_name": "M", "email": "only@example.com",
+            "password": PASSWORD, "password_confirmation": PASSWORD,
+        }).json()["access_token"]
+        for value in (None, ""):
+            resp = client.patch("/users/me", headers={"Authorization": token}, json={"email": value})
+            assert resp.status_code == 400
+        assert client.get("/users/me", headers={"Authorization": token}).json()["email"] == "only@example.com"
+
+    def test_email_can_be_removed_once_a_phone_is_verified(self, client, sms):
+        token = sign_up(client, sms)["access_token"]
+        auth = {"Authorization": token}
+        assert client.patch("/users/me", headers=auth, json={"email": "x@example.com"}).status_code == 200
+        assert client.patch("/users/me", headers=auth, json={"email": None}).status_code == 200
 
     def test_resaving_same_number_keeps_verification(self, client, sms):
         token = sign_up(client, sms)["access_token"]

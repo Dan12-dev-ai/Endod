@@ -207,7 +207,9 @@ class TestReviewFindings:
 
         user = _phone_patient()
         _book(user["internal_user_id"])
-        identity.update_profile(user["internal_user_id"], {"phone": "0922 333 444"})
+        # A verified number changes only by linking a newly verified one;
+        # reminders queued for the old number are then not sent to it.
+        identity.set_verified_phone(user["internal_user_id"], "+251922333444")
         assert self._deliver_all().sent == []
 
     def test_cancelled_appointment_is_not_texted_even_if_already_claimed(self, db):
