@@ -56,6 +56,7 @@ openai>=1.30
 # which was stale: it left a clean `pip install -r requirements.txt` unable to
 # import `main_clinical`.
 sqlalchemy>=2.0
+psycopg[binary]>=3.2            # PostgreSQL driver for DEDAN_DATABASE_URL=postgresql+psycopg://...
 tzdata>=2024.1                  # IANA timezones for zoneinfo; Windows ships none,
                                 # so "Africa/Addis_Ababa" is otherwise unknown there.
 

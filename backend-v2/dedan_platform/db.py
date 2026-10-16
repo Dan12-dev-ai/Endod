@@ -45,9 +45,29 @@ def new_uuid() -> str:
     return uuid.uuid4().hex
 
 
+class DatabaseNotConfiguredError(RuntimeError):
+    """Production has no database URL configured."""
+
+
 def database_url() -> str:
-    """Resolve the connection URL. Env wins, so tests can override."""
-    return os.getenv("DEDAN_DATABASE_URL", DEFAULT_DATABASE_URL).strip() or DEFAULT_DATABASE_URL
+    """Resolve the connection URL: process environment, then settings (`.env`).
+
+    The SQLite default is for development and tests only. In production a
+    missing URL is an error: falling back to a SQLite file in the working
+    directory loses patient data on the next container restart.
+    """
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    url = (os.getenv("DEDAN_DATABASE_URL") or settings.DEDAN_DATABASE_URL or "").strip()
+    if url:
+        return url
+    environment = (os.getenv("ENVIRONMENT") or settings.ENVIRONMENT).strip().lower()
+    if environment == "production":
+        raise DatabaseNotConfiguredError(
+            "DEDAN_DATABASE_URL must be set in production (e.g. postgresql+psycopg://...)."
+        )
+    return DEFAULT_DATABASE_URL
 
 
 _engine: Optional[Engine] = None
