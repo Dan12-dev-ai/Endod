@@ -364,7 +364,9 @@ def update_status(
             title=f"{payload['appointment_type'].title()} completed",
             occurred_at=utcnow(),
             status=EventStatus.COMPLETED,
-            source="dedan",
+            # The patient marked their own booking completed, and its place
+            # and type are what they typed: an unverified record.
+            source="appointment",
             # Read by the records screen (dedan_platform.records).
             metadata={
                 "appointment_id": appointment_id,

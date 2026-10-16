@@ -64,7 +64,7 @@ def test_add_and_list_with_summary(client, auth):
     }
 
 
-def test_completed_appointment_becomes_a_verified_record(client, auth):
+def test_completed_appointment_becomes_an_unverified_record(client, auth):
     from dedan_platform import appointments, identity
 
     user = identity.find_user_by_email("a@example.com")
@@ -74,7 +74,52 @@ def test_completed_appointment_becomes_a_verified_record(client, auth):
     appointments.update_status(user.id, appointment["appointment_id"], "CONFIRMED")
     appointments.update_status(user.id, appointment["appointment_id"], "COMPLETED")
     record = client.get("/users/me/records", headers=auth).json()["records"][0]
-    assert record["facility_name"] == "Yekatit 12 Hospital" and record["verified"] is True
+    assert record["facility_name"] == "Yekatit 12 Hospital"
+    # The patient completed their own booking and typed its place: not verified.
+    assert record["verified"] is False and record["source"] == "appointment"
+
+
+def test_only_trusted_sources_are_verified(client, auth):
+    from datetime import datetime as dt
+
+    from dedan_platform import identity, records
+
+    user = identity.find_user_by_email("a@example.com")
+    records.add_record(user.id, {"facility_name": "Tikur Anbessa"},
+                       dt.now(timezone.utc) - timedelta(days=1), source="clinician")
+    body = client.get("/users/me/records", headers=auth).json()
+    assert body["records"][0]["verified"] is True
+    assert body["summary"]["verified_records"] == 1
+
+
+def test_consultation_events_without_a_record_are_not_records(client, auth):
+    from dedan_platform import identity
+    from dedan_platform.models import EventStatus, HealthEventType
+    from dedan_platform.timeline import record_event
+
+    user = identity.find_user_by_email("a@example.com")
+    # The shape older appointment completions were stored with.
+    record_event(user_id=user.id, event_type=HealthEventType.CONSULTATION,
+                 title="Consultation completed", status=EventStatus.COMPLETED,
+                 source="dedan", metadata={"appointment_id": "a-1"})
+    body = client.get("/users/me/records", headers=auth).json()
+    assert body["records"] == [] and body["summary"]["total_visits"] == 0
+
+
+def test_summary_covers_all_records_not_just_the_page(client, auth):
+    for i, place in enumerate(("A Clinic", "B Clinic", "C Clinic")):
+        assert client.post("/users/me/records", headers=auth,
+                           json=visit(days_ago=10 + i, facility_name=place)).status_code == 201
+    body = client.get("/users/me/records?limit=1", headers=auth).json()
+    assert len(body["records"]) == 1
+    assert body["summary"]["total_visits"] == 3 and body["summary"]["facilities_visited"] == 3
+
+
+@pytest.mark.parametrize("when", ["0001-01-01T00:30:00+01:00", "1850-06-01T10:00:00+00:00"])
+def test_implausible_dates_are_rejected(client, auth, when):
+    payload = visit()
+    payload["occurred_at"] = when
+    assert client.post("/users/me/records", headers=auth, json=payload).status_code == 400
 
 
 def test_requires_consent(client):

@@ -8,13 +8,15 @@ history too), with a documented metadata shape the records screen reads:
                 "medications": [{"name", "dose"}], "follow_up_days",
                 "follow_up_note"}}
 
-Records created by DEDAN or a clinician are "verified"; records a patient
-enters themselves are kept, but marked unverified.
+Only records written by a clinician or a facility integration are
+"verified". Records a patient enters, and visits a patient marks completed on
+their own booking (whose facility and department are what the patient typed),
+are kept but marked unverified.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
@@ -23,8 +25,10 @@ from dedan_platform.db import ensure_aware, session_scope
 from dedan_platform.models import EventStatus, HealthEvent, HealthEventType, utcnow
 from dedan_platform.timeline import record_event
 
-#: Sources whose records count as verified.
-VERIFIED_SOURCES = frozenset({"dedan", "clinician", "facility"})
+#: Sources whose records count as verified: trusted actors only.
+VERIFIED_SOURCES = frozenset({"clinician", "facility"})
+#: Accepted visit dates (a typo such as year 0001 is rejected, not stored).
+EARLIEST_VISIT = datetime(1900, 1, 1, tzinfo=timezone.utc)
 MAX_MEDICATIONS = 20
 
 
@@ -81,7 +85,12 @@ def add_record(
     source: str = "patient",
 ) -> Dict[str, Any]:
     """Store one visit record."""
-    occurred_at = ensure_aware(occurred_at)
+    try:
+        occurred_at = ensure_aware(occurred_at)
+    except (OverflowError, ValueError) as exc:
+        raise RecordError("occurred_at is not a valid date.") from exc
+    if occurred_at < EARLIEST_VISIT:
+        raise RecordError("occurred_at is too far in the past.")
     if occurred_at > utcnow() + timedelta(minutes=5):
         raise RecordError("A record is for a visit that has already happened.")
     record = _validate(body)
@@ -119,7 +128,12 @@ def _to_record(event: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def list_records(user_id: str, limit: int = 100) -> Dict[str, Any]:
-    """Records newest first, with the summary counts the records screen shows."""
+    """Records newest first, with the summary counts the records screen shows.
+
+    ``limit`` caps the list only; the summary covers every record. Only
+    CONSULTATION events that carry a ``record`` are records -- older
+    completion events and other consultation entries are timeline-only.
+    """
     from dedan_platform.timeline import _to_payload
 
     limit = max(1, min(limit, 200))
@@ -130,15 +144,14 @@ def list_records(user_id: str, limit: int = 100) -> Dict[str, Any]:
                 .where(HealthEvent.user_id == user_id,
                        HealthEvent.event_type == HealthEventType.CONSULTATION)
                 .order_by(HealthEvent.occurred_at.desc(), HealthEvent.id.desc())
-                .limit(limit)
             )
         ]
-    records = [_to_record(e) for e in events]
+    records = [_to_record(e) for e in events if (e.get("metadata") or {}).get("record")]
     now = utcnow()
     facilities = {r["facility_name"].lower() for r in records if r["facility_name"]}
     medicines = {m["name"].lower() for r in records for m in r["medications"] if m.get("name")}
     return {
-        "records": records,
+        "records": records[:limit],
         "summary": {
             "total_visits": len(records),
             "verified_records": sum(1 for r in records if r["verified"]),
