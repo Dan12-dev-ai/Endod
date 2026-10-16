@@ -469,6 +469,15 @@ class Appointment(Base):
     )
     location: Mapped[Optional[str]] = mapped_column(String(200))
     meeting_url: Mapped[Optional[str]] = mapped_column(String(500))
+    #: "in_person" or "telehealth" (None on rows from before the column).
+    visit_mode: Mapped[Optional[str]] = mapped_column(String(16))
+    department: Mapped[Optional[str]] = mapped_column(String(120))
+    #: "exact" or an arrival window ("morning", "afternoon", "evening").
+    time_window: Mapped[Optional[str]] = mapped_column(String(16))
+    #: A facility in the care directory (care_navigation.DIRECTORY).
+    facility_id: Mapped[Optional[str]] = mapped_column(String(64))
+    #: The clinician as the patient named them; there is no provider registry.
+    provider_name: Mapped[Optional[str]] = mapped_column(String(120))
     notes: Mapped[Optional[str]] = mapped_column(Text)
     reminder_offsets: Mapped[Optional[str]] = mapped_column(String(64))
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)

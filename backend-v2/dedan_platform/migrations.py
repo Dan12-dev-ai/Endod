@@ -97,6 +97,11 @@ _COLUMN_MIGRATIONS: Tuple[ColumnMigration, ...] = (
     ColumnMigration("health_profiles", "age_range", "VARCHAR(16)"),
     ColumnMigration("preferences", "onboarding_goals", "VARCHAR(200)"),
     ColumnMigration("preferences", "care_search_radius_km", "INTEGER"),
+    ColumnMigration("appointments", "visit_mode", "VARCHAR(16)"),
+    ColumnMigration("appointments", "department", "VARCHAR(120)"),
+    ColumnMigration("appointments", "time_window", "VARCHAR(16)"),
+    ColumnMigration("appointments", "facility_id", "VARCHAR(64)"),
+    ColumnMigration("appointments", "provider_name", "VARCHAR(120)"),
 )
 
 #: (index name, table, columns). Created only if absent.

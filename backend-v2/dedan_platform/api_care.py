@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from dedan_platform import care_navigation as cn
@@ -76,6 +76,35 @@ def search_facilities(
             longitude=longitude,
             limit=body.limit,
             query=body.query,
+        )
+    except cn.CareNavigationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/care/facilities")
+def browse_facilities(
+    country: Optional[str] = Query(default=None, min_length=2, max_length=2),
+    city: Optional[str] = Query(default=None, max_length=100),
+    department: Optional[str] = None,
+    emergency_only: bool = False,
+    q: Optional[str] = Query(default=None, max_length=120),
+    latitude: Optional[float] = Query(default=None, ge=-90, le=90),
+    longitude: Optional[float] = Query(default=None, ge=-180, le=180),
+    sort: str = "name",
+    limit: int = Query(default=50, ge=1, le=100),
+    user_id: str = Depends(current_user_id),
+) -> Dict[str, Any]:
+    """Browse the facility directory (the booking screen's hospital list).
+
+    Coordinates are optional and only sent once the patient has shared their
+    location; without them there is no distance and no distance sort.
+    """
+    if (latitude is None) != (longitude is None):
+        raise HTTPException(status_code=400, detail="Send both latitude and longitude, or neither.")
+    try:
+        return cn.browse(
+            country=country, city=city, department=department, emergency_only=emergency_only,
+            query=q, latitude=latitude, longitude=longitude, sort=sort, limit=limit,
         )
     except cn.CareNavigationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

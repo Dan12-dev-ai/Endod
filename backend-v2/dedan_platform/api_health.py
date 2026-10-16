@@ -101,6 +101,11 @@ class AppointmentRequest(BaseModel):
     notes: Optional[str] = None
     timezone: str = "UTC"
     reminder_offsets: Optional[str] = None
+    visit_mode: Optional[str] = Field(default=None, description="in_person | telehealth")
+    department: Optional[str] = None
+    time_window: Optional[str] = Field(default=None, description="exact | morning | afternoon | evening")
+    facility_id: Optional[str] = Field(default=None, description="An id from /care/facilities")
+    provider_name: Optional[str] = None
 
 
 class StatusRequest(BaseModel):
@@ -142,6 +147,11 @@ def create_appointment(
             timezone_name=body.timezone,
             reminder_offsets=body.reminder_offsets,
             correlation_id=request.headers.get("X-Correlation-ID"),
+            visit_mode=body.visit_mode,
+            department=body.department,
+            time_window=body.time_window,
+            facility_id=body.facility_id,
+            provider_name=body.provider_name,
         )
     except appt.AppointmentError as exc:
         raise _error(exc) from exc
@@ -206,6 +216,7 @@ def reschedule_appointment(
         payload = appt.reschedule(
             user_id, appointment_id, body.scheduled_at,
             correlation_id=request.headers.get("X-Correlation-ID"),
+            time_window=body.time_window,
         )
     except appt.AppointmentError as exc:
         raise _error(exc) from exc
