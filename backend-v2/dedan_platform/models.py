@@ -627,3 +627,37 @@ class PhoneVerification(Base):
         Index("ix_phone_verifications_phone_created", "phone", "created_at"),
         Index("ix_phone_verifications_client_created", "client", "created_at"),
     )
+
+
+class InboxItem(Base):
+    """A message in the patient's in-app inbox (the notifications screen).
+
+    Distinct from `Notification`, which is the *delivery queue* for email and
+    SMS: an inbox item is something to read in the app, with read and
+    dismissed state, and exists whether or not anything was sent externally.
+    """
+
+    __tablename__ = "inbox_items"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), nullable=False,
+    )
+    #: Filter group shown in the app: appointments | records | messages | security.
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: What happened, e.g. "appointment_booked", "password_changed".
+    kind: Mapped[str] = mapped_column(String(48), nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    body: Mapped[Optional[str]] = mapped_column(Text)
+    #: Where tapping the item should take the patient, e.g. "appointment".
+    link_screen: Mapped[Optional[str]] = mapped_column(String(32))
+    link_id: Mapped[Optional[str]] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    dismissed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (
+        Index("ix_inbox_items_user_created", "user_id", "created_at"),
+    )

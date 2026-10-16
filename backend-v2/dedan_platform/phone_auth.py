@@ -36,7 +36,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy import delete, func, select, update
 
-from dedan_platform import credentials, identity
+from dedan_platform import credentials, identity, inbox
 from dedan_platform.db import new_uuid, session_scope
 from dedan_platform.models import PhoneVerification, utcnow
 from dedan_platform.phone import mask, normalise_ethiopian_mobile
@@ -340,6 +340,11 @@ def complete(
     # For an existing account this is a password reset; it also signs out the
     # account's other sessions (credentials.password_changed_at).
     credentials.set_credential(internal_user_id, password)
+    if not created:
+        inbox.add_item(
+            internal_user_id, "security", "password_reset", "Your password was reset by phone",
+            body="If this wasn't you, contact support immediately.",
+        )
     user = identity.get_user_by_internal_id(internal_user_id)
     logger.info("phone_auth_complete user_id=%s created=%s", internal_user_id, created)
     return {
@@ -366,6 +371,9 @@ def link_to_account(internal_user_id: str, verification_token: str) -> Dict[str,
         raise PhoneInUse("This number already signs in to another account.")
     _claim(verification_id)
     try:
-        return identity.set_verified_phone(internal_user_id, phone)
+        profile = identity.set_verified_phone(internal_user_id, phone)
+        inbox.add_item(internal_user_id, "security", "phone_verified", "Phone number verified",
+                       body="You can now sign in with this number.")
+        return profile
     except identity.PhoneInUse as exc:
         raise PhoneInUse("This number already signs in to another account.") from exc
