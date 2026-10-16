@@ -51,7 +51,7 @@ def client(tmp_path, monkeypatch, sms):
     monkeypatch.setenv("DEDAN_DATABASE_URL", f"sqlite:///{tmp_path / 'phone.db'}")
     monkeypatch.setenv("TRUST_PROXY_HEADERS", "true")
     monkeypatch.setattr(credentials, "_throttle", credentials._LoginThrottle())
-    monkeypatch.setattr(phone_auth, "_client_window", phone_auth._ClientWindow())
+    monkeypatch.setattr(phone_auth, "OTP_MAX_PER_CLIENT_PER_HOUR", 10)
     dbmod.reset_engine()
     dbmod.create_all()
     app = FastAPI()
@@ -327,3 +327,109 @@ class TestSmsEthiopiaProvider:
         monkeypatch.setenv("ENVIRONMENT", "production")
         with pytest.raises(SmsNotConfiguredError):
             build_provider()
+
+
+class TestReviewFindings:
+    """Automated review (Qodo) of PR #4."""
+
+    def test_older_code_is_retired_by_a_resend(self, client, sms):
+        request_code(client)
+        first = sms.last_code()
+        _age_codes(61)
+        request_code(client, ip="10.0.0.2")
+        second = sms.last_code()
+        assert verify(client, second).status_code == 200
+        if first != second:
+            assert verify(client, first).status_code == 400
+
+    def test_code_is_recorded_before_the_sms_is_sent(self, client, sms, monkeypatch):
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import PhoneVerification
+
+        seen = {}
+        original = sms.send
+
+        def send(phone, text):
+            with session_scope() as session:
+                seen["rows"] = session.query(PhoneVerification).count()
+            return original(phone, text)
+
+        monkeypatch.setattr(sms, "send", send)
+        request_code(client)
+        assert seen["rows"] == 1
+
+    def test_concurrent_request_during_a_send_hits_the_cooldown(self, client, sms, monkeypatch):
+        from dedan_platform import phone_auth
+
+        nested = {}
+        original = sms.send
+
+        def send(phone, text):
+            if "done" not in nested:
+                nested["done"] = True
+                try:
+                    phone_auth.request_code(PHONE, client="10.5.5.5")
+                except phone_auth.TooManyRequests:
+                    nested["blocked"] = True
+            return original(phone, text)
+
+        monkeypatch.setattr(sms, "send", send)
+        assert request_code(client).status_code == 202
+        assert nested.get("blocked") is True
+        assert len(sms.sent) == 1
+
+    def test_phone_collision_is_classified_as_phone(self):
+        from sqlalchemy.exc import IntegrityError
+
+        from dedan_platform import identity
+
+        class Session:
+            def flush(self):
+                raise IntegrityError(
+                    "INSERT INTO profiles (email, phone) VALUES (?, ?)", {},
+                    Exception("UNIQUE constraint failed: profiles.phone"),
+                )
+
+        with pytest.raises(identity.PhoneInUse):
+            identity._flush_checking_email(Session())
+
+    def test_deactivated_account_cannot_reset_by_phone(self, client, sms):
+        from sqlalchemy import update
+
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import User
+
+        sign_up(client, sms)
+        with session_scope() as session:
+            session.execute(update(User).values(is_active=False))
+        _age_codes(120)
+        request_code(client, ip="10.0.0.8")
+        token = verify(client, sms.last_code()).json()["verification_token"]
+        assert complete(client, token).status_code == 403
+
+    def test_email_patient_links_phone_without_a_second_account(self, client, sms):
+        signup = client.post("/auth/register", json={
+            "first_name": "E", "last_name": "P", "email": "e@example.com",
+            "password": PASSWORD, "password_confirmation": PASSWORD, "phone": PHONE,
+        }).json()
+        request_code(client)
+        token = verify(client, sms.last_code()).json()["verification_token"]
+        resp = client.post("/users/me/phone", headers={"Authorization": signup["access_token"]},
+                           json={"verification_token": token})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["phone_verified"] is True
+        login = client.post("/auth/login", json={"identifier": PHONE, "password": PASSWORD})
+        assert login.json()["dedan_user_id"] == signup["dedan_user_id"]
+
+    def test_cannot_link_a_number_another_account_signs_in_with(self, client, sms):
+        sign_up(client, sms)  # owner
+        other = client.post("/auth/register", json={
+            "first_name": "O", "last_name": "X", "email": "o@example.com",
+            "password": PASSWORD, "password_confirmation": PASSWORD,
+        }).json()["access_token"]
+        _age_codes(120)
+        request_code(client, ip="10.0.0.6")
+        token = verify(client, sms.last_code()).json()["verification_token"]
+        resp = client.post("/users/me/phone", headers={"Authorization": other},
+                           json={"verification_token": token})
+        assert resp.status_code == 409

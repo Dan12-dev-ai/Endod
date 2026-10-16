@@ -625,4 +625,5 @@ class PhoneVerification(Base):
     __table_args__ = (
         # Rate limiting counts recent codes per phone.
         Index("ix_phone_verifications_phone_created", "phone", "created_at"),
+        Index("ix_phone_verifications_client_created", "client", "created_at"),
     )

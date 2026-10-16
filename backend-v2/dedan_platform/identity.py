@@ -251,6 +251,19 @@ def find_user_by_phone(phone_e164: str) -> Optional[User]:
     return matches[0]
 
 
+def set_verified_phone(internal_user_id: str, phone_e164: str) -> Dict[str, Any]:
+    """Record that this account proved it holds ``phone_e164``."""
+    with session_scope() as session:
+        user = session.scalar(_load_user(select(User).where(User.id == internal_user_id)))
+        if user is None:
+            raise UserNotFound("Account not found.")
+        user.profile.phone = phone_e164
+        user.profile.phone_verified_at = utcnow()
+        _record_event(session, user.id, "phone_verified")
+        _flush_checking_email(session)
+        return _profile_payload(user)
+
+
 def resolve_user(identifier: str) -> Optional[User]:
     """Resolve a sign-in identifier: DEDAN ID, verified phone, or email.
 
@@ -405,11 +418,13 @@ def _flush_checking_email(session: Session) -> None:
     try:
         session.flush()
     except IntegrityError as exc:
-        message = str(exc).lower()
-        if "email" in message:
-            raise EmailInUse("An account with this email address already exists.") from exc
+        # The database's own message only: `str(exc)` also contains the SQL,
+        # whose INSERT names both columns, so it cannot tell them apart.
+        message = str(getattr(exc, "orig", exc)).lower()
         if "phone" in message:
             raise PhoneInUse("An account already signs in with this phone number.") from exc
+        if "email" in message:
+            raise EmailInUse("An account with this email address already exists.") from exc
         raise
 
 

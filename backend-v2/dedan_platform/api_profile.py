@@ -20,7 +20,9 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
-from dedan_platform import credentials, identity
+from pydantic import BaseModel, Field
+
+from dedan_platform import credentials, identity, phone_auth
 from app.core.security import normalize_token
 from realtime.auth import AUTH_HEADER, AuthError, decode_token
 
@@ -191,3 +193,22 @@ def patch_consent(
         )
     except identity.IdentityError as exc:
         raise _error(exc) from exc
+
+
+class PhoneLinkRequest(BaseModel):
+    verification_token: str = Field(min_length=1, max_length=512)
+
+
+@router.post("/me/phone")
+def link_phone(body: PhoneLinkRequest, user_id: str = Depends(current_user_id)) -> Dict[str, Any]:
+    """Attach a phone verified with `/auth/phone/verify` to this account.
+
+    For patients who registered by email or typed their phone into the
+    profile: it gives them phone sign-in on the account they already have.
+    """
+    try:
+        return phone_auth.link_to_account(user_id, body.verification_token)
+    except phone_auth.InvalidVerification as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    except phone_auth.PhoneInUse as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
