@@ -49,6 +49,14 @@ from .models import (
 )
 
 
+def _env_price(name: str) -> Optional[float]:
+    value = os.getenv(name, "").strip()
+    try:
+        return float(value) if value else None
+    except ValueError:
+        return None
+
+
 def _strip_code_fence(text: str) -> str:
     """Remove a surrounding ```json ... ``` fence, if present."""
     stripped = text.strip()
@@ -91,6 +99,8 @@ class GeminiProvider(MultimodalAIProvider):
         self.temperature = config.get("temperature", 0.3)
         self.max_tokens = config.get("max_tokens")
         self.timeout_seconds = float(config.get("timeout_seconds", 60.0))
+        self._price_in = _env_price("GEMINI_PRICE_INPUT_PER_1M")
+        self._price_out = _env_price("GEMINI_PRICE_OUTPUT_PER_1M")
         self.max_retries = config.get("max_retries", 3)
         self.retry_delay = config.get("retry_delay_seconds", 1.0)
 
@@ -423,9 +433,20 @@ class GeminiProvider(MultimodalAIProvider):
         latency_ms = int((time.time() - start_time) * 1000)
         self.record_request(latency_ms, TokenUsage(), str(error))
     
+    @property
+    def pricing_configured(self) -> bool:
+        return self._price_in is not None and self._price_out is not None
+
     def estimate_cost(self, tokens: TokenUsage) -> float:
-        """Not estimated: prices change and a stale table misled budgets."""
-        return 0.0
+        """Cost from operator-configured prices (USD per 1M tokens).
+
+        No built-in price table: Google's prices change and the old table was
+        stale. Without configured prices the cost is unknown, which the audit
+        log records as such (see `pricing_configured`), not as zero.
+        """
+        if not self.pricing_configured:
+            return 0.0
+        return (tokens.prompt_tokens * self._price_in + tokens.completion_tokens * self._price_out) / 1_000_000
     
     async def health_check(self) -> bool:
         """Check that the configured model answers."""

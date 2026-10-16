@@ -182,3 +182,32 @@ class TestOpenAIErrors:
         monkeypatch.setattr(provider._client.chat.completions, "create", create)
         with pytest.raises(ProviderUnavailableError):
             run(provider.analyze_text(TextAnalysisRequest(text="cough")))
+
+
+class TestReviewFindings:
+    """Automated review (Qodo) of PR #8."""
+
+    def test_one_capability_can_be_pinned_offline(self, monkeypatch):
+        from providers.provider_factory import ProviderFactory
+
+        for var in ("AI_PROVIDER_MODE", "AI_VISION_PROVIDER", "AI_MULTIMODAL_PROVIDER", "AI_TEXT_MODEL"):
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("GEMINI_API_KEY", "AIza-real-looking-key")
+        monkeypatch.setenv("AI_TEXT_PROVIDER", "offline")
+        config = ProviderFactory().config
+        assert config.text_provider.provider == "offline"
+        assert config.vision_provider.provider == "gemini"
+
+    def test_cost_is_unknown_without_prices_and_computed_with_them(self, monkeypatch):
+        from providers.gemini_provider import GeminiProvider
+        from providers.models import TokenUsage
+
+        monkeypatch.delenv("GEMINI_PRICE_INPUT_PER_1M", raising=False)
+        monkeypatch.delenv("GEMINI_PRICE_OUTPUT_PER_1M", raising=False)
+        assert GeminiProvider({"api_key": "AIza-real-looking-key"}).pricing_configured is False
+
+        monkeypatch.setenv("GEMINI_PRICE_INPUT_PER_1M", "0.10")
+        monkeypatch.setenv("GEMINI_PRICE_OUTPUT_PER_1M", "0.40")
+        provider = GeminiProvider({"api_key": "AIza-real-looking-key"})
+        cost = provider.estimate_cost(TokenUsage(prompt_tokens=1_000_000, completion_tokens=500_000))
+        assert cost == pytest.approx(0.30)

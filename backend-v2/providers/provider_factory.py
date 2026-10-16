@@ -116,12 +116,18 @@ class ProviderFactory:
             vision slots were handed whichever key existed, possibly the other
             provider's.
             """
-            if offline:
-                return ProviderConfig(provider="offline", model="dedan-rules-v1", **extra)
             provider = os.getenv(f"AI_{kind}_PROVIDER", "").strip().lower() or self._default_live_provider()
+            if offline or provider == "offline":
+                # One capability can be pinned offline while others are live.
+                return ProviderConfig(provider="offline", model="dedan-rules-v1", **extra)
+            model = os.getenv(f"AI_{kind}_MODEL") or _DEFAULT_MODELS.get(provider, {}).get(kind)
+            if not model:
+                raise ValueError(
+                    f"AI_{kind}_PROVIDER={provider!r} has no default model; set AI_{kind}_MODEL."
+                )
             return ProviderConfig(
                 provider=provider,
-                model=os.getenv(f"AI_{kind}_MODEL") or _DEFAULT_MODELS.get(provider, {}).get(kind),
+                model=model,
                 api_key=os.getenv(_KEY_VARS.get(provider, "")),
                 temperature=float(os.getenv(temperature_var, default_temperature)),
                 **extra,
