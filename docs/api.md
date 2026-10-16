@@ -109,18 +109,14 @@ between replicas). 429 responses from the limiter carry `Retry-After`.
 - Allowed origins: `CORS_ORIGINS` (comma-separated or JSON array). Default
   `http://localhost:3000, http://localhost:3001, http://127.0.0.1:3000`.
   `*` is refused in production.
-- `allow_credentials=true`; allowed methods `GET, POST, PUT, DELETE, OPTIONS`;
-  allowed request headers `Authorization, X-API-Key, Content-Type`; exposed
-  headers `X-Process-Time, Retry-After`.
-- **`PATCH` is not in the allowed methods**, so cross-origin `PATCH` calls
-  from the browser (profile, preferences, consent, health profile, appointment
-  status) fail the preflight. Call through a same-origin proxy or fix the CORS
-  config before wiring those screens (see [Known gaps](#17-known-gaps)).
+- `allow_credentials=true`; allowed methods `GET, POST, PUT, PATCH, DELETE,
+  OPTIONS`; allowed request headers `Authorization, X-API-Key, Content-Type,
+  X-Correlation-ID`; exposed headers `X-Process-Time, Retry-After`.
 
 ### Optional headers
 
 `X-Correlation-ID` is read by profile, appointment and care-navigation writes
-and stored on audit and timeline rows. It is not in the CORS allow list either.
+and stored on audit and timeline rows.
 
 ---
 
@@ -324,8 +320,8 @@ Returns (and PATCH returns) the `preferences` object only.
 
 Fields (booleans): `treatment_processing`, `analytics`, `research`,
 `marketing`, `data_sharing_with_clinicians`. Returns the `consent` object.
-Send real JSON booleans: the server applies `bool(value)`, so the string
-`"false"` counts as granted.
+Values must be JSON booleans; anything else (including the string
+`"false"`) is a 400.
 
 `treatment_processing` gates the health profile, records writes, handoff
 summaries and `POST /users/me/consultations` (403 without it).
@@ -509,9 +505,9 @@ in UTC; render it in `timezone`.
 ### `GET /users/me/appointments`
 
 Query: `upcoming_only` (bool, default false: future and not
-`CANCELLED`/`COMPLETED`), `limit` (1-200, default 50). Returns a **JSON
-array** of appointment objects, ordered by `scheduled_at` descending (latest
-first, also for `upcoming_only`). The frontend's upcoming / past / cancelled
+`CANCELLED`/`COMPLETED`/`MISSED`), `limit` (1-200, default 50). Returns a
+**JSON array** of appointment objects, latest first; with `upcoming_only`,
+soonest first. The frontend's upcoming / past / cancelled
 tabs filter this list client side.
 
 ### `POST /users/me/appointments` (201)
@@ -566,8 +562,8 @@ Appointment object, or 404 `Appointment not found.`
 
 Returns the appointment object plus `reminders_cancelled` (int). Errors: 400
 for unknown status, illegal transition (`Cannot move an appointment from
-CANCELLED to CONFIRMED.`) and also for a missing appointment
-(`Appointment not found.` is a 400 here, not 404).
+CANCELLED to CONFIRMED.`) or `RESCHEDULED` (use the reschedule endpoint,
+which takes the new time); 404 for a missing appointment.
 
 ### `POST /users/me/appointments/{appointment_id}/reschedule`
 
@@ -582,8 +578,8 @@ Status becomes `RESCHEDULED`; old reminders are cancelled and new ones queued.
 If `time_window` is omitted the old window is kept when the new time fits,
 otherwise it becomes `exact`. Returns the appointment object plus
 `reminders_cancelled` and `reminders` (same shape as on create). Errors: 400
-(same validation as create, illegal transition from a terminal status, not
-found).
+(same validation as create, illegal transition from a terminal status), 404
+not found.
 
 ---
 
@@ -843,7 +839,7 @@ Top-level keys: `response_id`, `session_id`, `timestamp`, `health_summary`,
   does not fail).
 
 Errors: 400 consent, 403/400 preconditions (consultations), 422 validation,
-500 `Analysis failed: ...`, 503 providers not initialised.
+500 `Analysis failed. Reference: <request id>`, 503 providers not initialised.
 
 ---
 
@@ -877,16 +873,17 @@ minimum 224x224 and a basic quality score. Failure: 400 with
 ### `POST /api/images/upload-base64`
 
 ```json
-{ "image_data": "<plain base64>", "filename": "image.jpg", "session_id": "..." }
+{ "image_data": "<base64 or data: URL>", "filename": "image.jpg", "session_id": "..." }
 ```
 
-Same response. `image_data` must be plain base64; a `data:...;base64,` prefix
-is rejected with 400 `image_data is not valid base64` (strip it first).
+Same response. `image_data` may be plain base64 or a `data:...;base64,` URL;
+invalid base64 is a 400.
 
 ### `GET /api/images/{image_id}`
 
 Stored metadata (`image_id`, `original_filename`, `mime_type`, `size`,
-`dimensions`, `quality`, `session_id`, `upload_timestamp`, `expires_at`, ...).
+`dimensions`, `quality`, `upload_timestamp`, `expires_at`). Storage
+internals and the session id are not returned.
 404 if unknown.
 
 ### `GET /api/images/{image_id}/preview`
@@ -1000,10 +997,9 @@ With coordinates, facilities more than 150 km away are dropped.
 }
 ```
 
-### `GET /users/me/care/facilities/{facility_id}`
+### `GET /users/me/care/facilities/{facility_id}` (auth)
 
-Facility object, or 404 `Facility not found.` (This route does not check the
-token; see bugs.)
+Facility object, or 404 `Facility not found.`
 
 ### `GET /users/me/care/facilities/{facility_id}/availability` (auth)
 
@@ -1195,7 +1191,7 @@ and send SMS directly. Replace them with the backend calls above
 - No email password reset; no token refresh; no account deletion endpoint.
 - Live voice is not mounted on this branch.
 - Inbox categories `records` and `messages` have no producers.
-- CORS does not allow `PATCH` or `X-Correlation-ID`.
-- Image endpoints have no auth or ownership, and images are lost on restart.
+- Image endpoints have no auth or ownership (an image id acts as the access
+  key, as `/api/analyze` is anonymous), and images are lost on restart.
 - Frontend password rule (8+ chars, upper, number, symbol) differs from the
   backend (10+ chars, upper and lower).
