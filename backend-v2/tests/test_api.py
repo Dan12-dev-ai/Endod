@@ -88,17 +88,18 @@ class TestHealthEndpoints:
         assert resp.status_code == 200
         assert resp.json()["status"] == "healthy"
 
-    def test_root_service_metadata(self, client):
+    def test_root_serves_the_portal(self, client):
+        """`/` is the portal; the service identity lives on `/health`."""
         resp = client.get("/")
         assert resp.status_code == 200
-        body = resp.json()
-        assert "service" in body and "version" in body
+        assert resp.headers["content-type"].startswith("text/html")
 
     def test_providers_endpoint_returns_a_valid_envelope(self, client):
         resp = client.get("/api/providers")
         assert resp.status_code == 200
         body = resp.json()
-        assert set(body) == {"providers", "primary", "fallback_order"}
+        assert {"providers", "primary", "fallback_order", "offline_mode", "registry"} <= set(body)
+        assert body["offline_mode"] is True
 
 
 # ---------------------------------------------------------------------------

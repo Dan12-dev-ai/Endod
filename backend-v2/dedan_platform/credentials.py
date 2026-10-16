@@ -182,6 +182,7 @@ def validate_email(email: str) -> str:
 def set_credential(internal_user_id: str, password: str) -> None:
     """Create or replace the verifier for an account."""
     password_hash, salt, iterations = hash_password(password)
+    changed_at = utcnow()
     with session_scope() as session:
         user = session.scalar(select(User).where(User.id == internal_user_id))
         if user is None:
@@ -195,13 +196,37 @@ def set_credential(internal_user_id: str, password: str) -> None:
             existing.iterations = iterations
             existing.failed_attempts = 0
             existing.locked_until = None
+            existing.password_changed_at = changed_at
         else:
             user.credential = Credential(
                 password_hash=password_hash,
                 password_salt=salt,
                 iterations=iterations,
+                password_changed_at=changed_at,
             )
         session.flush()
+
+
+def tokens_valid_from(internal_user_id: str) -> Optional[int]:
+    """Earliest token ``iat`` (unix seconds) still accepted for this account.
+
+    Tokens issued before the last password change are rejected. Compared at
+    whole-second precision because ``iat`` is whole seconds: a token minted in
+    the same second as the change (e.g. the one returned by the change itself)
+    stays valid.
+    """
+    with session_scope() as session:
+        changed_at = session.scalar(
+            select(Credential.password_changed_at).where(
+                Credential.user_id == internal_user_id
+            )
+        )
+    if changed_at is None:
+        return None
+    if changed_at.tzinfo is None:
+        # SQLite returns naive datetimes; they were stored as UTC.
+        changed_at = changed_at.replace(tzinfo=timezone.utc)
+    return int(changed_at.timestamp())
 
 
 def has_credential(identifier: str) -> bool:

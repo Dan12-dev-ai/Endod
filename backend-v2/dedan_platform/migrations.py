@@ -74,9 +74,16 @@ _COLUMN_MIGRATIONS: Tuple[ColumnMigration, ...] = (
     # Distinguishes "never touched" from "last touched", which is what a
     # stuck-PROCESSING reconciliation query needs. Backfilled because rows that
     # predate the column would otherwise look infinitely stale.
+    #
+    # `TIMESTAMP WITH TIME ZONE` rather than `DATETIME`: PostgreSQL has no
+    # DATETIME type, so the old DDL failed on every production database.
+    # SQLite accepts any type name.
     ColumnMigration(
-        "notifications", "updated_at", "DATETIME", backfill=":now",
+        "notifications", "updated_at", "TIMESTAMP WITH TIME ZONE", backfill=":now",
     ),
+    # Tokens issued before this instant are rejected (password change signs
+    # out other sessions). NULL for existing rows means "no cutoff yet".
+    ColumnMigration("credentials", "password_changed_at", "TIMESTAMP WITH TIME ZONE"),
 )
 
 #: (index name, table, columns). Created only if absent.

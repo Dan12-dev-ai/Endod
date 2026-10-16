@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     # Security
     API_KEY_HEADER: str = Field(default="X-API-Key", description="API key header name")
     ADMIN_API_KEY: Optional[str] = Field(default=None, description="Admin API key for privileged operations")
+    REALTIME_TOKEN_SECRET: Optional[str] = Field(
+        default=None, description="Signs login tokens; falls back to ADMIN_API_KEY"
+    )
 
     # External Services (for pharmacy guidance)
     GOOGLE_MAPS_API_KEY: Optional[str] = Field(default=None, description="Google Maps API key for pharmacy lookup")

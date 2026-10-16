@@ -14,12 +14,14 @@ export default defineConfig({
     // Drive the system Google Chrome via its `chrome` channel — no browser
     // download needed (cdn.playwright.dev download timed out in this env).
     channel: 'chrome',
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-    ],
+    launchOptions: {
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
+    },
     trace: 'on-first-retry',
     actionTimeout: 10_000,
   },

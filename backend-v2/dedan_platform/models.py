@@ -135,6 +135,12 @@ class Credential(Base):
     last_login_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    #: When the password was last set. Tokens issued before this are rejected,
+    #: so changing a password signs out every other session. Not `updated_at`:
+    #: that also moves on failed logins and transparent re-hashes.
+    password_changed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow

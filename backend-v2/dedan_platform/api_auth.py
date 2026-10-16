@@ -124,7 +124,9 @@ def register(body: RegisterRequest) -> Dict[str, Any]:
             status_code=500, detail="Could not finish setting up the account. Please retry."
         ) from exc
 
-    token = cred.issue_token(created["dedan_user_id"], scope="portal")
+    token = cred.issue_token(
+        created["dedan_user_id"], expires_in=cred.SESSION_TTL_SECONDS, scope="portal"
+    )
     logger.info("register_success dedan_user_id=%s", created["dedan_user_id"])
     return {
         "access_token": token,
@@ -174,4 +176,14 @@ def change_password(
         )
     except cred.CredentialError as exc:
         raise _fail(exc) from exc
-    return {"changed": True}
+    # Every token issued before the change is now rejected, including the one
+    # that made this request, so hand the caller a fresh one.
+    dedan_user_id = identity.get_user_by_internal_id(user_id).dedan_user_id
+    return {
+        "changed": True,
+        "access_token": cred.issue_token(
+            dedan_user_id, expires_in=cred.SESSION_TTL_SECONDS, scope="portal"
+        ),
+        "token_type": "DEDAN",
+        "expires_in": cred.SESSION_TTL_SECONDS,
+    }
