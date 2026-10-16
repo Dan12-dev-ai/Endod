@@ -47,6 +47,9 @@ ALLOWED_TRANSITIONS: Dict[str, set] = {
         EventStatus.COMPLETED, EventStatus.MISSED,
     },
     EventStatus.RESCHEDULED: {
+        # A rescheduled appointment can be moved again; without this every
+        # second reschedule failed with "RESCHEDULED to RESCHEDULED".
+        EventStatus.RESCHEDULED,
         EventStatus.CONFIRMED, EventStatus.CANCELLED,
         EventStatus.COMPLETED, EventStatus.MISSED,
     },
@@ -136,6 +139,27 @@ def reminder_offsets_for(appointment: Appointment, user_preferences: Optional[st
     return [offset for offset in offsets if offset < horizon]
 
 
+#: Clock skew allowed between the patient's device and the server.
+_PAST_TOLERANCE = timedelta(minutes=5)
+
+
+def _require_future(when: datetime) -> None:
+    if when < utcnow() - _PAST_TOLERANCE:
+        raise AppointmentError("Appointments must be scheduled in the future.")
+
+
+def _validate_meeting_url(url: Optional[str]) -> Optional[str]:
+    """Only https links. A stored `javascript:` URL would run in any page or
+    email that renders it as a link."""
+    if url is None or not url.strip():
+        return None
+    url = url.strip()
+    # 500 is the column size; longer would pass here and fail at the database.
+    if not url.lower().startswith("https://") or len(url) > 500:
+        raise AppointmentError("meeting_url must be an https:// link.")
+    return url
+
+
 def create_appointment(
     user_id: str,
     scheduled_at: datetime,
@@ -165,6 +189,8 @@ def create_appointment(
     # wall-clock value, so writing 09:00+03:00 as-is would come back as 09:00Z
     # and quietly shift every reminder for that appointment three hours late.
     scheduled_at = ensure_utc(scheduled_at)
+    _require_future(scheduled_at)
+    meeting_url = _validate_meeting_url(meeting_url)
 
     with session_scope() as session:
         appointment = Appointment(
@@ -305,6 +331,7 @@ def reschedule(
     if new_time.tzinfo is None:
         raise AppointmentError("new_time must include a timezone offset.")
     new_time = ensure_utc(new_time)
+    _require_future(new_time)
     from dedan_platform import notifications
 
     with session_scope() as session:

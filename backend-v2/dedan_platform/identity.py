@@ -52,6 +52,10 @@ class InvalidDedanId(IdentityError):
     """A supplied DEDAN ID does not match the documented format."""
 
 
+class EmailInUse(IdentityError):
+    """Another account already uses this email address."""
+
+
 class UserNotFound(IdentityError):
     """No account for the supplied identifier."""
 
@@ -102,6 +106,10 @@ def create_user(
     otherwise surface as a 500 the first time someone changes their voice).
     """
     with session_scope() as session:
+        if email:
+            email = _normalise_email(email)
+            if _email_taken(session, email):
+                raise EmailInUse("An account with this email address already exists.")
         user = _allocate_user(session)
         user.profile = Profile(
             display_name=display_name, email=email, phone=phone,
@@ -113,7 +121,7 @@ def create_user(
         user.consent = Consent()
 
         _record_event(session, user.id, "user_created", payload={"locale": locale})
-        session.flush()
+        _flush_checking_email(session)
         return {
             "internal_user_id": user.id,
             "dedan_user_id": user.dedan_user_id,
@@ -197,13 +205,20 @@ def find_user_by_email(email: str) -> Optional[User]:
     if not value:
         return None
     with session_scope() as session:
-        return session.scalar(
+        matches = session.scalars(
             _load_user(
                 select(User)
                 .join(User.profile)
                 .where(func.lower(Profile.email) == value)
             )
-        )
+        ).unique().all()
+    # Accounts created before emails were unique may share one. Signing in by
+    # that email would pick an arbitrary account, so require the DEDAN ID.
+    if len(matches) != 1:
+        if matches:
+            logger.warning("ambiguous_email_login count=%d", len(matches))
+        return None
+    return matches[0]
 
 
 def resolve_user(identifier: str) -> Optional[User]:
@@ -319,6 +334,86 @@ _PROFILE_FIELDS = {
     "display_name", "email", "phone", "locale", "timezone", "country_code",
 }
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$")
+#: Shared with registration so a number accepted at signup is accepted on
+#: edit. 32 is the column size.
+_PHONE_RE = re.compile(r"^\+?[0-9 ().-]{6,32}$")
+
+
+def normalise_phone(value: Any) -> Optional[str]:
+    """``None`` for an empty value; otherwise a validated phone string."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if not isinstance(value, str) or not _PHONE_RE.match(value.strip()):
+        raise IdentityError("Enter a valid phone number.")
+    return value.strip()
+
+
+def _normalise_email(value: Any) -> str:
+    email = value.strip().lower() if isinstance(value, str) else ""
+    if not _EMAIL_RE.match(email) or len(email) > 254:
+        raise IdentityError("Enter a valid email address.")
+    return email
+
+
+def _email_taken(session: Session, email: str, exclude_user_id: Optional[str] = None) -> bool:
+    query = select(Profile.user_id).where(func.lower(Profile.email) == email)
+    if exclude_user_id:
+        query = query.where(Profile.user_id != exclude_user_id)
+    return session.scalar(query.limit(1)) is not None
+
+
+def _flush_checking_email(session: Session) -> None:
+    """Flush, turning a lost race on the unique email index into `EmailInUse`."""
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        if "email" in str(exc).lower():
+            raise EmailInUse("An account with this email address already exists.") from exc
+        raise
+
+
+def _validate_profile_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
+    """Type- and range-check a profile patch.
+
+    The route accepts an arbitrary JSON object, so without this a wrong type
+    (`{"email": {}}`) became a 500 and an oversized value was a 500 on
+    PostgreSQL. Values are normalised on the way in.
+    """
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    clean: Dict[str, Any] = {}
+    for field, value in changes.items():
+        if field in {"display_name", "email", "phone"} and (
+            value is None or (isinstance(value, str) and not value.strip())
+        ):
+            clean[field] = None
+            continue
+        if not isinstance(value, str):
+            raise IdentityError(f"'{field}' must be text.")
+        value = value.strip()
+        if field == "display_name":
+            if not 1 <= len(value) <= 120:
+                raise IdentityError("Display name must be 1-120 characters.")
+        elif field == "email":
+            value = _normalise_email(value)
+        elif field == "phone":
+            value = normalise_phone(value)
+        elif field == "locale":
+            if not re.fullmatch(r"[a-z]{2}(?:-[A-Za-z]{2})?", value):
+                raise IdentityError("Locale must look like 'en' or 'am-ET'.")
+        elif field == "timezone":
+            try:
+                ZoneInfo(value)
+            except (ZoneInfoNotFoundError, ValueError) as exc:
+                raise IdentityError("Unknown timezone.") from exc
+        elif field == "country_code":
+            if not re.fullmatch(r"[A-Za-z]{2}", value):
+                raise IdentityError("Country code must be two letters, e.g. 'ET'.")
+            value = value.upper()
+        clean[field] = value
+    return clean
+
 
 def update_profile(
     internal_user_id: str,
@@ -329,12 +424,22 @@ def update_profile(
     unknown = set(changes) - _PROFILE_FIELDS
     if unknown:
         raise IdentityError(f"Unsupported profile fields: {sorted(unknown)}")
+    changes = _validate_profile_changes(changes)
     with session_scope() as session:
         user = session.scalar(
             _load_user(select(User).where(User.id == internal_user_id))
         )
         if user is None:
             raise UserNotFound("Account not found.")
+        # Another account's email would make sign-in by email ambiguous and
+        # route that account's reminder emails to this one.
+        current_email = (user.profile.email or "").lower()
+        if (
+            changes.get("email")
+            and changes["email"] != current_email
+            and _email_taken(session, changes["email"], user.id)
+        ):
+            raise EmailInUse("Another account already uses this email address.")
         for field, value in changes.items():
             setattr(user.profile, field, value)
         _record_event(
@@ -343,7 +448,7 @@ def update_profile(
             # the personal data it exists to protect.
             {"fields": sorted(changes)},
         )
-        session.flush()
+        _flush_checking_email(session)
         return _profile_payload(user)
 
 

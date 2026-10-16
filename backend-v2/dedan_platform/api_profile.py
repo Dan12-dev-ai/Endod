@@ -83,6 +83,8 @@ def _error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=400, detail=str(exc))
     if isinstance(exc, identity.UserNotFound):
         return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, identity.EmailInUse):
+        return HTTPException(status_code=409, detail=str(exc))
     return HTTPException(status_code=400, detail=str(exc))
 
 

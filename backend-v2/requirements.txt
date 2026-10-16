@@ -56,6 +56,8 @@ openai>=1.30
 # which was stale: it left a clean `pip install -r requirements.txt` unable to
 # import `main_clinical`.
 sqlalchemy>=2.0
+tzdata>=2024.1                  # IANA timezones for zoneinfo; Windows ships none,
+                                # so "Africa/Addis_Ababa" is otherwise unknown there.
 
 # --- Test suite -------------------------------------------------------------
 httpx>=0.27                     # fastapi.testclient transport

@@ -31,6 +31,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
+from app.core.security import RateLimitMiddleware
 from dedan_platform import credentials as cred
 from dedan_platform import identity
 from dedan_platform.api_profile import current_user_id
@@ -51,7 +52,7 @@ class RegisterRequest(BaseModel):
     phone: Optional[str] = Field(default=None, max_length=32)
     locale: str = Field(default="en", max_length=8)
     timezone: str = Field(default="UTC", max_length=64)
-    country_code: str = Field(default="KE", max_length=2)
+    country_code: str = Field(default="ET", max_length=2)
 
 
 class LoginRequest(BaseModel):
@@ -92,21 +93,25 @@ def register(body: RegisterRequest) -> Dict[str, Any]:
     try:
         email = cred.validate_email(body.email)
         cred.validate_password(body.password, body.password_confirmation)
-    except cred.PasswordPolicyError as exc:
+        phone = identity.normalise_phone(body.phone)
+    except (cred.PasswordPolicyError, identity.IdentityError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Names are stored as a single display name; the platform's Profile has one
     # field. Joining with a space preserves both without widening the schema.
     display_name = f"{body.first_name.strip()} {body.last_name.strip()}".strip()
 
-    created = identity.create_user(
-        display_name=display_name,
-        email=email,
-        phone=(body.phone or "").strip() or None,
-        locale=body.locale or "en",
-        timezone_name=body.timezone or "UTC",
-        country_code=(body.country_code or "KE").upper(),
-    )
+    try:
+        created = identity.create_user(
+            display_name=display_name,
+            email=email,
+            phone=phone,
+            locale=body.locale or "en",
+            timezone_name=body.timezone or "UTC",
+            country_code=(body.country_code or "ET").upper(),
+        )
+    except identity.EmailInUse as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     # A failure here would leave an unreachable half-provisioned account: the
     # row exists but nobody can ever authenticate against it, and the patient
@@ -134,10 +139,12 @@ def register(body: RegisterRequest) -> Dict[str, Any]:
 
 
 @router.post("/login")
-def login(body: LoginRequest) -> Dict[str, Any]:
+def login(body: LoginRequest, request: Request) -> Dict[str, Any]:
     """Exchange a DEDAN ID (or email) and password for a session token."""
     try:
-        result = cred.authenticate(body.identifier, body.password)
+        result = cred.authenticate(
+            body.identifier, body.password, client=RateLimitMiddleware.client_identity(request)
+        )
     except cred.CredentialError as exc:
         raise _fail(exc) from exc
 

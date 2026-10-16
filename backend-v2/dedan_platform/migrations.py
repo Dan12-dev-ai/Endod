@@ -269,8 +269,59 @@ def apply_migrations(engine=None, now=None) -> List[str]:
             )
             raise
 
+    if ensure_unique_email_index(engine):
+        applied.append(UNIQUE_EMAIL_INDEX)
     backfill_appointment_links()
     return applied
+
+
+#: One account per email, case-insensitively. Enforced by the database so two
+#: simultaneous sign-ups cannot both pass the application check.
+UNIQUE_EMAIL_INDEX = "uq_profiles_email_lower"
+
+
+def _named_index_exists(engine, name: str) -> bool:
+    """Index lookup in the catalog. SQLAlchemy's inspector omits expression
+    indexes such as ``lower(email)``, so it cannot answer this."""
+    if engine.dialect.name == "sqlite":
+        query = "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = :name"
+    else:
+        query = "SELECT 1 FROM pg_indexes WHERE indexname = :name"
+    with engine.connect() as conn:
+        return conn.execute(text(query), {"name": name}).first() is not None
+
+
+def ensure_unique_email_index(engine) -> bool:
+    """Create the unique email index when the data allows it.
+
+    Databases created before emails were unique may already hold duplicates.
+    Creating the index there would fail and stop the app from starting, so it is
+    skipped with a warning until those accounts are merged by hand; the
+    application-level check still applies meanwhile. Returns True when the
+    index was created in this call.
+    """
+    if not _table_exists(engine, "profiles"):
+        return False
+    with engine.connect() as conn:
+        duplicates = conn.execute(text(
+            "SELECT COUNT(*) FROM (SELECT lower(email) AS e FROM profiles "
+            "WHERE email IS NOT NULL GROUP BY lower(email) HAVING COUNT(*) > 1) AS d"
+        )).scalar()
+    if duplicates:
+        logger.warning("unique_email_index_skipped duplicate_emails=%d", duplicates)
+        return False
+    if _named_index_exists(engine, UNIQUE_EMAIL_INDEX):
+        return False
+    try:
+        _execute(
+            engine,
+            f"CREATE UNIQUE INDEX IF NOT EXISTS {UNIQUE_EMAIL_INDEX} ON profiles (lower(email))",
+        )
+    except Exception as exc:  # noqa: BLE001
+        if _is_race(exc):
+            return False
+        raise
+    return True
 
 
 def _is_race(exc: Exception) -> bool:
