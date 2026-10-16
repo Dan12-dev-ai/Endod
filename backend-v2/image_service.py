@@ -85,6 +85,21 @@ class ImageQualityAssessment:
         }
 
 
+#: Decoding cost grows with pixel count, not file size: a 17 KB PNG can
+#: declare 12000x12000 and expand to ~500 MB when decoded. Checked from the
+#: header, before any pixels are decoded.
+MAX_IMAGE_PIXELS = 40_000_000
+MAX_IMAGE_SIDE = 10_000
+
+#: Sniffed type -> (Pillow format that must match, stored extension).
+_FORMATS = {
+    "image/jpeg": ("JPEG", ".jpg"),
+    "image/png": ("PNG", ".png"),
+    "image/webp": ("WEBP", ".webp"),
+    "image/heic": ("HEIF", ".heic"),
+}
+
+
 class ImageService:
     def __init__(self, settings=None):
         from app.core.config import get_settings
@@ -117,12 +132,31 @@ class ImageService:
 
         try:
             image = Image.open(io.BytesIO(file_content))
+        except Exception:
+            raise ImageValidationError("Invalid or corrupted image file", errors=["Could not read the image."])
+
+        expected_format, extension = _FORMATS.get(mime_type, (None, ".jpg"))
+        if image.format != expected_format:
+            # The bytes say one format, the decoder another: refuse rather than
+            # store something other than what was validated.
+            raise ImageValidationError(
+                "Image content does not match its type",
+                errors=[f"Detected {image.format or 'unknown'}, expected {expected_format}."],
+            )
+        width, height = image.size
+        if width * height > MAX_IMAGE_PIXELS or max(width, height) > MAX_IMAGE_SIDE:
+            raise ImageValidationError(
+                f"Image dimensions too large: {width}x{height}",
+                errors=[f"Maximum {MAX_IMAGE_SIDE}px per side and {MAX_IMAGE_PIXELS // 1_000_000} megapixels."],
+            )
+
+        try:
             image.verify()
             image = Image.open(io.BytesIO(file_content))
             if image.mode not in ("RGB", "L"):
                 image = image.convert("RGB")
-        except Exception as e:
-            raise ImageValidationError("Invalid or corrupted image file", errors=[str(e)])
+        except Exception:
+            raise ImageValidationError("Invalid or corrupted image file", errors=["The image data is damaged."])
 
         quality = self.quality_assessor.assess(image, file_size)
         if not quality["is_usable"]:
@@ -130,12 +164,12 @@ class ImageService:
 
         image_id = str(uuid.uuid4())
         content_hash = hashlib.sha256(file_content).hexdigest()
-        safe_filename = self._sanitize_filename(filename)
-        ext = Path(safe_filename).suffix or ".jpg"
-        stored_filename = f"{image_id}{ext}"
+        # Extension and format come from the validated content, never from the
+        # client's filename: "photo.pdf" used to be re-encoded as a real PDF.
+        stored_filename = f"{image_id}{extension}"
         file_path = self.storage_path / stored_filename
-        
-        image.save(file_path, quality=90, optimize=True)
+
+        image.save(file_path, format=expected_format, quality=90, optimize=True)
         actual_size = file_path.stat().st_size
 
         metadata = {
@@ -240,8 +274,8 @@ class ImageService:
             return "image/webp"
         elif content.startswith(b'\x00\x00\x00') and b'ftypheic' in content[:12]:
             return "image/heic"
-        mime_type, _ = mimetypes.guess_type(filename)
-        return mime_type or "application/octet-stream"
+        # No fallback to the filename: "anything.jpg" is not evidence of a JPEG.
+        return "application/octet-stream"
 
     def _sanitize_filename(self, filename: str) -> str:
         filename = os.path.basename(filename)

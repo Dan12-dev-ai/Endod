@@ -22,6 +22,7 @@ import hashlib
 import hmac
 import logging
 import os
+import ssl
 import time
 import uuid
 from email.message import EmailMessage
@@ -113,7 +114,12 @@ class SmtpEmailProvider(EmailProvider):
         try:
             with smtplib.SMTP(self.host, self.port, timeout=SMTP_TIMEOUT_SECONDS) as smtp:
                 if self.use_tls:
-                    smtp.starttls()
+                    # An explicit default context verifies the server's
+                    # certificate and hostname. Without one, `starttls()`
+                    # encrypts but trusts any certificate, so anyone on the
+                    # network path could capture the SMTP password and every
+                    # patient email.
+                    smtp.starttls(context=ssl.create_default_context())
                 if self.username:
                     smtp.login(self.username, self.password)
                 smtp.send_message(message)

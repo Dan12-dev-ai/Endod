@@ -49,6 +49,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -541,13 +542,16 @@ def create_app(settings = None) -> FastAPI:
     async def upload_image(file: UploadFile = File(...), session_id: Optional[str] = Form(None)):
         try:
             content = await file.read()
-            result = image_service.validate_and_store(content, file.filename or "image.jpg", session_id)
-            return result
+            # Decoding is CPU-bound; off the event loop so one upload cannot
+            # stall every other request.
+            return await run_in_threadpool(
+                image_service.validate_and_store, content, file.filename or "image.jpg", session_id
+            )
         except ImageValidationError as e:
             raise HTTPException(status_code=400, detail={"message": e.message, "errors": e.errors, "warnings": e.warnings})
         except Exception as e:
-            logger.error(f"Image upload error: {e}")
-            raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+            logger.error(f"Image upload error: {type(e).__name__}: {e}")
+            raise HTTPException(status_code=500, detail="Upload failed. Please try again.")
 
     @app.post("/api/images/upload-base64", response_model=ImageUploadResponse)
     async def upload_image_base64(request: dict):
@@ -557,14 +561,20 @@ def create_app(settings = None) -> FastAPI:
             session_id = request.get("session_id")
             if not base64_data:
                 raise HTTPException(status_code=400, detail="image_data is required")
-            file_content = base64.b64decode(base64_data)
-            result = image_service.validate_and_store(file_content, filename, session_id)
-            return result
+            try:
+                file_content = base64.b64decode(base64_data, validate=True)
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail="image_data is not valid base64")
+            return await run_in_threadpool(
+                image_service.validate_and_store, file_content, filename, session_id
+            )
+        except HTTPException:
+            raise
         except ImageValidationError as e:
             raise HTTPException(status_code=400, detail={"message": e.message, "errors": e.errors, "warnings": e.warnings})
         except Exception as e:
-            logger.error(f"Base64 image upload error: {e}")
-            raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+            logger.error(f"Base64 image upload error: {type(e).__name__}: {e}")
+            raise HTTPException(status_code=500, detail="Upload failed. Please try again.")
 
     @app.get("/api/images/{image_id}")
     async def get_image_metadata(image_id: str):

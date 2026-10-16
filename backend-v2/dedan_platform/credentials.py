@@ -38,8 +38,11 @@ import logging
 import os
 import re
 import secrets
+import threading
+import time
+from collections import deque
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Deque, Dict, Optional, Tuple
 
 from sqlalchemy import select
 
@@ -60,8 +63,15 @@ DK_LEN = 32
 SALT_BYTES = 16
 
 #: Cooldown applied after `MAX_FAILED_ATTEMPTS` consecutive failures.
+#: Failures from one client against one sign-in identifier before that pair is
+#: throttled. Keyed per client so knowing a patient's DEDAN ID does not let
+#: anyone lock the patient out, and applied identically to identifiers that do
+#: not exist so the response cannot reveal which accounts are real.
 LOCKOUT_ATTEMPTS = int(os.getenv("PASSWORD_LOCKOUT_ATTEMPTS", "8"))
 LOCKOUT_MINUTES = int(os.getenv("PASSWORD_LOCKOUT_MINUTES", "15"))
+#: Account-wide ceiling across all clients, against guessing spread over many
+#: addresses. Much higher than the per-client limit.
+ACCOUNT_LOCKOUT_ATTEMPTS = int(os.getenv("PASSWORD_ACCOUNT_LOCKOUT_ATTEMPTS", "50"))
 
 #: Session lifetime. Longer than the realtime token because a portal session must
 #: survive a consultation break; the token is still short enough to bound the
@@ -206,6 +216,63 @@ def has_credential(identifier: str) -> bool:
     return True
 
 
+class _LoginThrottle:
+    """Failed sign-ins per (identifier, client), in a sliding window.
+
+    In-process: a restart clears it and replicas do not share it. The
+    account-wide ceiling in the database (`_record_failure`) still holds.
+    """
+
+    def __init__(self) -> None:
+        self._failures: Dict[Tuple[str, str], Deque[float]] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def key(identifier: str, client: str) -> Tuple[str, str]:
+        return ((identifier or "").strip().lower(), client or "unknown")
+
+    def _recent(self, key: Tuple[str, str], now: float) -> Deque[float]:
+        window_start = now - LOCKOUT_MINUTES * 60
+        hits = self._failures.get(key)
+        if hits is None:
+            return deque()
+        while hits and hits[0] <= window_start:
+            hits.popleft()
+        if not hits:
+            self._failures.pop(key, None)
+        return hits
+
+    def remaining_minutes(self, key: Tuple[str, str]) -> Optional[int]:
+        now = time.time()
+        with self._lock:
+            hits = self._recent(key, now)
+            if len(hits) < LOCKOUT_ATTEMPTS:
+                return None
+            return int((hits[0] + LOCKOUT_MINUTES * 60 - now) // 60) + 1
+
+    def fail(self, key: Tuple[str, str]) -> None:
+        now = time.time()
+        with self._lock:
+            hits = self._recent(key, now)
+            hits.append(now)
+            self._failures[key] = hits
+            if len(self._failures) > 50_000:
+                # Bounded: drop the oldest entries rather than grow forever.
+                for stale in list(self._failures)[:5_000]:
+                    self._failures.pop(stale, None)
+
+    def clear(self, key: Tuple[str, str]) -> None:
+        with self._lock:
+            self._failures.pop(key, None)
+
+
+_throttle = _LoginThrottle()
+
+
+def _locked_error(minutes: int) -> AccountLockedError:
+    return AccountLockedError(f"Too many failed attempts. Try again in {minutes} minute(s).")
+
+
 def _record_failure(user_id: str) -> Optional[datetime]:
     """Count one failed attempt and apply the lockout. Returns `locked_until`.
 
@@ -225,7 +292,7 @@ def _record_failure(user_id: str) -> Optional[datetime]:
             return None
         credential.failed_attempts = int(credential.failed_attempts or 0) + 1
         locked_until = None
-        if credential.failed_attempts >= LOCKOUT_ATTEMPTS:
+        if credential.failed_attempts >= ACCOUNT_LOCKOUT_ATTEMPTS:
             locked_until = now + timedelta(minutes=LOCKOUT_MINUTES)
             credential.locked_until = locked_until
             credential.failed_attempts = 0
@@ -234,24 +301,28 @@ def _record_failure(user_id: str) -> Optional[datetime]:
         return locked_until
 
 
-def authenticate(identifier: str, password: str) -> Dict[str, Any]:
+def authenticate(identifier: str, password: str, client: str = "unknown") -> Dict[str, Any]:
     """Verify a password and return the signed session token.
 
-    `identifier` may be a DEDAN ID or an email address. Raises
-    `CredentialError` subclasses carrying a uniform message, so the caller
-    cannot distinguish "no such account" from "wrong password".
+    `identifier` may be a DEDAN ID or an email address; `client` identifies the
+    caller (its address) for throttling. Raises `CredentialError` subclasses
+    carrying a uniform message, so the caller cannot distinguish "no such
+    account" from "wrong password" -- including once throttled.
     """
+    throttle_key = _throttle.key(identifier, client)
+    remaining = _throttle.remaining_minutes(throttle_key)
+    if remaining is not None:
+        raise _locked_error(remaining)
+
     user = identity.resolve_user(identifier)
 
     if user is None or user.credential is None:
         # Equalise timing before returning, so an unknown identifier is not
-        # detectable by how quickly the request comes back.
+        # detectable by how quickly the request comes back, and count the
+        # failure exactly as for a real account.
         _burn_equivalent_time()
+        _throttle.fail(throttle_key)
         raise CredentialError(INVALID_CREDENTIALS)
-
-    if not user.is_active:
-        _burn_equivalent_time()
-        raise CredentialError("This account has been deactivated.")
 
     with session_scope() as session:
         credential = session.scalar(
@@ -267,10 +338,7 @@ def authenticate(identifier: str, password: str) -> Dict[str, Any]:
             if locked_until.tzinfo is None:
                 locked_until = locked_until.replace(tzinfo=timezone.utc)
             if locked_until > now:
-                remaining = int((locked_until - now).total_seconds() // 60) + 1
-                raise AccountLockedError(
-                    f"Too many failed attempts. Try again in {remaining} minute(s)."
-                )
+                raise _locked_error(int((locked_until - now).total_seconds() // 60) + 1)
             # Cooldown elapsed: give the account another chance.
             credential.locked_until = None
             credential.failed_attempts = 0
@@ -298,10 +366,17 @@ def authenticate(identifier: str, password: str) -> Dict[str, Any]:
             internal_user_id = user.id
 
     if not matched:
+        _throttle.fail(throttle_key)
         _record_failure(user.id)
         # Identical to the unknown-account message, so the endpoint cannot be
         # used to discover which DEDAN IDs exist.
         raise CredentialError(INVALID_CREDENTIALS)
+
+    _throttle.clear(throttle_key)
+    if not user.is_active:
+        # Only after the correct password: said earlier, this message revealed
+        # that the account exists to anyone who typed its id.
+        raise CredentialError("This account has been deactivated.")
 
     token = issue_token(subject, expires_in=SESSION_TTL_SECONDS, scope="portal")
     logger.info("credential_login user_id=%s", internal_user_id)

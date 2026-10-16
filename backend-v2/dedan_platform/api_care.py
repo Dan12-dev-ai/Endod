@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from dedan_platform import care_navigation as cn
 from dedan_platform import handoff as ho
+from dedan_platform import identity
 from dedan_platform.api_profile import current_user_id
 from dedan_platform.models import EventStatus, HealthEventType
 from dedan_platform.timeline import record_event
@@ -175,6 +176,16 @@ class HandoffRequest(BaseModel):
     language: str = "en"
 
 
+def _require_consent(user_id: str, kind: str, detail: str) -> None:
+    """403 unless the patient has granted ``kind`` consent.
+
+    Same rule `/users/me/health-profile` enforces: without it, health details
+    must not be stored (or shared) through a side door.
+    """
+    if not identity.get_profile_payload(user_id)["consent"].get(kind):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
 @router.post("/handoff/summary", status_code=status.HTTP_201_CREATED)
 def create_handoff_summary(
     body: HandoffRequest,
@@ -185,6 +196,9 @@ def create_handoff_summary(
     The response carries `fingerprint`. Nothing is transmitted to any clinician at
     this point -- the patient must read it first, then approve it explicitly.
     """
+    # The summary (allergies, medications, main concern) is stored on the
+    # timeline, so it needs the same consent as the health profile.
+    _require_consent(user_id, "treatment_processing", "Consent to store health information is required.")
     try:
         summary = ho.build_summary(
             main_concern=body.main_concern,
@@ -242,6 +256,11 @@ def share_handoff(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Sharing requires explicit patient approval.",
         )
+    _require_consent(
+        user_id,
+        "data_sharing_with_clinicians",
+        "Consent to share your information with clinicians is required.",
+    )
 
     from dedan_platform import timeline as tl
 
