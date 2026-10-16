@@ -204,6 +204,15 @@ def schedule_reminders(
     }
 
 
+def current_destination(channel: str, profile: Dict[str, Any]) -> Optional[str]:
+    """Where a reminder on ``channel`` may go *now*: None if the patient opted
+    out or has no consented address. Checked again at delivery time."""
+    preferences = profile.get("preferences", {})
+    if not preferences.get(CHANNEL_PREFERENCE_FIELD.get(channel, ""), True):
+        return None
+    return _destination_for(channel, profile)
+
+
 def _destination_for(channel: str, profile: Dict[str, Any]) -> Optional[str]:
     """Resolve the real address for a channel from the authorized profile.
 
@@ -213,7 +222,9 @@ def _destination_for(channel: str, profile: Dict[str, Any]) -> Optional[str]:
     if channel == NotificationChannel.EMAIL:
         return profile.get("email") or None
     if channel == NotificationChannel.SMS:
-        return profile.get("phone") or None
+        # Only a phone the patient proved they hold: an unverified number may
+        # be someone else's, and reminders would text a stranger.
+        return profile.get("phone") if profile.get("phone_verified") else None
     if channel in (NotificationChannel.IN_APP, NotificationChannel.PUSH):
         # In-app and push need no external address; the recipient is the user id.
         return str(profile.get("internal_user_id") or "")
@@ -237,6 +248,28 @@ def _reminder_payload(appointment, scheduled_at: datetime) -> Dict[str, Any]:
     }
 
 
+#: Channels reminders are scheduled on. Each honours its own preference and
+#: is recorded as SKIPPED (with the reason) when it does not apply.
+REMINDER_CHANNELS = (NotificationChannel.EMAIL, NotificationChannel.SMS)
+
+
+def schedule_all_channels(
+    user_id: str,
+    appointment_id: str,
+    correlation_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """`schedule_reminders` for every reminder channel, merged into one report."""
+    merged: Dict[str, Any] = {"queued": 0, "job_ids": [], "skipped": [], "offsets": [], "channels": {}}
+    for channel in REMINDER_CHANNELS:
+        report = schedule_reminders(user_id, appointment_id, correlation_id=correlation_id, channel=channel)
+        merged["queued"] += report.get("queued", 0)
+        merged["job_ids"].extend(report.get("job_ids", []))
+        merged["skipped"].extend(report.get("skipped", []))
+        merged["offsets"] = merged["offsets"] or report.get("offsets", [])
+        merged["channels"][channel] = report.get("queued", 0)
+    return merged
+
+
 def reschedule_reminders(
     user_id: str,
     appointment_id: str,
@@ -248,4 +281,4 @@ def reschedule_reminders(
     `appointments.reschedule` (a safety invariant); re-arming happens here,
     because creating reminders is a policy action rather than a safety one.
     """
-    return schedule_reminders(user_id, appointment_id, correlation_id=correlation_id)
+    return schedule_all_channels(user_id, appointment_id, correlation_id=correlation_id)

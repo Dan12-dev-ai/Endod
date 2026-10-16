@@ -286,7 +286,51 @@ def apply_migrations(engine=None, now=None) -> List[str]:
         applied.append(UNIQUE_EMAIL_INDEX)
     if ensure_unique_phone_index(engine):
         applied.append(UNIQUE_PHONE_INDEX)
+    applied.extend(apply_data_migrations(engine))
     backfill_appointment_links()
+    return applied
+
+
+#: One-time data changes, each applied at most once per database (recorded in
+#: `data_migrations`), so re-running startup never repeats them -- e.g. a
+#: patient who turns SMS off afterwards is not switched back on.
+_DATA_MIGRATIONS: Tuple[Tuple[str, str], ...] = (
+    (
+        # Phone sign-ups made before SMS reminders existed were created with
+        # SMS off, and have no email: they would get no reminders at all.
+        "2026_10_enable_sms_for_phone_only_accounts",
+        "UPDATE preferences SET sms_notifications = :yes "
+        "WHERE sms_notifications = :no AND user_id IN ("
+        "SELECT user_id FROM profiles WHERE phone_verified_at IS NOT NULL AND email IS NULL)",
+    ),
+)
+
+
+def apply_data_migrations(engine) -> List[str]:
+    if not (_table_exists(engine, "preferences") and _table_exists(engine, "profiles")):
+        return []
+    with engine.begin() as conn:
+        conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS data_migrations ("
+            "name VARCHAR(128) PRIMARY KEY, applied_at TIMESTAMP WITH TIME ZONE NOT NULL)"
+        ))
+    applied = []
+    for name, statement in _DATA_MIGRATIONS:
+        with engine.begin() as conn:
+            if conn.execute(text("SELECT 1 FROM data_migrations WHERE name = :n"), {"n": name}).first():
+                continue
+            try:
+                conn.execute(
+                    text("INSERT INTO data_migrations (name, applied_at) VALUES (:n, CURRENT_TIMESTAMP)"),
+                    {"n": name},
+                )
+            except Exception as exc:  # noqa: BLE001
+                if _is_race(exc) or "unique" in str(exc).lower():
+                    continue  # another process is applying it
+                raise
+            conn.execute(text(statement), {"yes": True, "no": False})
+        applied.append(name)
+        logger.info("data_migration_applied", extra={"migration": name})
     return applied
 
 

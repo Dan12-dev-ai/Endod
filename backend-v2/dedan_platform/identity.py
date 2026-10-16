@@ -129,7 +129,12 @@ def create_user(
             phone_verified_at=utcnow() if phone and phone_verified else None,
             locale=locale, timezone=timezone_name, country_code=country_code,
         )
-        user.preferences = Preferences(language=locale)
+        # A patient who signed up by phone has no other channel, so appointment
+        # reminders (transactional, not marketing) go by SMS unless they turn
+        # them off in settings.
+        user.preferences = Preferences(
+            language=locale, sms_notifications=bool(phone and phone_verified)
+        )
         user.health_profile = HealthProfile()
         # Consent starts fully withdrawn: nothing is assumed on the user's behalf.
         user.consent = Consent()

@@ -325,7 +325,7 @@ class AuditLogger:
         response: AnalysisResponse,
         latency_ms: int,
         token_usage: TokenUsage,
-        cost_usd: float,
+        cost_usd: Optional[float],
     ):
         self.logs.append({
             "timestamp": datetime.utcnow().isoformat(),
@@ -465,7 +465,12 @@ class MultimodalOrchestrator:
                 completion_tokens=response.token_usage.get("completion_tokens", 0),
                 total_tokens=response.token_usage.get("total_tokens", 0),
             )
-            cost = provider.estimate_cost(token_usage)
+            # None means "unknown": a provider without configured prices must
+            # not be audited as free.
+            cost = (
+                provider.estimate_cost(token_usage)
+                if getattr(provider, "pricing_configured", True) else None
+            )
             
             self.audit_logger.log_response(
                 request_id, response, latency_ms, token_usage, cost
