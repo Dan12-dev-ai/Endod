@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { defineConfig } from '@playwright/test';
@@ -12,13 +13,24 @@ const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const python =
   process.env.E2E_PYTHON ??
   path.join('..', '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-const e2eDatabase = path.join(os.tmpdir(), 'dedan-e2e.db').replace(/\\/g, '/');
+// A fresh database per run. Set once in the main process (which also clears
+// earlier runs' files); test workers inherit it, so they never pick another.
+if (!process.env.E2E_DB) {
+  for (const name of fs.readdirSync(os.tmpdir())) {
+    if (name.startsWith('dedan-e2e-')) fs.rmSync(path.join(os.tmpdir(), name), { force: true });
+  }
+  process.env.E2E_DB = path.join(os.tmpdir(), `dedan-e2e-${Date.now()}.db`).replace(/\\/g, '/');
+}
+const e2eDatabase = process.env.E2E_DB;
 
 export default defineConfig({
   testDir: 'tests',
   timeout: 30_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
+  // All specs share one test patient: one worker keeps them from seeing
+  // each other's appointments and inbox items mid-test.
+  workers: 1,
   retries: 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   globalSetup: './tests/global-setup.ts',
