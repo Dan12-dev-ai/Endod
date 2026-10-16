@@ -147,7 +147,7 @@ def create_appointment(
     # the reminder policy. This previously re-queried the row inline here and
     # passed `None` for preferences, which silently discarded the user's
     # configured reminder times.
-    queued = scheduler.schedule_reminders(
+    queued = scheduler.schedule_all_channels(
         user_id=user_id,
         appointment_id=result["appointment"]["appointment_id"],
         correlation_id=request.headers.get("X-Correlation-ID"),

@@ -417,7 +417,11 @@ def record_opt_out_skip(
     )
 
 
-def claim_due_jobs(limit: int = 20, now: Optional[datetime] = None) -> List[Dict[str, Any]]:
+def claim_due_jobs(
+    limit: int = 20,
+    now: Optional[datetime] = None,
+    channels: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
     """Atomically claim due jobs and return them.
 
     Claiming is a conditional UPDATE (`WHERE status = PENDING`), not a
@@ -434,7 +438,7 @@ def claim_due_jobs(limit: int = 20, now: Optional[datetime] = None) -> List[Dict
         # More candidates than needed: with several workers polling together,
         # losing the conditional UPDATE on one candidate moves on to the next
         # instead of returning nothing (which ended that worker's whole pass).
-        candidates = list(session.scalars(
+        query = (
             select(Notification)
             .where(
                 Notification.status.in_(list(NotificationStatus.CLAIMABLE)),
@@ -442,7 +446,12 @@ def claim_due_jobs(limit: int = 20, now: Optional[datetime] = None) -> List[Dict
             )
             .order_by(Notification.scheduled_for)
             .limit(limit + CLAIM_HEADROOM)
-        ))
+        )
+        if channels is not None:
+            # Only channels with a working transport, so jobs for a channel
+            # that is not configured wait instead of failing.
+            query = query.where(Notification.channel.in_(channels))
+        candidates = list(session.scalars(query))
         for job in candidates:
             if len(claimed) >= limit:
                 break
@@ -727,14 +736,20 @@ def reconcile_appointments(horizon_days: int = 30, now: Optional[datetime] = Non
         expected = len(appt.reminder_offsets_for(
             _Offsets(scheduled_at, None), _preference_offsets(user_id)
         ))
-        existing = count_open_for_appointment(appointment_id)
+        # Per channel: three email reminders must not hide three missing SMS.
+        existing = min(
+            count_handled_for_appointment(appointment_id, channel)
+            for channel in scheduler.REMINDER_CHANNELS
+        )
         if existing >= expected:
             continue
 
         # Routed through the same scheduler the booking path uses, so a repair
         # derives identical jobs -- including consent and skip records -- rather
-        # than a second, subtly different policy.
-        report = scheduler.schedule_reminders(
+        # than a second, subtly different policy. Channels a patient has not
+        # opted into, or has no address for, are recorded as skips and not
+        # counted as missing next time (skips are idempotent).
+        report = scheduler.schedule_all_channels(
             user_id=user_id,
             appointment_id=appointment_id,
             correlation_id=correlation_id,
@@ -789,5 +804,23 @@ def count_open_for_appointment(appointment_id: str) -> int:
             select(func.count(Notification.id)).where(
                 Notification.appointment_id == appointment_id,
                 Notification.status.in_(list(NotificationStatus.CLAIMABLE)),
+            )
+        ) or 0)
+
+
+def count_handled_for_appointment(appointment_id: str, channel: str) -> int:
+    """Reminders on one channel that are deliverable or deliberately skipped.
+
+    For reconciliation: a channel the patient opted out of, or has no
+    address for, is fully handled, not missing.
+    """
+    with session_scope() as session:
+        return int(session.scalar(
+            select(func.count(Notification.id)).where(
+                Notification.appointment_id == appointment_id,
+                Notification.channel == channel,
+                Notification.status.in_(
+                    list(NotificationStatus.CLAIMABLE) + [NotificationStatus.SKIPPED]
+                ),
             )
         ) or 0)

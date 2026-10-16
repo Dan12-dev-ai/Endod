@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 SMS_ETHIOPIA_URL = os.getenv("SMSETHIOPIA_API_URL", "https://smsethiopia.com/api/sms/send")
 SMS_TIMEOUT_SECONDS = float(os.getenv("SMS_TIMEOUT_SECONDS", "15"))
+#: Shown in every text the platform sends.
+BRAND_NAME = os.getenv("SMS_BRAND_NAME", "Endod Health")
 
 
 class SmsProviderError(RuntimeError):
@@ -103,6 +105,22 @@ class SmsEthiopiaProvider(SmsProvider):
             message_id = None
         logger.info("sms_sent to=%s provider=smsethiopia", mask(phone))
         return str(message_id) if message_id else None
+
+
+def render_sms_reminder(payload: dict) -> str:
+    """An appointment reminder short enough for one or two SMS segments.
+
+    Logistics only, like the email: an SMS preview is visible on a lock
+    screen, so no condition, department or clinician is ever named.
+    """
+    from dedan_platform.email_provider import format_appointment_time
+
+    kind = str(payload.get("appointment_type") or "consultation").replace("_", " ")
+    where = payload.get("location") or ("online" if payload.get("meeting_url") else None)
+    text = f"{BRAND_NAME} reminder: your {kind} appointment is on {format_appointment_time(payload)}"
+    if where:
+        text += f" at {where}"
+    return text + ". To change it, open the app."
 
 
 def build_provider() -> SmsProvider:

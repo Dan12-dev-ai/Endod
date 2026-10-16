@@ -147,7 +147,7 @@ class TestNoFakeDelivery:
         assert summary["blocked"] == 1 and summary["SENT"] == 0
         assert not any(j["status"] in ("SENT", "PROCESSING") for j in _jobs())
 
-    def test_non_email_job_is_never_given_to_the_email_provider(self, user):
+    def test_unsupported_channel_is_never_given_to_the_email_provider(self, user):
         import dedan_platform.notifications as nt
         import dedan_platform.worker as wk
         from dedan_platform.models import Notification, NotificationChannel
@@ -155,7 +155,7 @@ class TestNoFakeDelivery:
         _queue_one(user["internal_user_id"])
         with nt.session_scope() as session:
             session.execute(update(Notification).values(
-                channel=NotificationChannel.SMS, destination="+251911234567"))
+                channel=NotificationChannel.PUSH, destination=user["internal_user_id"]))
         _due_now()
         provider = FakeProvider()
         wk.run_once(provider=provider)
