@@ -73,3 +73,22 @@ test.describe('Auth', () => {
     expect(otherPath.status()).toBe(404);
   });
 });
+
+test.describe('Sign out', () => {
+  test('signs the patient out and protects the app again', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const page = await context.newPage();
+    const { email, password } = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '.auth', 'credentials.json'), 'utf8'),
+    ) as { email: string; password: string };
+    const login = await page.request.post('/api/auth/login', { data: { identifier: email, password } });
+    expect(login.ok()).toBeTruthy();
+
+    await page.goto('/interview');
+    await page.locator('[data-purpose="sign-out"]').click();
+    await expect(page).toHaveURL(/\/login$/);
+    await page.goto('/interview');
+    await expect(page).toHaveURL(/\/login\?next=/);
+    await context.close();
+  });
+});

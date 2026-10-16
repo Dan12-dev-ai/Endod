@@ -12,7 +12,10 @@ const BACKEND_URL = `http://127.0.0.1:${BACKEND_PORT}`;
 const python =
   process.env.E2E_PYTHON ??
   path.join('..', '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-const e2eDatabase = path.join(os.tmpdir(), 'dedan-e2e.db').replace(/\\/g, '/');
+// A fresh database per run. Set once in the main process; test workers
+// inherit it, so they never pick a different file.
+process.env.E2E_DB ??= path.join(os.tmpdir(), `dedan-e2e-${Date.now()}.db`).replace(/\\/g, '/');
+const e2eDatabase = process.env.E2E_DB;
 
 export default defineConfig({
   testDir: 'tests',

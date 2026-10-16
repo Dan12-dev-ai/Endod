@@ -1,120 +1,90 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { createAppointment, futureSlot, openSection } from './helpers';
 
-async function openAppointment(page: Page) {
-  await page.locator('aside').getByRole('link', { name: 'Appointment' }).click();
-  await expect(page.locator('[data-purpose="appointment-view"]')).toBeVisible();
+// Appointments against the real backend. Each test creates its own
+// appointments with a unique doctor name, since the test patient is shared.
+
+function unique(label: string) {
+  return `Dr. ${label} ${Date.now().toString(36)}`;
 }
 
-test.describe('Interview — Appointment page (simplified)', () => {
-  test.beforeEach(async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.dismiss());
+test.describe('Interview — Appointment page', () => {
+  test('shows a booked appointment in Upcoming', async ({ page }) => {
+    const doctor = unique('Upcoming');
+    const appointment = await createAppointment(page.request, {
+      scheduled_at: futureSlot(3).iso, provider_name: doctor, department: 'Cardiology',
+    });
+    await openSection(page, 'Appointment', 'appointment-view');
+
+    const card = page.locator(`[data-purpose="appointment-card-${appointment.appointment_id}"]`);
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(doctor);
+    await expect(card).toContainText('Cardiology');
+    await expect(card.getByRole('button', { name: 'Reschedule' })).toBeVisible();
+    await expect(page.locator('[data-purpose="upcoming-count"]')).toContainText(/\d+ Scheduled/);
+    await expect(page.locator('[data-purpose="next-appointment"]')).not.toContainText('None scheduled');
   });
 
-  test('Appointment page renders stat cards and appointment list', async ({ page }) => {
-    await page.goto('/interview', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(300);
-    await openAppointment(page);
-
-    // Page header
-    await expect(page.getByRole('heading', { name: 'Appointments' })).toBeVisible();
-
-    // Only 2 stat cards (Next Visit, Virtual Follow-up)
-    await expect(page.getByText('Next Appointment')).toBeVisible();
-    await expect(page.getByText('Virtual Follow-up')).toBeVisible();
-    await expect(page.getByText('Pending Action')).toHaveCount(0);
-    await expect(page.getByText('Assigned Providers')).toHaveCount(0);
-
-    // 3 appointment cards
-    await expect(page.locator('[data-purpose="appointment-card-1"]')).toBeVisible();
-    await expect(page.locator('[data-purpose="appointment-card-2"]')).toBeVisible();
-    await expect(page.locator('[data-purpose="appointment-card-3"]')).toBeVisible();
-  });
-
-  test('Appointment cards show only name, address, time, miles, est drive', async ({ page }) => {
-    await page.goto('/interview', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(300);
-    await openAppointment(page);
-
-    const card1 = page.locator('[data-purpose="appointment-card-1"]');
-    await expect(card1).toContainText('Dr. Marcus Vance, MD');
-    await expect(card1).toContainText('Apex Heart & Health Institute');
-    await expect(card1).toContainText('Tomorrow, 10:30 AM');
-    await expect(card1).toContainText('3.2 miles');
-    await expect(card1).toContainText('Est. 12 min drive');
-
-    // Should NOT contain removed elements
-    await expect(card1).not.toContainText('Cardiology Specialist');
-    await expect(card1).not.toContainText('Clinical Reason');
-    await expect(card1).not.toContainText('Get Directions');
-    await expect(card1).not.toContainText('Cancel');
-
-    // Only Reschedule button should exist
-    await expect(card1.getByRole('button', { name: 'Reschedule' })).toBeVisible();
-    await expect(card1.getByRole('button', { name: 'Cancel' })).toHaveCount(0);
-  });
-
-  test('Tab switching: upcoming -> past -> cancelled', async ({ page }) => {
-    await page.goto('/interview', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(300);
-    await openAppointment(page);
-
-    // Upcoming is default
-    await expect(page.locator('[data-purpose="appointment-card-1"]')).toBeVisible();
-
-    // Switch to Past -> shows past cards with same structure
-    await page.locator('[data-purpose="appointment-tab-past"]').click();
-    await expect(page.locator('[data-purpose="appointment-past-list"]')).toBeVisible();
-    await expect(page.locator('[data-purpose="appointment-card-1"]')).toHaveCount(0);
-    await expect(page.locator('[data-purpose="past-card-1"]')).toContainText('ENDOD AI Emergency Live Consultation');
-    await expect(page.locator('[data-purpose="past-card-1"]')).toContainText('Oct 11, 10:24 AM');
-    await expect(page.locator('[data-purpose="past-card-2"]')).toContainText('Dr. Marcus Vance, MD');
-
-    // Switch to Cancelled -> shows cancelled card
-    await page.locator('[data-purpose="appointment-tab-cancelled"]').click();
-    await expect(page.locator('[data-purpose="appointment-cancelled-list"]')).toBeVisible();
-    await expect(page.locator('[data-purpose="cancelled-card-1"]')).toContainText('Dr. Sarah Jenkins, MD');
-    await expect(page.locator('[data-purpose="cancelled-card-1"]')).toContainText('Cancelled');
-
-    // Back to Upcoming
-    await page.locator('[data-purpose="appointment-tab-upcoming"]').click();
-    await expect(page.locator('[data-purpose="appointment-card-1"]')).toBeVisible();
-  });
-
-  test('Booking modal: open -> fill form -> submit -> success', async ({ page }) => {
-    await page.goto('/interview', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(300);
-    await openAppointment(page);
-
-    // Open booking modal
+  test('schedules a video visit from the modal', async ({ page }) => {
+    const doctor = unique('Video');
+    await openSection(page, 'Appointment', 'appointment-view');
     await page.getByRole('button', { name: 'Schedule Visit' }).click();
     await expect(page.locator('[data-purpose="appointment-modal"]')).toBeVisible();
 
-    // Submit form
+    await page.locator('#appointment-provider').fill(doctor);
+    await page.locator('[data-purpose="appointment-modal"]').getByText('Video Telehealth', { exact: true }).click();
+    await page.locator('#appointment-meeting-url').fill('https://meet.example.com/visit');
+    const slot = futureSlot(5, 14, 0);
+    await page.locator('#appointment-date').fill(slot.date);
+    await page.locator('#appointment-time').fill(slot.time);
     await page.getByRole('button', { name: 'Confirm Booking' }).click();
 
-    // Success state
     await expect(page.locator('[data-purpose="appointment-modal-success"]')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Appointment Confirmed!' })).toBeVisible();
+    await page.getByRole('button', { name: 'Done' }).click();
+    const card = page.locator('[data-purpose^="appointment-card-"]', { hasText: doctor });
+    await expect(card).toContainText('Video visit');
+    await expect(card.getByRole('link', { name: 'Join video visit' })).toHaveAttribute('href', 'https://meet.example.com/visit');
   });
 
-  test('Reschedule modal shows provider name', async ({ page }) => {
-    await page.goto('/interview', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(300);
-    await openAppointment(page);
+  test('reschedules an appointment', async ({ page }) => {
+    const doctor = unique('Move');
+    const appointment = await createAppointment(page.request, { scheduled_at: futureSlot(4).iso, provider_name: doctor });
+    await openSection(page, 'Appointment', 'appointment-view');
+    const card = page.locator(`[data-purpose="appointment-card-${appointment.appointment_id}"]`);
+    await card.getByRole('button', { name: 'Reschedule' }).click();
 
-    // Click Reschedule on first card
-    await page.locator('[data-purpose="appointment-card-1"]').getByRole('button', { name: 'Reschedule' }).click();
-    await expect(page.locator('[data-purpose="appointment-modal"]')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Reschedule with Dr. Marcus Vance' })).toBeVisible();
+    const slot = futureSlot(6, 16, 45);
+    await page.locator('#appointment-date').fill(slot.date);
+    await page.locator('#appointment-time').fill(slot.time);
+    await page.getByRole('button', { name: 'Confirm Reschedule' }).click();
+    await expect(page.locator('[data-purpose="appointment-modal-success"]')).toContainText('Appointment moved');
+
+    const moved = await page.request.get(`/api/backend/users/me/appointments/${appointment.appointment_id}`);
+    expect(new Date((await moved.json()).scheduled_at).toISOString()).toBe(slot.iso);
   });
 
-  test('Past consultations section is removed', async ({ page }) => {
-    await page.goto('/interview', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(300);
-    await openAppointment(page);
+  test('cancels an appointment after confirmation', async ({ page }) => {
+    const doctor = unique('Cancel');
+    const appointment = await createAppointment(page.request, { scheduled_at: futureSlot(7).iso, provider_name: doctor });
+    await openSection(page, 'Appointment', 'appointment-view');
+    const card = page.locator(`[data-purpose="appointment-card-${appointment.appointment_id}"]`);
+    await card.getByRole('button', { name: 'Cancel' }).click();
+    await expect(card.locator('[data-purpose="cancel-confirm"]')).toBeVisible();
+    await card.getByRole('button', { name: 'Yes, cancel' }).click();
 
-    // Past Completed Consultations should NOT exist
-    await expect(page.getByText('Past Completed Consultations')).toHaveCount(0);
-    await expect(page.getByText('View Log →')).toHaveCount(0);
+    await expect(page.locator('[data-purpose="toast-notification"]')).toContainText('Appointment Cancelled');
+    await expect(card).toHaveCount(0);
+    await page.locator('[data-purpose="appointment-tab-cancelled"]').click();
+    const cancelled = page.locator(`[data-purpose="appointment-card-${appointment.appointment_id}"]`);
+    await expect(cancelled).toContainText('Cancelled');
+  });
+
+  test('filters by visit type', async ({ page }) => {
+    const doctor = unique('InPerson');
+    await createAppointment(page.request, { scheduled_at: futureSlot(8).iso, provider_name: doctor, visit_mode: 'in_person' });
+    await openSection(page, 'Appointment', 'appointment-view');
+    await expect(page.locator('[data-purpose^="appointment-card-"]', { hasText: doctor })).toBeVisible();
+    await page.locator('[data-purpose="appointment-type-filter"]').selectOption('telehealth');
+    await expect(page.locator('[data-purpose^="appointment-card-"]', { hasText: doctor })).toHaveCount(0);
   });
 });
