@@ -114,7 +114,9 @@ class TestDelivery:
         assert sms.sent
         phone, text = sms.sent[0]
         assert phone == "+251911234567"
-        assert "(Africa/Addis_Ababa)" in text and "Black Lion Hospital" in text
+        assert "(Africa/Addis_Ababa)" in text
+        # The place can reveal the kind of care on a lock screen.
+        assert "Black Lion Hospital" not in text
         # Reminders whose window had already passed are recorded as SKIPPED.
         assert all(j["status"] == "SENT" for j in _jobs() if j["channel"] == "sms" and j["status"] != "SKIPPED")
 
@@ -179,3 +181,119 @@ def test_sms_text_is_short_and_not_clinical():
     })
     assert len(text) <= 200
     assert "Tuesday 20 October 2026, 09:30" in text
+
+
+class TestReviewFindings:
+    """Automated review (Qodo) of PR #9."""
+
+    def _deliver_all(self):
+        import dedan_platform.worker as wk
+
+        _due_now()
+        sms = FakeSms()
+        wk.run_once(provider=FakeEmail(), sms_provider=sms)
+        return sms
+
+    def test_opting_out_after_booking_stops_queued_texts(self, db):
+        from dedan_platform import identity
+
+        user = _phone_patient()
+        _book(user["internal_user_id"])
+        identity.update_preferences(user["internal_user_id"], {"sms_notifications": False})
+        assert self._deliver_all().sent == []
+
+    def test_changed_phone_is_not_texted(self, db):
+        from dedan_platform import identity
+
+        user = _phone_patient()
+        _book(user["internal_user_id"])
+        identity.update_profile(user["internal_user_id"], {"phone": "0922 333 444"})
+        assert self._deliver_all().sent == []
+
+    def test_cancelled_appointment_is_not_texted_even_if_already_claimed(self, db):
+        import dedan_platform.notifications as nt
+        import dedan_platform.worker as wk
+        from dedan_platform import appointments
+
+        user = _phone_patient()
+        appointment = _book(user["internal_user_id"])
+        _due_now()
+        job = next(j for j in nt.claim_due_jobs(limit=10) if j["channel"] == "sms")
+        # Cancelled while the job was already PROCESSING (not cancellable).
+        appointments.update_status(user["internal_user_id"], appointment["appointment_id"], "CANCELLED")
+        sms = FakeSms()
+        assert wk.deliver_one(job, FakeEmail(), sms) == "SKIPPED"
+        assert sms.sent == []
+
+    def test_moved_appointment_does_not_get_the_old_time(self, db):
+        import dedan_platform.notifications as nt
+        import dedan_platform.worker as wk
+        from dedan_platform import appointments
+
+        user = _phone_patient()
+        appointment = _book(user["internal_user_id"])
+        _due_now()
+        job = next(j for j in nt.claim_due_jobs(limit=10) if j["channel"] == "sms")
+        appointments.reschedule(
+            user["internal_user_id"], appointment["appointment_id"],
+            datetime.now(timezone.utc) + timedelta(days=5),
+        )
+        sms = FakeSms()
+        assert wk.deliver_one(job, FakeEmail(), sms) == "SKIPPED"
+
+    def test_text_names_neither_the_place_nor_the_kind_of_visit(self):
+        from dedan_platform.sms_provider import render_sms_reminder
+
+        text = render_sms_reminder({
+            "scheduled_at": "2026-10-20T06:30:00+00:00", "timezone": "Africa/Addis_Ababa",
+            "appointment_type": "psychiatry follow up", "location": "Amanuel Mental Specialized Hospital",
+        })
+        assert "psychiatry" not in text.lower() and "Amanuel" not in text
+
+    def test_existing_phone_accounts_are_switched_on_once(self, db):
+        from sqlalchemy import update
+
+        from dedan_platform import identity, migrations
+        from dedan_platform.db import get_engine, session_scope
+        from dedan_platform.models import Preferences
+
+        user = _phone_patient()
+        with session_scope() as session:  # as created before this change
+            session.execute(update(Preferences).values(sms_notifications=False))
+        with get_engine().begin() as conn:
+            from sqlalchemy import text
+            conn.execute(text("DELETE FROM data_migrations"))
+        migrations.apply_data_migrations(get_engine())
+        prefs = identity.get_profile_payload(user["internal_user_id"])["preferences"]
+        assert prefs["sms_notifications"] is True
+
+        # The patient opts out; a later startup must not switch it back on.
+        identity.update_preferences(user["internal_user_id"], {"sms_notifications": False})
+        migrations.apply_data_migrations(get_engine())
+        prefs = identity.get_profile_payload(user["internal_user_id"])["preferences"]
+        assert prefs["sms_notifications"] is False
+
+    def test_reenabling_sms_arms_already_booked_visits(self, db):
+        from dedan_platform import identity
+        from dedan_platform import notifications as nt
+
+        user = _phone_patient()
+        identity.update_preferences(user["internal_user_id"], {"sms_notifications": False})
+        _book(user["internal_user_id"])
+        assert not [j for j in _jobs() if j["channel"] == "sms" and j["status"] == "PENDING"]
+        identity.update_preferences(user["internal_user_id"], {"sms_notifications": True})
+        nt.reconcile_appointments()
+        assert [j for j in _jobs() if j["channel"] == "sms" and j["status"] == "PENDING"]
+
+    def test_channels_without_a_transport_are_closed(self, db):
+        import dedan_platform.notifications as nt
+        from dedan_platform.models import Notification
+
+        user = _phone_patient()
+        _book(user["internal_user_id"])
+        with nt.session_scope() as session:
+            session.execute(update(Notification).where(Notification.channel == "sms").values(
+                channel="whatsapp"))
+        self._deliver_all()
+        statuses = {j["status"] for j in _jobs() if j["channel"] == "whatsapp"}
+        assert statuses == {"SKIPPED"}

@@ -110,17 +110,17 @@ class SmsEthiopiaProvider(SmsProvider):
 def render_sms_reminder(payload: dict) -> str:
     """An appointment reminder short enough for one or two SMS segments.
 
-    Logistics only, like the email: an SMS preview is visible on a lock
-    screen, so no condition, department or clinician is ever named.
+    Only the time. An SMS preview is visible on a lock screen, and the
+    appointment type and place are free text that can reveal the kind of care
+    (a psychiatric hospital, a clinic's department), so neither is included;
+    the app shows the details after sign-in.
     """
     from dedan_platform.email_provider import format_appointment_time
 
-    kind = str(payload.get("appointment_type") or "consultation").replace("_", " ")
-    where = payload.get("location") or ("online" if payload.get("meeting_url") else None)
-    text = f"{BRAND_NAME} reminder: your {kind} appointment is on {format_appointment_time(payload)}"
-    if where:
-        text += f" at {where}"
-    return text + ". To change it, open the app."
+    return (
+        f"{BRAND_NAME} reminder: you have an appointment on {format_appointment_time(payload)}. "
+        "Open the app for details."
+    )
 
 
 def build_provider() -> SmsProvider:

@@ -204,6 +204,15 @@ def schedule_reminders(
     }
 
 
+def current_destination(channel: str, profile: Dict[str, Any]) -> Optional[str]:
+    """Where a reminder on ``channel`` may go *now*: None if the patient opted
+    out or has no consented address. Checked again at delivery time."""
+    preferences = profile.get("preferences", {})
+    if not preferences.get(CHANNEL_PREFERENCE_FIELD.get(channel, ""), True):
+        return None
+    return _destination_for(channel, profile)
+
+
 def _destination_for(channel: str, profile: Dict[str, Any]) -> Optional[str]:
     """Resolve the real address for a channel from the authorized profile.
 

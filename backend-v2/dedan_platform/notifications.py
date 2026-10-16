@@ -737,8 +737,14 @@ def reconcile_appointments(horizon_days: int = 30, now: Optional[datetime] = Non
             _Offsets(scheduled_at, None), _preference_offsets(user_id)
         ))
         # Per channel: three email reminders must not hide three missing SMS.
+        from dedan_platform import identity
+
+        profile = identity.get_profile_payload(user_id)
         existing = min(
-            count_handled_for_appointment(appointment_id, channel)
+            count_handled_for_appointment(
+                appointment_id, channel,
+                eligible=scheduler.current_destination(channel, profile) is not None,
+            )
             for channel in scheduler.REMINDER_CHANNELS
         )
         if existing >= expected:
@@ -808,19 +814,22 @@ def count_open_for_appointment(appointment_id: str) -> int:
         ) or 0)
 
 
-def count_handled_for_appointment(appointment_id: str, channel: str) -> int:
-    """Reminders on one channel that are deliverable or deliberately skipped.
+def count_handled_for_appointment(appointment_id: str, channel: str, eligible: bool) -> int:
+    """Reminders on one channel that need no repair.
 
-    For reconciliation: a channel the patient opted out of, or has no
-    address for, is fully handled, not missing.
+    Deliverable jobs always count. A SKIPPED row counts when its reason still
+    holds: a passed window always does, but an opt-out or a missing address
+    does not once the channel is ``eligible`` again (the patient turned the
+    channel on or verified a phone after booking).
     """
+    query = select(func.count(Notification.id)).where(
+        Notification.appointment_id == appointment_id,
+        Notification.channel == channel,
+    )
+    window_passed = Notification.payload_json.contains(f'"skip_reason": "{SKIP_REASON_WINDOW_PASSED}"')
+    skipped = Notification.status == NotificationStatus.SKIPPED
+    if eligible:
+        skipped = skipped & window_passed
+    query = query.where(Notification.status.in_(list(NotificationStatus.CLAIMABLE)) | skipped)
     with session_scope() as session:
-        return int(session.scalar(
-            select(func.count(Notification.id)).where(
-                Notification.appointment_id == appointment_id,
-                Notification.channel == channel,
-                Notification.status.in_(
-                    list(NotificationStatus.CLAIMABLE) + [NotificationStatus.SKIPPED]
-                ),
-            )
-        ) or 0)
+        return int(session.scalar(query) or 0)
