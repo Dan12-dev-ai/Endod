@@ -269,6 +269,10 @@ class GeminiProvider(MultimodalAIProvider):
                         "Response blocked by safety filter"
                     )
                 return response
+            except ProviderSafetyError:
+                # A blocked prompt is blocked every time; retrying only delays
+                # the patient's answer.
+                raise
             except Exception as e:
                 last_error = e
                 if attempt < self.max_retries - 1:
@@ -309,13 +313,24 @@ class GeminiProvider(MultimodalAIProvider):
             result.raw_response = response_text
             self._extract_from_text(result, response_text)
         except Exception as e:
+            # Includes Gemini refusing to answer (`response.text` raises when
+            # the candidate was blocked). An unreadable answer is not
+            # reassurance: ask for a clinician rather than defaulting to the
+            # model contract's "routine".
             result.raw_response = str(e)
-            result.safety_flags.append(f"Parse error: {e}")
+            result.safety_flags.append(f"provider_response_unreadable:{type(e).__name__}")
+            result.urgency = "see_doctor_soon"
+            result.requires_professional_review = True
+            result.recommended_next_step = (
+                "We could not complete this assessment. Please see a clinician, "
+                "and seek emergency care if your symptoms are severe."
+            )
         return result
     
     def _populate_from_dict(self, result: AnalysisResponse, data: Dict[str, Any]):
         """Populate AnalysisResponse from parsed JSON."""
-        result.urgency = data.get("urgency", "routine")
+        # A missing urgency is not reassurance.
+        result.urgency = data.get("urgency") or "see_doctor_soon"
         result.recommended_next_step = data.get("recommended_next_step", "")
         result.confidence_score = float(data.get("confidence_score", 0.0))
         result.uncertainty = data.get("uncertainty", "")

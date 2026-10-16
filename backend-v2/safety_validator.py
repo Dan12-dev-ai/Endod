@@ -11,6 +11,8 @@ import re
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, TYPE_CHECKING
 
+import clinical_triage
+
 if TYPE_CHECKING:
     from providers.models import AnalysisResponse, PatientProfile as ProviderPatientProfile
 
@@ -30,26 +32,8 @@ class SafetyValidator:
     Never silently downgrades urgency. Always escalates when uncertain.
     """
 
-    # Emergency keywords that should ALWAYS trigger emergency/urgent
-    EMERGENCY_KEYWORDS = [
-        "chest pain", "difficulty breathing", "shortness of breath", "severe bleeding",
-        "loss of consciousness", "unconscious", "stroke symptoms", "heart attack",
-        "severe allergic reaction", "anaphylaxis", "suicidal", "confusion",
-        "slurred speech", "facial drooping", "arm weakness", "severe headache",
-        "high fever with rash", "seizure", "severe abdominal pain", "vomiting blood",
-        "black tarry stools", "severe dehydration", "unable to wake", "coughing blood",
-        "sudden vision loss", "severe burns", "electric shock", "drowning",
-        "poisoning", "overdose", "severe head injury", "broken bone protruding",
-    ]
-
-    URGENT_KEYWORDS = [
-        "worsening symptoms", "high fever", "severe pain", "bloody diarrhea",
-        "difficulty swallowing", "rapid heartbeat", "stiff neck", "persistent vomiting",
-        "unable to keep fluids down", "signs of dehydration", "pregnant with bleeding",
-        "newborn with fever", "elderly with confusion", "immunocompromised with fever",
-        "spreading redness", "increasing swelling", "pus or foul discharge",
-        "fever above 39", "fever above 102", "pain not relieved by otc",
-    ]
+    # Red-flag symptom rules live in `clinical_triage`, shared with the
+    # offline provider, so the two can never disagree about an emergency.
 
     HIGH_RISK_PATIENT_FLAGS = [
         "pregnant", "pregnancy",
@@ -64,6 +48,15 @@ class SafetyValidator:
         "liver disease", "cirrhosis",
         "on blood thinners", "anticoagulant", "warfarin",
     ]
+
+    #: Conditions that make any infection more dangerous: never "routine".
+    IMMUNOCOMPROMISED_FLAGS = frozenset({
+        "immunocompromised", "immunosuppressed", "hiv", "aids", "chemotherapy",
+        "cancer", "malignancy",
+    })
+
+    #: Below this the model's answer is never treated as reassurance.
+    VERY_LOW_CONFIDENCE = 0.4
 
     UNCERTAINTY_INDICATORS = [
         "cannot determine", "unclear", "insufficient", "need better image",
@@ -84,71 +77,71 @@ class SafetyValidator:
         Validate response for safety. Returns safety check result with any overrides.
         """
         result = SafetyCheckResult(is_safe=True)
-        combined_text = " ".join(filter(None, [
+        current = response.urgency
+        target = current
+
+        def escalate(urgency: str, flag: str) -> None:
+            nonlocal target
+            result.additional_flags.append(flag)
+            result.requires_professional_review = True
+            target = clinical_triage.max_urgency(target, urgency)
+
+        # 1. Red-flag rules on the patient's own words. The model's output is
+        #    not scanned: advice such as "seek care if chest pain develops"
+        #    must not turn into an emergency.
+        triage = clinical_triage.assess(
             original_text,
-            response.recommended_next_step,
-            response.uncertainty,
-            str(response.medical_information),
-            str(response.treatment_information),
-        ])).lower()
+            age_years=context.age if context else None,
+            pregnant=bool(context and context.pregnancy_status),
+        )
+        result.additional_flags.extend(f"triage:{reason}" for reason in triage.reasons)
+        if triage.reasons:
+            escalate(triage.urgency, f"triage_urgency:{triage.urgency}")
 
-        # 1. Check for emergency keywords - NEVER downgrade
-        for keyword in self.EMERGENCY_KEYWORDS:
-            if keyword in combined_text:
-                result.additional_flags.append(f"emergency_keyword:{keyword}")
-                result.requires_professional_review = True
-                if response.urgency not in ["emergency", "urgent"]:
-                    result.urgency_override = "emergency"
-                    result.emergency_message = (
-                        f"⚠️ EMERGENCY DETECTED: '{keyword}' mentioned. "
-                        f"Call emergency services ({self._get_emergency_number(context)}) or go to the nearest emergency department IMMEDIATELY."
-                    )
-                break
-
-        # 2. Check for urgent keywords
-        if not result.urgency_override:
-            for keyword in self.URGENT_KEYWORDS:
-                if keyword in combined_text:
-                    result.additional_flags.append(f"urgent_keyword:{keyword}")
-                    result.requires_professional_review = True
-                    if response.urgency == "self_care":
-                        result.urgency_override = "see_doctor_soon"
-                    break
-
-        # 3. Check patient risk factors
+        # 2. High-risk patients are never told "routine": at least see a
+        #    clinician soon.
         if context:
-            patient_text = " ".join(filter(None, [
-                str(context.chronic_conditions),
-                str(context.medications),
-                "pregnant" if context.pregnancy_status else "",
-                str(context.age) if context.age else "",
-            ])).lower()
-
+            if context.age is not None and context.age < 5:
+                escalate("see_doctor_soon", "high_risk_patient:young_child")
+            if context.age is not None and context.age >= 75:
+                escalate("see_doctor_soon", "high_risk_patient:older_adult")
+            if context.pregnancy_status:
+                escalate("see_doctor_soon", "high_risk_patient:pregnant")
+            conditions = " ".join(
+                str(item) for item in (context.chronic_conditions or []) + (context.medications or [])
+            ).lower()
             for flag in self.HIGH_RISK_PATIENT_FLAGS:
-                if flag in patient_text:
-                    result.additional_flags.append(f"high_risk_patient:{flag}")
-                    result.requires_professional_review = True
-                    if response.urgency == "self_care":
-                        result.urgency_override = "see_doctor_soon"
+                if flag in conditions:
+                    immunocompromised = flag in self.IMMUNOCOMPROMISED_FLAGS
+                    floor = "see_doctor_soon" if immunocompromised or target == "self_care" else "routine"
+                    escalate(floor, f"high_risk_patient:{flag}")
                     break
 
-        # 4. Check AI uncertainty
+        # 3. The model is unsure of its own answer.
         if response.uncertainty:
             uncertainty_lower = response.uncertainty.lower()
             for indicator in self.UNCERTAINTY_INDICATORS:
                 if indicator in uncertainty_lower:
-                    result.additional_flags.append(f"ai_uncertainty:{indicator}")
-                    result.requires_professional_review = True
-                    if response.urgency == "self_care":
-                        result.urgency_override = "see_doctor_soon"
+                    floor = "see_doctor_soon" if target == "self_care" else "routine"
+                    escalate(floor, f"ai_uncertainty:{indicator}")
                     break
 
-        # 5. Check confidence threshold
+        # 4. Low confidence. Very low confidence is never reassurance.
         if response.confidence_score < self.confidence_threshold:
             result.additional_flags.append(f"low_confidence:{response.confidence_score:.2f}")
             result.requires_professional_review = True
-            if response.urgency == "self_care":
-                result.urgency_override = "see_doctor_soon"
+            if response.confidence_score < self.VERY_LOW_CONFIDENCE or target == "self_care":
+                target = clinical_triage.max_urgency(target, "see_doctor_soon")
+
+        # 5. Escalate only. Never lower what the model said.
+        target = clinical_triage.max_urgency(current, target)
+        if clinical_triage.urgency_rank(target) > clinical_triage.urgency_rank(current):
+            result.urgency_override = target
+        if target == "emergency":
+            result.requires_professional_review = True
+            result.emergency_message = "⚠️ " + clinical_triage.emergency_instructions(
+                context.location if context else None
+            )
 
         # 6. Ensure safety notice is present
         if not response.safety_notice:
@@ -190,39 +183,7 @@ class SafetyValidator:
 
     def _get_emergency_number(self, context: Optional[ProviderPatientProfile]) -> str:
         """Get emergency number based on location."""
-        if context and context.location:
-            location_lower = context.location.lower()
-            emergency_numbers = {
-                "kenya": "999 or 112",
-                "ke": "999 or 112",
-                "tanzania": "112",
-                "tz": "112",
-                "uganda": "999",
-                "ug": "999",
-                "nigeria": "199 or 112",
-                "ng": "199 or 112",
-                "ghana": "193 or 112",
-                "gh": "193 or 112",
-                "south africa": "10177 or 112",
-                "za": "10177 or 112",
-                "ethiopia": "991 or 907",
-                "et": "991 or 907",
-                "rwanda": "112",
-                "rw": "112",
-                "us": "911",
-                "usa": "911",
-                "uk": "999 or 112",
-                "gb": "999 or 112",
-                "eu": "112",
-                "canada": "911",
-                "ca": "911",
-                "australia": "000",
-                "au": "000",
-            }
-            for key, number in emergency_numbers.items():
-                if key in location_lower:
-                    return number
-        return "your local emergency number (e.g., 911, 999, 112)"
+        return clinical_triage.emergency_number(context.location if context else None)
 
     def _has_proper_disclaimer(self, notice: str) -> bool:
         """Check if safety notice contains required disclaimer elements."""

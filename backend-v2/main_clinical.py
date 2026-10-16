@@ -648,22 +648,55 @@ def create_app(settings = None) -> FastAPI:
             # Run AI analysis
             from providers import MultimodalOrchestrator
             orchestrator = MultimodalOrchestrator()
-            ai_result = await orchestrator.process(
-                text=combined_text,
-                images=images if images else None,
-                voice_transcript=request.voice_transcript,
-                conversation_history=conversation_history if conversation_history else None,
-                patient_profile=patient_context,
-                session_id=request.session_id,
-            )
+            try:
+                ai_result = await orchestrator.process(
+                    text=combined_text,
+                    images=images if images else None,
+                    voice_transcript=request.voice_transcript,
+                    conversation_history=conversation_history if conversation_history else None,
+                    patient_profile=patient_context,
+                    session_id=request.session_id,
+                )
+            except Exception as provider_exc:
+                # A failed or refusing AI provider must not leave the patient
+                # with an error page: the deterministic rules still triage
+                # them (an emergency is still reported as one).
+                logger.error(
+                    "Analysis %s: provider failed (%s); using offline rules",
+                    request_id, type(provider_exc).__name__,
+                )
+                from providers.models import TextAnalysisRequest
+                from providers.offline_provider import OfflineProvider
+
+                ai_result = await OfflineProvider().analyze_text(TextAnalysisRequest(
+                    text=" ".join(filter(None, [combined_text, request.voice_transcript])),
+                    patient_context={
+                        "age": request.patient_age,
+                        "pregnancy_status": request.patient_pregnant,
+                        "location": request.patient_location,
+                    },
+                ))
+                ai_result.safety_flags.append("live_provider_failed:offline_fallback")
+                ai_result.requires_professional_review = True
 
             # Safety validation
             # NOTE: `validate_async` / `apply_safety_result_async` are coroutine
             # functions; both must be awaited. Calling them without `await`
             # rebinds `ai_result` to a coroutine object, which later fails in
             # the response transformer with a confusing attribute error.
+            # Everything the patient said, including by voice and in earlier
+            # turns of this conversation, goes through the red-flag rules.
+            patient_words = " ".join(filter(None, [
+                combined_text,
+                request.voice_transcript,
+                *(
+                    turn.get("content", "")
+                    for turn in request.conversation_history
+                    if turn.get("role", "user") in ("user", "patient")
+                ),
+            ]))
             safety_result = await safety_validator.validate_async(
-                ai_result, patient_context, original_text=combined_text
+                ai_result, patient_context, original_text=patient_words
             )
             ai_result = await safety_validator.apply_safety_result_async(ai_result, safety_result)
 
@@ -711,8 +744,15 @@ def create_app(settings = None) -> FastAPI:
             from clinical_schema import MedicationVerificationItem
             for med in structured_response.medication_information:
                 verification = medication_safety_service.get_pharmacy_verification_workflow(med.medication_class)
+                # `package_check_items` is a list of plain strings; indexing them
+                # like dicts raised TypeError and failed every response that
+                # included medication information.
                 structured_response.medication_verification.extend([
-                    MedicationVerificationItem(field=item["field"], description=item["description"], why_important=item.get("why_important", "Important for safety"))
+                    MedicationVerificationItem(
+                        field=item,
+                        description=f"Check the package for: {item}",
+                        why_important="Confirms you received the right medicine, strength and quality.",
+                    )
                     for item in verification.get("package_check_items", [])
                 ])
 
