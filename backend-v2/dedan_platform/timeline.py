@@ -201,6 +201,15 @@ def get_event(user_id: str, event_id: str) -> Optional[Dict[str, Any]]:
         return _to_payload(event) if event else None
 
 
+class ProtectedEventError(RuntimeError):
+    """The event is a safety record the patient cannot delete."""
+
+
+#: System-generated safety records. A patient may remove what they added, but
+#: not the record that DEDAN told them to seek emergency care.
+PROTECTED_EVENT_TYPES = frozenset({HealthEventType.SAFETY_ALERT})
+
+
 def delete_event(user_id: str, event_id: str) -> bool:
     with session_scope() as session:
         event = session.scalar(
@@ -210,8 +219,37 @@ def delete_event(user_id: str, event_id: str) -> bool:
         )
         if event is None:
             return False
+        if event.event_type in PROTECTED_EVENT_TYPES and event.source == "dedan":
+            raise ProtectedEventError("Safety records cannot be deleted.")
         session.delete(event)
         return True
+
+
+def update_appointment_event(
+    user_id: str,
+    appointment_id: str,
+    status: str,
+    occurred_at: Optional[datetime] = None,
+) -> int:
+    """Keep an appointment's timeline entry in step with the appointment.
+
+    A cancelled appointment used to stay SCHEDULED on the timeline (and in the
+    "upcoming" count), and a rescheduled one kept its old time.
+    """
+    marker = json.dumps({"appointment_id": appointment_id})[1:-1]  # '"appointment_id": "<id>"'
+    with session_scope() as session:
+        events = session.scalars(
+            select(HealthEvent).where(
+                HealthEvent.user_id == user_id,
+                HealthEvent.event_type == HealthEventType.APPOINTMENT,
+                HealthEvent.metadata_json.contains(marker),
+            )
+        ).all()
+        for event in events:
+            event.status = status
+            if occurred_at is not None:
+                event.occurred_at = occurred_at
+        return len(events)
 
 
 def summarise_timeline(user_id: str) -> Dict[str, Any]:
