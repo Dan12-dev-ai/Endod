@@ -312,7 +312,7 @@ Returns (and PATCH returns) the `preferences` object only.
 | `voice_preference` | `warm`, `calm`, `clear` |
 | `onboarding_goals` | array (or comma string) of `symptoms`, `hospitals`, `appointments`, `treatment`, `history` |
 | `care_search_radius_km` | integer 1-200 or `null` |
-| `reminder_offsets` | 1-5 seconds-before values (array or comma string), each up to 30 days; stored as e.g. `"86400,3600"` |
+| `reminder_offsets` | 1-5 seconds-before values (array or comma string), each up to 30 days; stored as e.g. `"86400,3600"`. Empty resets to the default `604800,86400,3600` |
 | `email_notifications`, `sms_notifications`, `push_notifications` | boolean (JSON true/false only) |
 | `theme` | `system`, `light`, `dark` |
 | `voice_gender` | `female`, `male`, `neutral` or `null` |
@@ -1167,7 +1167,7 @@ Value mapping the UI needs:
 | "Exact Arrival Time" / "Morning (08:00 - 12:00)" / "Afternoon" / "Evening" | `time_window`: `exact` / `morning` / `afternoon` / `evening` |
 | "in-person" / "telehealth" | `visit_mode`: `in_person` / `telehealth` |
 | Specialty filter (Cardiology, General Medicine, Emergency & Trauma, Pediatrics) | `department`: `cardiology`, `general_medicine`, `emergency`, `pediatrics` |
-| Onboarding age "1–20" ... "81–100" | `age_range`: send `1-20` ... `81-100` as is (normalised to `0-20` ... `81+`) |
+| Onboarding age "1–20" ... "81–100" | `age_range`: send the label as is (hyphen or en dash; normalised to `0-20` ... `81+`) |
 | Onboarding goals (symptoms, hospitals, ...) | `onboarding_goals` ids are identical |
 
 `frontend/app/api/auth/*` (`send-otp`, `resend-otp`, `verify-otp`,

@@ -133,7 +133,7 @@ def create_user(
         # reminders (transactional, not marketing) go by SMS unless they turn
         # them off in settings.
         user.preferences = Preferences(
-            language=locale if locale in SUPPORTED_LANGUAGES else "en",
+            language=_language_from_locale(locale),
             sms_notifications=bool(phone and phone_verified)
         )
         user.health_profile = HealthProfile()
@@ -570,6 +570,13 @@ _PREFERENCE_FIELDS = {
 }
 
 THEMES = ("system", "light", "dark")
+DEFAULT_REMINDER_OFFSETS = "604800,86400,3600"
+
+
+def _language_from_locale(locale: Optional[str]) -> str:
+    """App language from a locale such as "am-ET": its language part, if supported."""
+    lang = str(locale or "").replace("_", "-").split("-")[0].strip().lower()
+    return lang if lang in SUPPORTED_LANGUAGES else "en"
 VOICE_GENDERS = ("female", "male", "neutral")
 #: Reminder offsets are seconds before the appointment: at most 5, up to 30 days.
 MAX_REMINDER_OFFSETS = 5
@@ -577,7 +584,12 @@ MAX_REMINDER_OFFSET_SECONDS = 30 * 86400
 
 
 def _clean_reminder_offsets(raw: Any) -> str:
-    """Positive whole seconds, as a list or comma-separated text, stored as text."""
+    """Positive whole seconds, as a list or comma-separated text, stored as text.
+
+    Empty (None, "", []) means "use the defaults", as it always has.
+    """
+    if raw is None or raw == [] or (isinstance(raw, str) and not raw.strip()):
+        return DEFAULT_REMINDER_OFFSETS
     if isinstance(raw, str):
         parts = [p.strip() for p in raw.split(",") if p.strip()]
     elif isinstance(raw, list):
@@ -715,7 +727,9 @@ def _validate_health_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
             raise IdentityError(f"sex must be one of {list(SEX_VALUES)}.")
         clean["sex"] = sex
     if clean.get("age_range") is not None:
-        clean["age_range"] = _AGE_RANGE_ALIASES.get(str(clean["age_range"]).strip(), clean["age_range"])
+        # The onboarding buttons use en dashes ("21–40").
+        spelled = str(clean["age_range"]).strip().replace("–", "-").replace("—", "-")
+        clean["age_range"] = _AGE_RANGE_ALIASES.get(spelled, spelled)
     if "age_range" in clean and clean["age_range"] is not None and clean["age_range"] not in AGE_RANGES:
         raise IdentityError(f"age_range must be one of {list(AGE_RANGES)}.")
     if "blood_type" in clean and clean["blood_type"] is not None:

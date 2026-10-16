@@ -108,12 +108,27 @@ class TestPreferences:
         assert client.get("/users/me/preferences", headers=auth).json()["reminder_offsets"] in (
             "86400,3600", [86400, 3600])
 
+    @pytest.mark.parametrize("empty", ["", "  ", None, []])
+    def test_empty_offsets_mean_the_defaults(self, client, empty):
+        auth = register(client)
+        assert client.patch("/users/me/preferences", headers=auth,
+                            json={"reminder_offsets": empty}).status_code == 200
+        assert client.get("/users/me/preferences", headers=auth).json()["reminder_offsets"] in (
+            "604800,86400,3600", [604800, 86400, 3600])
+
+    def test_region_locale_sets_its_language(self, client):
+        auth = register(client, locale="am-ET")
+        assert client.get("/users/me/preferences", headers=auth).json()["language"] == "am"
+
     def test_unsupported_locale_does_not_become_the_language(self, client):
         auth = register(client, locale="xx")
         assert client.get("/users/me/preferences", headers=auth).json()["language"] == "en"
 
 
-@pytest.mark.parametrize("given,stored", [("1-20", "0-20"), ("81-100", "81+"), ("21-40", "21-40")])
+@pytest.mark.parametrize("given,stored", [
+    ("1-20", "0-20"), ("81-100", "81+"), ("21-40", "21-40"),
+    ("1–20", "0-20"), ("81–100", "81+"), (" 21–40 ", "21-40"),
+])
 def test_onboarding_age_buckets_are_accepted(client, given, stored):
     auth = register(client)
     client.patch("/users/me/consent", headers=auth, json={"treatment_processing": True})
