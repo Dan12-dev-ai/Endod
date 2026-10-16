@@ -41,7 +41,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +84,8 @@ class Facility:
     emergency: bool = False
     #: 0..24. None means "not known" -- never assumed open.
     open_hours: Optional[str] = None
+    #: Official website, only when confirmed; never guessed.
+    website: Optional[str] = None
     verified: bool = True
     source: str = FACILITY_SOURCE
     notes: str = ""
@@ -104,6 +106,10 @@ DEPARTMENT_MATERNAL = "maternal_health"
 DEPARTMENT_PEDIATRIC = "pediatrics"
 DEPARTMENT_CARDIOLOGY = "cardiology"
 DEPARTMENT_RESPIRATORY = "respiratory"
+DEPARTMENTS = (
+    DEPARTMENT_GENERAL, DEPARTMENT_EMERGENCY, DEPARTMENT_MATERNAL,
+    DEPARTMENT_PEDIATRIC, DEPARTMENT_CARDIOLOGY, DEPARTMENT_RESPIRATORY,
+)
 
 DIRECTORY: Sequence[Facility] = (
     Facility(
@@ -507,6 +513,70 @@ def slots_for(
             "to DEDAN. Call the facility using the number shown, or ask a "
             "clinician to arrange a referral."
         ),
+    }
+
+
+BROWSE_SORTS = ("name", "distance")
+
+
+def browse(
+    country: Optional[str] = None,
+    city: Optional[str] = None,
+    department: Optional[str] = None,
+    emergency_only: bool = False,
+    query: Optional[str] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    sort: str = "name",
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """The directory as a filterable list, for the facility browse screen.
+
+    Unlike `search`, nothing is ranked by clinical fit: this is the patient
+    looking around. Distance is given (and can be sorted on) only when the
+    patient shared coordinates. The directory carries no ratings or wait
+    times, and none are invented.
+    """
+    if sort not in BROWSE_SORTS:
+        raise CareNavigationError(f"sort must be one of {list(BROWSE_SORTS)}.")
+    if department is not None and department not in DEPARTMENTS:
+        raise CareNavigationError(f"department must be one of {list(DEPARTMENTS)}.")
+    location_used = latitude is not None and longitude is not None
+    if sort == "distance" and not location_used:
+        raise CareNavigationError("Sorting by distance needs your location.")
+    needle = (query or "").strip().lower()
+
+    rows = []
+    for facility in DIRECTORY:
+        if country and facility.country != country.upper():
+            continue
+        if city and facility.city.lower() != city.strip().lower():
+            continue
+        if department and department not in facility.departments:
+            continue
+        if emergency_only and not facility.emergency:
+            continue
+        if needle and not any(
+            needle in text.lower() for text in (facility.name, facility.city, facility.address)
+        ):
+            continue
+        payload = facility.to_payload()
+        payload["distance_km"] = (
+            round(haversine_km(latitude, longitude, facility.latitude, facility.longitude), 1)
+            if location_used else None
+        )
+        rows.append(payload)
+
+    if sort == "distance":
+        rows.sort(key=lambda r: (r["distance_km"], r["name"]))
+    else:
+        rows.sort(key=lambda r: r["name"].lower())
+    return {
+        "facilities": rows[: max(1, min(limit, 100))],
+        "total": len(rows),
+        "location_used": location_used,
+        "directory_version": DIRECTORY_VERSION,
+        "departments": list(DEPARTMENTS),
     }
 
 

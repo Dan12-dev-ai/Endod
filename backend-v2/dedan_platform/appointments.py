@@ -24,6 +24,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -67,6 +68,25 @@ class AppointmentError(RuntimeError):
     """Appointment operation failed."""
 
 
+VISIT_MODES = ("in_person", "telehealth")
+#: Arrival windows, as local [start, end) hours in the appointment's timezone.
+TIME_WINDOWS = {"exact": None, "morning": (8, 12), "afternoon": (12, 17), "evening": (17, 21)}
+
+
+def _facility_payload(facility_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not facility_id:
+        return None
+    from dedan_platform.care_navigation import get_facility
+
+    facility = get_facility(facility_id)
+    if facility is None:
+        return {"id": facility_id, "name": None}
+    return {
+        "id": facility.id, "name": facility.name, "address": facility.address,
+        "city": facility.city, "country": facility.country, "phone": facility.phone,
+    }
+
+
 def _to_payload(appointment: Appointment) -> Dict[str, Any]:
     # Normalise on the way out so callers always get an aware timestamp.
     appointment.scheduled_at = ensure_aware(appointment.scheduled_at)
@@ -83,6 +103,12 @@ def _to_payload(appointment: Appointment) -> Dict[str, Any]:
         "status": appointment.status,
         "location": appointment.location,
         "meeting_url": appointment.meeting_url,
+        # Older rows have no mode: a meeting link means a video visit.
+        "visit_mode": appointment.visit_mode or ("telehealth" if appointment.meeting_url else "in_person"),
+        "department": appointment.department,
+        "time_window": appointment.time_window or "exact",
+        "facility": _facility_payload(appointment.facility_id),
+        "provider_name": appointment.provider_name,
         "notes": appointment.notes,
         "timezone": appointment.timezone,
         "created_at": appointment.created_at.isoformat(),
@@ -225,6 +251,68 @@ def _require_future(when: datetime) -> None:
         raise AppointmentError("Appointments must be scheduled in the future.")
 
 
+def _zone(name: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise AppointmentError(
+            f"Unknown timezone {name!r}; use an IANA name such as Africa/Addis_Ababa."
+        ) from exc
+
+
+def _validate_time_window(window: Optional[str], when: datetime, zone: ZoneInfo) -> str:
+    """The window name, after checking the start time falls inside it."""
+    window = (window or "exact").strip().lower()
+    if window not in TIME_WINDOWS:
+        raise AppointmentError(f"time_window must be one of {list(TIME_WINDOWS)}.")
+    hours = TIME_WINDOWS[window]
+    if hours:
+        local = when.astimezone(zone)
+        if not hours[0] <= local.hour < hours[1]:
+            raise AppointmentError(
+                f"A {window} appointment must start between {hours[0]:02d}:00 "
+                f"and {hours[1]:02d}:00 local time."
+            )
+    return window
+
+
+def _short_text(value: Optional[str], field: str, limit: int) -> Optional[str]:
+    if value is None or not value.strip():
+        return None
+    value = value.strip()
+    if len(value) > limit:
+        raise AppointmentError(f"{field} must be at most {limit} characters.")
+    return value
+
+
+def _validate_visit(
+    visit_mode: Optional[str],
+    meeting_url: Optional[str],
+    facility_id: Optional[str],
+    location: Optional[str],
+) -> Dict[str, Any]:
+    """Mode, facility and place, consistent with each other."""
+    meeting_url = _validate_meeting_url(meeting_url)
+    mode = (visit_mode or ("telehealth" if meeting_url else "in_person")).strip().lower()
+    if mode not in VISIT_MODES:
+        raise AppointmentError(f"visit_mode must be one of {list(VISIT_MODES)}.")
+    if mode == "in_person" and meeting_url:
+        raise AppointmentError("meeting_url is only for telehealth visits.")
+    location = _short_text(location, "location", 200)
+    if facility_id:
+        from dedan_platform.care_navigation import get_facility
+
+        facility = get_facility(facility_id)
+        if facility is None:
+            raise AppointmentError("Unknown facility_id.")
+        if mode == "telehealth":
+            raise AppointmentError("A telehealth visit is not at a facility; leave facility_id empty.")
+        if location is None:
+            location = f"{facility.name}, {facility.address}, {facility.city}"[:200]
+    return {"visit_mode": mode, "meeting_url": meeting_url, "facility_id": facility_id or None,
+            "location": location}
+
+
 def _validate_meeting_url(url: Optional[str]) -> Optional[str]:
     """Only https links. A stored `javascript:` URL would run in any page or
     email that renders it as a link."""
@@ -251,6 +339,11 @@ def create_appointment(
     reminder_offsets: Optional[str] = None,
     user_preferences: Optional[str] = None,
     correlation_id: Optional[str] = None,
+    visit_mode: Optional[str] = None,
+    department: Optional[str] = None,
+    time_window: Optional[str] = None,
+    facility_id: Optional[str] = None,
+    provider_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Persist an appointment and publish the scheduling event.
 
@@ -267,7 +360,12 @@ def create_appointment(
     # and quietly shift every reminder for that appointment three hours late.
     scheduled_at = ensure_utc(scheduled_at)
     _require_future(scheduled_at)
-    meeting_url = _validate_meeting_url(meeting_url)
+    zone = _zone(timezone_name)
+    time_window = _validate_time_window(time_window, scheduled_at, zone)
+    visit = _validate_visit(visit_mode, meeting_url, facility_id, location)
+    meeting_url, location = visit["meeting_url"], visit["location"]
+    department = _short_text(department, "department", 120)
+    provider_name = _short_text(provider_name, "provider_name", 120)
 
     duration = max(5, min(int(duration_minutes or 30), 480))
     with session_scope() as session:
@@ -282,6 +380,11 @@ def create_appointment(
             duration_minutes=duration,
             location=location,
             meeting_url=meeting_url,
+            visit_mode=visit["visit_mode"],
+            department=department,
+            time_window=time_window,
+            facility_id=visit["facility_id"],
+            provider_name=provider_name,
             notes=notes,
             timezone=timezone_name,
             reminder_offsets=reminder_offsets,
@@ -413,8 +516,13 @@ def reschedule(
     appointment_id: str,
     new_time: datetime,
     correlation_id: Optional[str] = None,
+    time_window: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Move an appointment to a new time, cancelling its obsolete reminders.
+
+    ``time_window`` replaces the arrival window when given. Otherwise the old
+    window is kept if the new time still falls inside it, and becomes "exact"
+    if it does not.
 
     The cancel is part of this call rather than the caller's job. Rescheduling
     used to cancel in the route and re-arm nowhere, so a rescheduled appointment
@@ -441,6 +549,14 @@ def reschedule(
             session, user_id, new_time, appointment.duration_minutes or 30,
             appointment.provider_id, exclude_id=appointment.id,
         )
+        zone = _zone(appointment.timezone or "UTC")
+        if time_window is not None:
+            appointment.time_window = _validate_time_window(time_window, new_time, zone)
+        else:
+            try:
+                appointment.time_window = _validate_time_window(appointment.time_window, new_time, zone)
+            except AppointmentError:
+                appointment.time_window = "exact"
         _transition(appointment, EventStatus.RESCHEDULED)
         appointment.scheduled_at = new_time
         update_appointment_event(
