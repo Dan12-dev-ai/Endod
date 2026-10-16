@@ -28,11 +28,12 @@ test.describe('Interview — Settings page (simplified)', () => {
     await expect(page.locator('[data-purpose="privacy-preferences"]')).toHaveCount(0);
 
     // Profile fields have expected default values
-    await expect(page.locator('#first-name')).toHaveValue('Daniel');
-    await expect(page.locator('#last-name')).toHaveValue('Everett');
-    await expect(page.locator('#patient-id-field')).toHaveValue('DE482731');
+    // The signed-in test patient from tests/global-setup.ts.
+    await expect(page.locator('#first-name')).toHaveValue('Test');
+    await expect(page.locator('#last-name')).toHaveValue('Patient');
+    await expect(page.locator('#patient-id-field')).toHaveValue(/^DE\d{6}$/);
     await expect(page.locator('#email-address')).toHaveValue('daniel.everett@healthmail.com');
-    await expect(page.locator('#phone-number')).toHaveValue('+1 (617) 555-0198');
+    await expect(page.locator('#phone-number')).toHaveValue('');
 
     // Removed fields should NOT be present
     await expect(page.locator('#preferred-name')).toHaveCount(0);
@@ -116,7 +117,7 @@ test.describe('Interview — Settings page (simplified)', () => {
     // Re-enter Settings -> fresh values
     await page.locator('aside').getByRole('link', { name: 'Setting' }).click();
     await expect(page.locator('[data-purpose="settings-view"]')).toBeVisible();
-    await expect(page.locator('#first-name')).toHaveValue('Daniel');
+    await expect(page.locator('#first-name')).toHaveValue('Test');
     await expect(page.locator('#new-password')).toHaveValue('');
   });
 
@@ -162,7 +163,7 @@ test.describe('Interview — Settings page (simplified)', () => {
     await page.getByRole('button', { name: 'Show Card Preview' }).click();
     const preview = page.locator('[data-purpose="card-preview"]');
     await expect(preview).toBeVisible();
-    await expect(preview).toContainText('Daniel Everett');
+    await expect(preview).toContainText('Test Patient');
 
     // Change allergies
     await page.locator('#allergies').fill('Latex');

@@ -1,44 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { hasUser, verifyUserPassword } from "@/app/lib/user-store";
-import { normalizeEthiopianPhone } from "@/app/lib/phone";
+import {
+  badRequest, callBackend, failure, forbiddenOrigin, isSameOrigin, readJson, setSessionCookie, str,
+} from "@/app/lib/server/backend";
 
+// Password sign-in (backend: POST /auth/login). The identifier can be a
+// verified phone number, an email address or a DEDAN ID.
 export async function POST(request: NextRequest) {
-  let body: { phone?: string; password?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: "Invalid request body." }, { status: 400 });
-  }
+  if (!isSameOrigin(request)) return forbiddenOrigin();
+  const body = await readJson(request);
+  if (!body) return badRequest();
+  const identifier = str(body.identifier ?? body.phone).trim();
+  const password = str(body.password);
+  if (!identifier) return badRequest("Please enter your phone number.");
+  if (!password) return badRequest("Please enter your password.");
 
-  const msisdn = normalizeEthiopianPhone(body.phone ?? "");
-  if (!msisdn) {
-    return NextResponse.json(
-      { ok: false, error: "Please enter a valid phone number." },
-      { status: 400 },
-    );
-  }
+  const result = await callBackend(request, "/auth/login", { method: "POST", body: { identifier, password } });
+  const token = str(result.data.access_token);
+  if (result.status >= 400 || !token) return failure(result, "Unable to sign in. Please try again.");
 
-  const password = body.password ?? "";
-  if (!password) {
-    return NextResponse.json(
-      { ok: false, error: "Please enter your password." },
-      { status: 400 },
-    );
-  }
-
-  if (!hasUser(msisdn)) {
-    return NextResponse.json(
-      { ok: false, error: "No account found for this number. Please sign up first." },
-      { status: 404 },
-    );
-  }
-
-  if (!verifyUserPassword(msisdn, password)) {
-    return NextResponse.json(
-      { ok: false, error: "Incorrect phone number or password." },
-      { status: 401 },
-    );
-  }
-
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  setSessionCookie(response, token, Number(result.data.expires_in));
+  return response;
 }

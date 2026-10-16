@@ -141,8 +141,9 @@ function VerifyOtp() {
         return;
       }
 
-      // Verified — set a password before onboarding.
-      router.push(`/set-password?phone=${encodeURIComponent(phone)}`);
+      // Verified: a new patient sets a password, an existing one resets it.
+      const mode = data.accountExists ? "&mode=reset" : "";
+      router.push(`/set-password?phone=${encodeURIComponent(phone)}${mode}`);
     } catch {
       setFormError("Unable to verify right now. Please check your connection and try again.");
     } finally {
@@ -154,12 +155,17 @@ function VerifyOtp() {
     if (resendCooldown > 0) return;
     setFormError("");
     try {
-      await fetch("/api/auth/resend-otp", {
+      const response = await fetch("/api/auth/resend-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone }),
       });
-      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.ok) {
+        setFormError(data.error ?? "Unable to resend the code right now. Please try again.");
+        return;
+      }
+      setResendCooldown(Number(data.resendAfter) || RESEND_COOLDOWN_SECONDS);
     } catch {
       setFormError("Unable to resend the code right now. Please try again.");
     }

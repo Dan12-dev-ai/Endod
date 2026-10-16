@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Endod Health web app (Next.js)
 
-## Getting Started
+The patient web app. It talks to the DEDAN backend (`../backend-v2`); see
+[`../docs/api.md`](../docs/api.md) for the API.
 
-First, run the development server:
+## Run it
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Start the backend (from the repo root): `make run-backend` (port 8001).
+   Without `SMSETHIOPIA_API_KEY` the backend prints SMS codes to its console.
+2. `cp .env.example .env.local` and adjust `DEDAN_API_URL` if needed.
+3. `npm ci && npm run dev`, then open http://localhost:3000.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## How it talks to the backend
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- The browser never holds a backend token. Sign-in routes in `app/api/auth/*`
+  call the backend and keep the session in an httpOnly cookie
+  (`dedan_session`); the phone verification step uses a short-lived httpOnly
+  cookie too.
+- `app/api/backend/[...path]` forwards the signed-in patient's own calls
+  (`/users/me/...` only) with that cookie. Client code uses `app/lib/api.ts`:
+  `api("users/me/appointments")`.
+- `proxy.ts` sends signed-out visitors from private pages to `/login`.
+- State-changing requests from another site are refused (Origin check, and
+  the cookie is `SameSite=Lax`).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tests
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`npx playwright test` starts the backend (offline AI mode, a throwaway
+SQLite database) and `next dev` on port 3100, signs a test patient in
+(`tests/global-setup.ts`) and runs the browser tests. It uses the repo's
+`.venv`; set `E2E_PYTHON` to use another Python.

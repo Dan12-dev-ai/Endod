@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { readHealthCardData, type HealthCardInfo } from "../health-card/health-card-data";
+import { loadHealthCard, type HealthCardInfo } from "../health-card/health-card-data";
 
 // ---------------------------------------------------------------------------
 // Booking hospital directory data (new design)
@@ -406,21 +406,24 @@ export default function Interview() {
   const [cardEmergencyContact, setCardEmergencyContact] = useState("");
   const [cardEmergencyPhone, setCardEmergencyPhone] = useState("");
 
-  // Digital Health Card data — same source as the /health-card route
-  // (onboarding/session entries written at signup). Falls back to the
-  // profile form values when no onboarding data exists yet.
+  // Digital Health Card data: the signed-in patient's profile, the same
+  // source as the /health-card route.
   const [healthCard, setHealthCard] = useState<HealthCardInfo | null>(null);
-  /* eslint-disable react-hooks/set-state-in-effect -- one-time localStorage initialization on mount */
   useEffect(() => {
-    const hc = readHealthCardData();
-    setHealthCard(hc);
-    if (hc) {
-      setFirstName(hc.firstName || "Daniel");
-      setLastName(hc.lastName || "Everett");
-      setPhone(hc.phone);
-    }
+    let cancelled = false;
+    loadHealthCard()
+      .then((hc) => {
+        if (cancelled) return;
+        setHealthCard(hc);
+        setFirstName(hc.firstName);
+        setLastName(hc.lastName);
+        setPhone(hc.phone === "—" ? "" : hc.phone);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Password strength
   const passwordStrength = (val: string) => {
@@ -1091,7 +1094,7 @@ export default function Interview() {
                       <div>
                         <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5" htmlFor="phone-number">Phone Number</label>
                         <div className="relative">
-                          <input id="phone-number" required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 pr-24 shadow-xs text-slate-900 border" />
+                          <input id="phone-number" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 pr-24 shadow-xs text-slate-900 border" />
                           <span className="absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path clipRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fillRule="evenodd" /></svg>
                             Verified

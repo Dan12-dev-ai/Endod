@@ -1,29 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyOtp } from "@/app/lib/otp-store";
-import { normalizeEthiopianPhone } from "@/app/lib/phone";
+import {
+  badRequest, callBackend, failure, forbiddenOrigin, isSameOrigin, readJson, setVerificationCookie, str,
+} from "@/app/lib/server/backend";
 
+// Checks the SMS code (backend: POST /auth/phone/verify). The single-use
+// verification token is kept in an httpOnly cookie for the set-password step.
 export async function POST(request: NextRequest) {
-  let body: { phone?: string; code?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: "Invalid request body." }, { status: 400 });
-  }
+  if (!isSameOrigin(request)) return forbiddenOrigin();
+  const body = await readJson(request);
+  if (!body) return badRequest();
+  const phone = str(body.phone).trim();
+  const code = str(body.code).replace(/\s/g, "");
+  if (!phone || !code) return badRequest("Phone number and code are required.");
 
-  const msisdn = normalizeEthiopianPhone(body.phone ?? "");
-  const code = (body.code ?? "").replace(/\s/g, "");
+  const result = await callBackend(request, "/auth/phone/verify", { method: "POST", body: { phone, code } });
+  const token = str(result.data.verification_token);
+  if (result.status >= 400 || !token) return failure(result, "That code did not work. Please try again.");
 
-  if (!msisdn || !code) {
-    return NextResponse.json(
-      { ok: false, error: "Phone number and code are required." },
-      { status: 400 },
-    );
-  }
-
-  const result = verifyOtp(msisdn, code);
-  if (!result.ok) {
-    return NextResponse.json({ ok: false, error: result.reason }, { status: 400 });
-  }
-
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true, accountExists: Boolean(result.data.account_exists) });
+  setVerificationCookie(response, token, Number(result.data.expires_in) || 900);
+  return response;
 }

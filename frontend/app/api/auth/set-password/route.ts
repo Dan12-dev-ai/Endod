@@ -1,41 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  MAX_PASSWORD_LENGTH,
-  MIN_PASSWORD_LENGTH,
-  setUserPassword,
-} from "@/app/lib/user-store";
-import { normalizeEthiopianPhone } from "@/app/lib/phone";
+  badRequest, callBackend, clearVerificationCookie, failure, forbiddenOrigin, isSameOrigin, readJson,
+  setSessionCookie, str, VERIFICATION_COOKIE,
+} from "@/app/lib/server/backend";
 
+// Creates the account, or resets its password, after a verified code
+// (backend: POST /auth/phone/complete), and signs the patient in.
 export async function POST(request: NextRequest) {
-  let body: { phone?: string; password?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: "Invalid request body." }, { status: 400 });
-  }
-
-  const msisdn = normalizeEthiopianPhone(body.phone ?? "");
-  if (!msisdn) {
+  if (!isSameOrigin(request)) return forbiddenOrigin();
+  const body = await readJson(request);
+  if (!body) return badRequest();
+  const verificationToken = request.cookies.get(VERIFICATION_COOKIE)?.value;
+  if (!verificationToken) {
     return NextResponse.json(
-      { ok: false, error: "Please enter a valid phone number." },
-      { status: 400 },
+      { ok: false, error: "Your verification has expired. Please request a new code." },
+      { status: 401 },
     );
   }
 
-  const password = body.password ?? "";
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    return NextResponse.json(
-      { ok: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` },
-      { status: 400 },
-    );
-  }
-  if (password.length > MAX_PASSWORD_LENGTH) {
-    return NextResponse.json(
-      { ok: false, error: `Password must be at most ${MAX_PASSWORD_LENGTH} characters.` },
-      { status: 400 },
-    );
+  const payload: Record<string, string> = {
+    verification_token: verificationToken,
+    password: str(body.password),
+    password_confirmation: str(body.passwordConfirmation ?? body.password),
+  };
+  for (const [from, to] of [["firstName", "first_name"], ["lastName", "last_name"]] as const) {
+    const value = str(body[from]).trim();
+    if (value) payload[to] = value;
   }
 
-  setUserPassword(msisdn, password);
-  return NextResponse.json({ ok: true });
+  const result = await callBackend(request, "/auth/phone/complete", { method: "POST", body: payload });
+  const token = str(result.data.access_token);
+  if (result.status >= 400 || !token) {
+    const response = failure(result, "Unable to save your password. Please try again.");
+    // A used or expired verification cannot be retried; a weak password can.
+    if (result.status === 401) clearVerificationCookie(response);
+    return response;
+  }
+
+  const response = NextResponse.json({ ok: true, created: Boolean(result.data.created) });
+  setSessionCookie(response, token, Number(result.data.expires_in));
+  clearVerificationCookie(response);
+  return response;
 }

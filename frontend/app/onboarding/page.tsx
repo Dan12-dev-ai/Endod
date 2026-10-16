@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { api, ApiError } from "@/app/lib/api";
 
 const LOOKING_FOR_OPTIONS = [
   { id: "symptoms", label: "Understand my symptoms", hint: "Talk to Endod AI about how you're feeling" },
@@ -12,6 +13,10 @@ const LOOKING_FOR_OPTIONS = [
 ];
 
 const SEX_OPTIONS = ["Male", "Female", "Other", "Prefer not to say"];
+// The values the backend stores for each option.
+const SEX_VALUES: Record<string, string> = {
+  Male: "male", Female: "female", Other: "other", "Prefer not to say": "prefer_not_to_say",
+};
 
 const STEP_TITLES = [
   "What's your name?",
@@ -51,6 +56,10 @@ export default function OnboardingPage() {
 
   // Step 4: age (clinical-style ranges) - UPDATED
   const [ageRange, setAgeRange] = useState<string>('');
+  // Explicit, opt-in consent to store health details (sex and age).
+  const [healthConsent, setHealthConsent] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const toggleLookingFor = (id: string) => {
     setFormError("");
@@ -64,7 +73,7 @@ export default function OnboardingPage() {
     if (next.length > 0) {
       advanceTimer.current = setTimeout(() => {
         advanceTimer.current = null;
-        goNext();
+        goNextRef.current();
       }, 650);
     }
   };
@@ -122,13 +131,20 @@ export default function OnboardingPage() {
     setStep((current) => Math.min(current + 1, STEP_TITLES.length - 1));
   };
 
+  // Timers fire after later renders, so they call the newest goNext (which
+  // sees the answer just given), not the one from the render that set them.
+  const goNextRef = useRef(goNext);
+  useEffect(() => {
+    goNextRef.current = goNext;
+  });
+
   // Advance after a short beat so the selection is visibly applied first.
   const autoAdvance = (delay = 550) => {
     clearAdvanceTimer();
     clearFinishTimer();
     advanceTimer.current = setTimeout(() => {
       advanceTimer.current = null;
-      goNext();
+      goNextRef.current();
     }, delay);
   };
 
@@ -141,43 +157,47 @@ export default function OnboardingPage() {
 
   // Keep the newest form values in a ref so timer callbacks (which capture an
   // older render's closure) always save the latest answers, not stale ones.
-  const formRef = useRef({ firstName, middleName, lastName, lookingFor, sex, age: ageRange });
+  const formRef = useRef({ firstName, middleName, lastName, lookingFor, sex, age: ageRange, healthConsent });
   useEffect(() => {
-    formRef.current = { firstName, middleName, lastName, lookingFor, sex, age: ageRange };
-  }, [firstName, middleName, lastName, lookingFor, sex, ageRange]);
+    formRef.current = { firstName, middleName, lastName, lookingFor, sex, age: ageRange, healthConsent };
+  }, [firstName, middleName, lastName, lookingFor, sex, ageRange, healthConsent]);
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     const current = formRef.current;
     if (!current.sex || !current.age) return; // final step not complete yet
+    if (savingRef.current) return;
     clearAdvanceTimer();
     clearFinishTimer();
+    savingRef.current = true;
+    setIsSaving(true);
+    setFormError("");
     try {
-      localStorage.setItem(
-        "dedan_onboarding",
-        JSON.stringify({
-          firstName: current.firstName.trim(),
-          middleName: current.middleName.trim(),
-          lastName: current.lastName.trim(),
-          lookingFor: current.lookingFor,
-          sex: current.sex,
-          age: current.age,
-          completedAt: new Date().toISOString(),
-        }),
-      );
-    } catch {
-      // Storage unavailable (private mode etc.) — continue anyway.
+      await api("users/me", {
+        method: "PATCH",
+        body: {
+          first_name: current.firstName.trim(),
+          middle_name: current.middleName.trim() || null,
+          last_name: current.lastName.trim(),
+        },
+      });
+      if (current.lookingFor.length) {
+        await api("users/me/preferences", { method: "PATCH", body: { onboarding_goals: current.lookingFor } });
+      }
+      // Sex and age are health information: stored only with consent.
+      if (current.healthConsent) {
+        await api("users/me/consent", { method: "PATCH", body: { treatment_processing: true } });
+        await api("users/me/health-profile", {
+          method: "PATCH",
+          body: { sex: SEX_VALUES[current.sex] ?? "other", age_range: current.age },
+        });
+      }
+      router.push("/health-card");
+    } catch (error) {
+      setFormError(error instanceof ApiError ? error.message : "Unable to save your answers. Please try again.");
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
-    router.push("/health-card");
-  };
-
-  // On the final step, a completed selection auto-saves and moves on.
-  const autoFinish = (delay = 550) => {
-    clearAdvanceTimer();
-    clearFinishTimer();
-    finishTimer.current = setTimeout(() => {
-      finishTimer.current = null;
-      handleFinish();
-    }, delay);
   };
 
   // Name step: advance once both required fields have content (on blur/Enter).
@@ -422,6 +442,18 @@ export default function OnboardingPage() {
                 <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-brand-heading tracking-tight mb-4">
                   {STEP_TITLES[3]}
                 </h2>
+                <label className="flex items-start gap-2.5 mb-4 text-xs text-brand-muted leading-relaxed cursor-pointer" data-purpose="health-consent">
+                  <input
+                    checked={healthConsent}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-[#1E5852]"
+                    onChange={(e) => setHealthConsent(e.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    Save my sex and age to my Endod health profile, so advice and safety checks fit me.
+                    Without this, they are not stored.
+                  </span>
+                </label>
                 <div className="flex flex-col gap-2" role="radiogroup" aria-label="Age range">
                   {AGE_RANGES.map((range) => {
                     const selected = ageRange === range.label;
@@ -441,9 +473,10 @@ export default function OnboardingPage() {
                           value={range.label}
                           checked={selected}
                           onChange={(e) => {
+                            // No auto-finish here: the consent choice above
+                            // must be made before anything is saved.
                             setAgeRange(e.target.value);
                             setFormError("");
-                            autoFinish();
                           }}
                           className="sr-only"
                           aria-label={range.label}
@@ -458,6 +491,10 @@ export default function OnboardingPage() {
             </div>
           </div>
 
+          {isSaving && (
+            <p className="mt-4 text-xs text-brand-muted" role="status">Saving your answers...</p>
+          )}
+
           {/* Form Error Message */}
           {formError && (
             <p
@@ -468,8 +505,8 @@ export default function OnboardingPage() {
             </p>
           )}
 
-          {/* Navigation: Back only — steps advance automatically once completed */}
-          <div className="mt-7 flex items-center" data-purpose="step-navigation">
+          {/* Navigation: steps advance automatically; the last one has an explicit Finish */}
+          <div className="mt-7 flex items-center justify-between" data-purpose="step-navigation">
             <button
               className={`px-5 py-3 rounded-full text-sm font-medium text-brand-muted hover:text-brand-heading transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer ${step === 0 ? "invisible" : ""}`}
               disabled={step === 0}
@@ -478,6 +515,17 @@ export default function OnboardingPage() {
             >
               Back
             </button>
+            {step === STEP_TITLES.length - 1 && (
+              <button
+                className="px-6 py-3 rounded-full text-sm font-semibold bg-[#1E5852] text-white hover:bg-[#174640] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                data-purpose="finish-onboarding"
+                disabled={!ageRange || isSaving}
+                onClick={() => void handleFinish()}
+                type="button"
+              >
+                {isSaving ? "Saving..." : "Finish"}
+              </button>
+            )}
           </div>
         </div>
 
