@@ -93,7 +93,8 @@ def register(body: RegisterRequest) -> Dict[str, Any]:
     try:
         email = cred.validate_email(body.email)
         cred.validate_password(body.password, body.password_confirmation)
-    except cred.PasswordPolicyError as exc:
+        phone = identity.normalise_phone(body.phone)
+    except (cred.PasswordPolicyError, identity.IdentityError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Names are stored as a single display name; the platform's Profile has one
@@ -104,7 +105,7 @@ def register(body: RegisterRequest) -> Dict[str, Any]:
         created = identity.create_user(
             display_name=display_name,
             email=email,
-            phone=(body.phone or "").strip() or None,
+            phone=phone,
             locale=body.locale or "en",
             timezone_name=body.timezone or "UTC",
             country_code=(body.country_code or "ET").upper(),

@@ -154,7 +154,8 @@ def _validate_meeting_url(url: Optional[str]) -> Optional[str]:
     if url is None or not url.strip():
         return None
     url = url.strip()
-    if not url.lower().startswith("https://") or len(url) > 2048:
+    # 500 is the column size; longer would pass here and fail at the database.
+    if not url.lower().startswith("https://") or len(url) > 500:
         raise AppointmentError("meeting_url must be an https:// link.")
     return url
 

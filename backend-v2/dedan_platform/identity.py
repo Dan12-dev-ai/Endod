@@ -121,7 +121,7 @@ def create_user(
         user.consent = Consent()
 
         _record_event(session, user.id, "user_created", payload={"locale": locale})
-        session.flush()
+        _flush_checking_email(session)
         return {
             "internal_user_id": user.id,
             "dedan_user_id": user.dedan_user_id,
@@ -335,7 +335,18 @@ _PROFILE_FIELDS = {
 }
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s.]+(\.[^@\s.]+)+$")
-_PHONE_RE = re.compile(r"^\+?[0-9 ()-]{6,20}$")
+#: Shared with registration so a number accepted at signup is accepted on
+#: edit. 32 is the column size.
+_PHONE_RE = re.compile(r"^\+?[0-9 ().-]{6,32}$")
+
+
+def normalise_phone(value: Any) -> Optional[str]:
+    """``None`` for an empty value; otherwise a validated phone string."""
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if not isinstance(value, str) or not _PHONE_RE.match(value.strip()):
+        raise IdentityError("Enter a valid phone number.")
+    return value.strip()
 
 
 def _normalise_email(value: Any) -> str:
@@ -352,6 +363,16 @@ def _email_taken(session: Session, email: str, exclude_user_id: Optional[str] = 
     return session.scalar(query.limit(1)) is not None
 
 
+def _flush_checking_email(session: Session) -> None:
+    """Flush, turning a lost race on the unique email index into `EmailInUse`."""
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        if "email" in str(exc).lower():
+            raise EmailInUse("An account with this email address already exists.") from exc
+        raise
+
+
 def _validate_profile_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
     """Type- and range-check a profile patch.
 
@@ -363,7 +384,9 @@ def _validate_profile_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
 
     clean: Dict[str, Any] = {}
     for field, value in changes.items():
-        if value is None and field in {"display_name", "email", "phone"}:
+        if field in {"display_name", "email", "phone"} and (
+            value is None or (isinstance(value, str) and not value.strip())
+        ):
             clean[field] = None
             continue
         if not isinstance(value, str):
@@ -375,8 +398,7 @@ def _validate_profile_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
         elif field == "email":
             value = _normalise_email(value)
         elif field == "phone":
-            if not _PHONE_RE.match(value):
-                raise IdentityError("Enter a valid phone number.")
+            value = normalise_phone(value)
         elif field == "locale":
             if not re.fullmatch(r"[a-z]{2}(?:-[A-Za-z]{2})?", value):
                 raise IdentityError("Locale must look like 'en' or 'am-ET'.")
@@ -411,7 +433,12 @@ def update_profile(
             raise UserNotFound("Account not found.")
         # Another account's email would make sign-in by email ambiguous and
         # route that account's reminder emails to this one.
-        if changes.get("email") and _email_taken(session, changes["email"], user.id):
+        current_email = (user.profile.email or "").lower()
+        if (
+            changes.get("email")
+            and changes["email"] != current_email
+            and _email_taken(session, changes["email"], user.id)
+        ):
             raise EmailInUse("Another account already uses this email address.")
         for field, value in changes.items():
             setattr(user.profile, field, value)
@@ -421,7 +448,7 @@ def update_profile(
             # the personal data it exists to protect.
             {"fields": sorted(changes)},
         )
-        session.flush()
+        _flush_checking_email(session)
         return _profile_payload(user)
 
 

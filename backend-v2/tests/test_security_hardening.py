@@ -238,3 +238,111 @@ class TestSmtp:
         assert isinstance(seen["context"], ssl.SSLContext)
         assert seen["context"].verify_mode == ssl.CERT_REQUIRED
         assert seen["context"].check_hostname is True
+
+
+class TestReviewFindings:
+    """Automated review (Qodo) of PR #3."""
+
+    def test_empty_phone_from_settings_form_is_accepted(self, platform):
+        token = register(platform).json()["access_token"]
+        resp = platform.patch(
+            "/users/me", headers=auth(token), json={"display_name": "Abebe K", "phone": ""}
+        )
+        assert resp.status_code == 200, resp.text
+
+    def test_phone_accepted_at_signup_is_accepted_on_edit(self, platform):
+        phone = "+251 911 234 567 000 111 2222"  # 29 chars: over the old 20 limit
+        resp = platform.post("/auth/register", json={
+            "first_name": "A", "last_name": "B", "email": "p@example.com",
+            "password": PASSWORD, "password_confirmation": PASSWORD, "phone": phone,
+        })
+        assert resp.status_code == 201, resp.text
+        token = resp.json()["access_token"]
+        assert platform.patch("/users/me", headers=auth(token), json={"phone": phone}).status_code == 200
+
+    def test_invalid_phone_is_rejected_at_signup(self, platform):
+        resp = platform.post("/auth/register", json={
+            "first_name": "A", "last_name": "B", "email": "q@example.com",
+            "password": PASSWORD, "password_confirmation": PASSWORD, "phone": "call me maybe",
+        })
+        assert resp.status_code == 400
+
+    def test_dedan_id_and_email_share_one_guessing_budget(self, platform):
+        dedan_id = register(platform).json()["dedan_user_id"]
+        login = TestLoginThrottling()._login
+        for i in range(8):
+            name = dedan_id if i % 2 else "abebe@example.com"
+            assert login(platform, name, "wrong", "10.9.9.9").status_code == 401
+        assert login(platform, "abebe@example.com", "wrong", "10.9.9.9").status_code == 429
+        assert login(platform, dedan_id, "wrong", "10.9.9.9").status_code == 429
+
+    def test_account_wide_limit_is_a_rolling_window(self, platform, monkeypatch):
+        from dedan_platform import credentials
+
+        dedan_id = register(platform).json()["dedan_user_id"]
+        login = TestLoginThrottling()._login
+        for client in range(7):  # 7 clients x 8 = 56 > 50 account-wide
+            for _ in range(8):
+                login(platform, dedan_id, "wrong", f"10.2.0.{client}")
+        assert login(platform, dedan_id, PASSWORD, "10.3.3.3").status_code == 429
+
+        real_time = credentials.time.time
+        monkeypatch.setattr(credentials.time, "time", lambda: real_time() + 16 * 60)
+        assert login(platform, dedan_id, PASSWORD, "10.3.3.3").status_code == 200
+
+    def test_meeting_url_longer_than_the_column_is_400(self, platform):
+        token = register(platform).json()["access_token"]
+        when = datetime.now(timezone.utc) + timedelta(days=3)
+        resp = TestAppointments()._book(
+            platform, token, when, meeting_url="https://meet.example.com/" + "a" * 600
+        )
+        assert resp.status_code == 400
+
+    def test_database_rejects_duplicate_emails(self, platform):
+        import sqlalchemy
+
+        from dedan_platform.db import get_engine
+
+        register(platform, "one@example.com")
+        register(platform, "two@example.com")
+        with pytest.raises(sqlalchemy.exc.IntegrityError):
+            with get_engine().begin() as conn:
+                conn.execute(sqlalchemy.text(
+                    "UPDATE profiles SET email = 'ONE@example.com' WHERE email = 'two@example.com'"
+                ))
+
+    def test_legacy_shared_email_can_still_edit_profile(self, platform):
+        import sqlalchemy
+
+        from dedan_platform.db import get_engine
+        from dedan_platform.migrations import UNIQUE_EMAIL_INDEX
+
+        token = register(platform, "shared@example.com").json()["access_token"]
+        register(platform, "other@example.com")
+        # Simulate a database from before emails were unique.
+        with get_engine().begin() as conn:
+            conn.execute(sqlalchemy.text(f"DROP INDEX {UNIQUE_EMAIL_INDEX}"))
+            conn.execute(sqlalchemy.text(
+                "UPDATE profiles SET email = 'shared@example.com' WHERE email = 'other@example.com'"
+            ))
+        resp = platform.patch(
+            "/users/me", headers=auth(token),
+            json={"email": "shared@example.com", "display_name": "New Name"},
+        )
+        assert resp.status_code == 200, resp.text
+
+    def test_index_is_skipped_while_duplicates_exist(self, platform):
+        import sqlalchemy
+
+        from dedan_platform.db import get_engine
+        from dedan_platform.migrations import UNIQUE_EMAIL_INDEX, ensure_unique_email_index
+
+        register(platform, "a1@example.com")
+        register(platform, "a2@example.com")
+        engine = get_engine()
+        with engine.begin() as conn:
+            conn.execute(sqlalchemy.text(f"DROP INDEX {UNIQUE_EMAIL_INDEX}"))
+            conn.execute(sqlalchemy.text(
+                "UPDATE profiles SET email = 'a1@example.com' WHERE email = 'a2@example.com'"
+            ))
+        assert ensure_unique_email_index(engine) is False  # warns, does not crash startup
