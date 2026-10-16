@@ -63,6 +63,28 @@ test.describe('Interview — Appointment page', () => {
     expect(new Date((await moved.json()).scheduled_at).toISOString()).toBe(slot.iso);
   });
 
+  test('rescheduling keeps the arrival window and shows its rule', async ({ page }) => {
+    const appointment = await createAppointment(page.request, {
+      scheduled_at: futureSlot(11, 9, 30).iso,
+      provider_name: unique('Window'),
+      time_window: 'morning',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    await openSection(page, 'Appointment', 'appointment-view');
+    await page.locator(`[data-purpose="appointment-card-${appointment.appointment_id}"]`).getByRole('button', { name: 'Reschedule' }).click();
+    await expect(page.locator('#appointment-window')).toHaveValue('morning');
+
+    const slot = futureSlot(12, 15, 0);
+    await page.locator('#appointment-date').fill(slot.date);
+    await page.locator('#appointment-time').fill(slot.time);
+    await page.getByRole('button', { name: 'Confirm Reschedule' }).click();
+    await expect(page.locator('[data-purpose="appointment-error"]')).toContainText('morning appointment must start between');
+
+    await page.locator('#appointment-window').selectOption('afternoon');
+    await page.getByRole('button', { name: 'Confirm Reschedule' }).click();
+    await expect(page.locator('[data-purpose="appointment-modal-success"]')).toBeVisible();
+  });
+
   test('cancels an appointment after confirmation', async ({ page }) => {
     const doctor = unique('Cancel');
     const appointment = await createAppointment(page.request, { scheduled_at: futureSlot(7).iso, provider_name: doctor });

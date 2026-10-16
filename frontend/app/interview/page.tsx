@@ -402,6 +402,8 @@ export default function Interview() {
                   href="#"
                   onClick={(e) => {
                     e.preventDefault();
+                    // Sidebar navigation never carries a notification highlight.
+                    setHighlightTarget(null);
                     setActiveNav(item.id);
                   }}
                   className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-sm font-medium cursor-pointer"

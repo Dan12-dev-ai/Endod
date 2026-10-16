@@ -76,14 +76,12 @@ export function localDateTimeToIso(date: string, time: string): string | null {
   return Number.isNaN(value.getTime()) ? null : value.toISOString();
 }
 
-export function formatWhen(iso: string, timezone?: string): string {
-  const date = new Date(iso);
-  const options: Intl.DateTimeFormatOptions = { dateStyle: "medium", timeStyle: "short" };
-  try {
-    return date.toLocaleString(undefined, { ...options, timeZone: timezone || undefined });
-  } catch {
-    return date.toLocaleString(undefined, options);
-  }
+/**
+ * A date and time in the browser's timezone: the same zone the booking and
+ * reschedule forms use, so what is shown is what gets edited.
+ */
+export function formatWhen(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
 export function initials(text: string): string {

@@ -21,8 +21,9 @@ type Props = {
 
 type Coords = { latitude: number; longitude: number };
 
-function todayLocal(): string {
+function todayLocal(offsetDays = 0): string {
   const now = new Date();
+  now.setDate(now.getDate() + offsetDays);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
@@ -38,7 +39,8 @@ export default function BookingView({ patientId, onToast }: Props) {
 
   const [selected, setSelected] = useState<Facility | null>(null);
   const [booked, setBooked] = useState<Appointment | null>(null);
-  const [bookingDate, setBookingDate] = useState(todayLocal);
+  // Tomorrow: a default of "today 10:30" is often already past.
+  const [bookingDate, setBookingDate] = useState(() => todayLocal(1));
   const [bookingTime, setBookingTime] = useState("10:30");
   const [timeWindow, setTimeWindow] = useState("exact");
   const [bookingDepartment, setBookingDepartment] = useState("");
@@ -55,8 +57,9 @@ export default function BookingView({ patientId, onToast }: Props) {
           q: searchQuery.trim() || undefined,
           department: department || undefined,
           sort,
-          latitude: coords?.latitude,
-          longitude: coords?.longitude,
+          // Coordinates only for a distance sort, never with other requests.
+          latitude: sort === "distance" ? coords?.latitude : undefined,
+          longitude: sort === "distance" ? coords?.longitude : undefined,
         },
       })
         .then((list) => {
@@ -367,7 +370,7 @@ export default function BookingView({ patientId, onToast }: Props) {
               </div>
               <div className="flex justify-between gap-3">
                 <span className="text-slate-400">Visit Time:</span>
-                <span className="font-bold text-emerald-600 text-right">{formatWhen(booked.scheduled_at, booked.timezone)}</span>
+                <span className="font-bold text-emerald-600 text-right">{formatWhen(booked.scheduled_at)}</span>
               </div>
               <div className="flex justify-between gap-3">
                 <span className="text-slate-400">Booking Reference:</span>

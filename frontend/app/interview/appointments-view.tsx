@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import {
   ACTIVE_STATUSES,
@@ -12,6 +12,7 @@ import {
   formatWhen,
   initials,
   localDateTimeToIso,
+  TIME_WINDOWS,
 } from "./data";
 
 type Props = {
@@ -25,11 +26,11 @@ type ModalState = { mode: "book" } | { mode: "reschedule"; appointment: Appointm
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
+/** An active visit stays "upcoming" until it ends, so one in progress can still be joined. */
 function tabOf(appointment: Appointment, now: number): Tab {
   if (appointment.status === "CANCELLED") return "cancelled";
-  if (ACTIVE_STATUSES.includes(appointment.status) && new Date(appointment.scheduled_at).getTime() >= now) {
-    return "upcoming";
-  }
+  const ends = new Date(appointment.scheduled_at).getTime() + (appointment.duration_minutes || 30) * 60_000;
+  if (ACTIVE_STATUSES.includes(appointment.status) && ends >= now) return "upcoming";
   return "past";
 }
 
@@ -54,7 +55,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
   const [sortOrder, setSortOrder] = useState<"earliest" | "latest" | "name">("earliest");
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [now] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const [month, setMonth] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
@@ -71,6 +72,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
   const [formType, setFormType] = useState<"in-person" | "telehealth">("in-person");
   const [formMeetingUrl, setFormMeetingUrl] = useState("");
   const [formNotes, setFormNotes] = useState("");
+  const [formWindow, setFormWindow] = useState<Appointment["time_window"]>("exact");
   const [facilities, setFacilities] = useState<FacilityList["facilities"]>([]);
 
   const load = useCallback(async () => {
@@ -87,11 +89,22 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
     void load();
   }, [load]);
 
-  // A notification link: show the tab that holds the highlighted card.
+  // Keep "upcoming" and "past" honest on a page left open.
   useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // A notification link: show the tab that holds the highlighted card, once
+  // per link, so later reloads (after a cancel or reschedule) keep the tab.
+  const followedTarget = useRef<string | null>(null);
+  useEffect(() => {
+    if (!highlightTarget || followedTarget.current === highlightTarget) return;
     const target = (appointments ?? []).find((a) => `appointment-card-${a.appointment_id}` === highlightTarget);
+    if (!target) return;
+    followedTarget.current = highlightTarget;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- follows the linked appointment
-    if (target) setTab(tabOf(target, now));
+    setTab(tabOf(target, now));
   }, [appointments, highlightTarget, now]);
 
   const counts = useMemo(() => {
@@ -145,6 +158,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
     const at = new Date(appointment.scheduled_at);
     setFormDate(localDateInput(at));
     setFormTime(`${pad(at.getHours())}:${pad(at.getMinutes())}`);
+    setFormWindow(appointment.time_window);
     setModal({ mode: "reschedule", appointment });
     setSuccess("");
     setFormError("");
@@ -169,7 +183,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
       if (modal.mode === "reschedule") {
         await api(`users/me/appointments/${modal.appointment.appointment_id}/reschedule`, {
           method: "POST",
-          body: { scheduled_at: scheduledAt },
+          body: { scheduled_at: scheduledAt, time_window: formWindow },
         });
         setSuccess("Appointment moved. Reminders were updated for the new time.");
       } else {
@@ -238,7 +252,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
             <h4 className="text-sm font-bold text-slate-900">{appointmentTitle(a)}</h4>
             <p className="text-xs text-slate-500 mt-0.5">{appointmentPlace(a)}</p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-xs text-slate-500">
-              <span>{formatWhen(a.scheduled_at, a.timezone)}</span>
+              <span>{formatWhen(a.scheduled_at)}</span>
               <span>{telehealth ? "Virtual" : "In person"}</span>
               {a.department && <span>{a.department}</span>}
               {a.time_window !== "exact" && <span>Arrive in the {a.time_window}</span>}
@@ -317,7 +331,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
               </div>
               <div>
                 <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Next Appointment</p>
-                <h4 className="text-base font-bold text-slate-900 mt-0.5">{nextVisit ? formatWhen(nextVisit.scheduled_at, nextVisit.timezone) : "None scheduled"}</h4>
+                <h4 className="text-base font-bold text-slate-900 mt-0.5">{nextVisit ? formatWhen(nextVisit.scheduled_at) : "None scheduled"}</h4>
                 {nextVisit && <span className="text-[11px] text-emerald-600 font-medium">{appointmentTitle(nextVisit)}</span>}
               </div>
             </div>
@@ -329,7 +343,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
               </div>
               <div>
                 <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Next Video Visit</p>
-                <h4 className="text-base font-bold text-slate-900 mt-0.5">{nextVideo ? formatWhen(nextVideo.scheduled_at, nextVideo.timezone) : "None scheduled"}</h4>
+                <h4 className="text-base font-bold text-slate-900 mt-0.5">{nextVideo ? formatWhen(nextVideo.scheduled_at) : "None scheduled"}</h4>
                 {nextVideo && <span className="text-[11px] text-teal-600 font-medium">{appointmentTitle(nextVideo)}</span>}
               </div>
             </div>
@@ -499,6 +513,15 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                     <input id="appointment-time" type="time" required value={formTime} onChange={(e) => setFormTime(e.target.value)} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium" />
                   </div>
                 </div>
+
+                {modal.mode === "reschedule" && modal.appointment.visit_mode === "in_person" && (
+                  <div>
+                    <label htmlFor="appointment-window" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Arrival Window</label>
+                    <select id="appointment-window" value={formWindow} onChange={(e) => setFormWindow(e.target.value as Appointment["time_window"])} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium">
+                      {TIME_WINDOWS.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
+                    </select>
+                  </div>
+                )}
 
                 {modal.mode === "book" && (
                   <div>

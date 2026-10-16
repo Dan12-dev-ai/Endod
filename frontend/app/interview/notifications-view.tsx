@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 
 type Category = "appointments" | "records" | "messages" | "security";
@@ -82,22 +82,31 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
   const [loadError, setLoadError] = useState("");
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // Responses for a filter the patient has since left are dropped.
+  const generation = useRef(0);
+
   const load = useCallback(async (cursor?: string) => {
+    const mine = generation.current;
     try {
       const page = await api<InboxPage>("users/me/inbox", {
         query: { category: filter === "all" ? undefined : filter, cursor, limit: 30 },
       });
+      if (mine !== generation.current) return;
       setItems((previous) => (cursor && previous ? [...previous, ...page.items] : page.items));
       setNextCursor(page.next_cursor);
       setUnread({ total: page.unread_count, byCategory: page.unread_by_category });
       setLoadError("");
     } catch (error) {
+      if (mine !== generation.current) return;
       setLoadError(error instanceof ApiError ? error.message : "Unable to load notifications.");
     }
   }, [filter]);
 
   useEffect(() => {
+    generation.current += 1;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- (re)load when the filter changes
+    setItems(null);
+    setNextCursor(null);
     void load();
   }, [load]);
 
@@ -115,7 +124,8 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
       total: Math.max(0, u.total - 1),
       byCategory: { ...u.byCategory, [item.category]: Math.max(0, (u.byCategory[item.category] ?? 1) - 1) },
     }));
-    api(`users/me/inbox/${item.id}/read`, { method: "POST" }).catch(() => undefined);
+    // If the server did not record it, reload so the counts are true again.
+    api(`users/me/inbox/${item.id}/read`, { method: "POST" }).catch(() => void load());
   };
 
   const open = (item: InboxItem) => {
@@ -129,7 +139,12 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
     try {
       await api(`users/me/inbox/${item.id}`, { method: "DELETE" });
       setItems((list) => list?.filter((n) => n.id !== item.id) ?? null);
-      if (!item.read) setUnread((u) => ({ ...u, total: Math.max(0, u.total - 1) }));
+      if (!item.read) {
+        setUnread((u) => ({
+          total: Math.max(0, u.total - 1),
+          byCategory: { ...u.byCategory, [item.category]: Math.max(0, (u.byCategory[item.category] ?? 1) - 1) },
+        }));
+      }
     } catch (error) {
       onToast("Could not dismiss", error instanceof ApiError ? error.message : "Please try again.");
     }
@@ -212,6 +227,14 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
                     data-purpose={`notif-${n.id}`}
                     data-kind={n.kind}
                     onClick={() => open(n)}
+                    role={to ? "link" : undefined}
+                    tabIndex={to ? 0 : undefined}
+                    onKeyDown={(e) => {
+                      if (to && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        open(n);
+                      }
+                    }}
                     className={`bg-white rounded-xl border p-4 sm:p-5 card-shadow transition relative ${to ? "cursor-pointer hover:border-emerald-300 hover:shadow-md" : "hover:border-slate-300"} ${n.read ? "border-slate-200/90" : "border-slate-300"}`}
                   >
                     <div className="flex items-start space-x-3 sm:space-x-4">
