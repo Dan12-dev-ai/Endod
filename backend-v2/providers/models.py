@@ -4,6 +4,7 @@ Provider-agnostic request/response models for multimodal AI.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -188,6 +189,9 @@ class AnalysisResponse(BaseModel):
     image_assessment: Optional[ImageAssessment] = None
     urgency: str = "routine"  # emergency | urgent | routine | self_care
     recommended_next_step: str = ""
+    #: Differential for the patient's description (text, voice or images).
+    #: Image-specific ones also live on `image_assessment`.
+    possible_explanations: List[PossibleExplanation] = field(default_factory=list)
     
     # Evidence-based information
     medical_information: List[MedicalInformation] = field(default_factory=list)
@@ -294,6 +298,30 @@ class ProviderTimeoutError(ProviderError):
 # =============================================================================
 # Abstract Base Provider
 # =============================================================================
+
+_items_logger = logging.getLogger("providers.models")
+
+
+def parse_items(model, items: Any) -> List[Any]:
+    """Validate each item of a model-provided list, skipping invalid ones.
+
+    A single malformed entry (a missing field, a wrong type) used to raise and
+    discard the provider's entire answer.
+    """
+    parsed = []
+    for index, item in enumerate(items if isinstance(items, list) else []):
+        if not isinstance(item, dict):
+            _items_logger.warning("provider_item_discarded model=%s index=%d reason=not_an_object",
+                                  model.__name__, index)
+            continue
+        try:
+            parsed.append(model.model_validate(item))
+        except Exception as exc:  # noqa: BLE001 - pydantic.ValidationError and friends
+            fields = sorted({str(err.get("loc", ("?",))[0]) for err in getattr(exc, "errors", lambda: [])()})
+            _items_logger.warning("provider_item_discarded model=%s index=%d fields=%s",
+                                  model.__name__, index, ",".join(fields) or type(exc).__name__)
+    return parsed
+
 
 from abc import ABC, abstractmethod
 
