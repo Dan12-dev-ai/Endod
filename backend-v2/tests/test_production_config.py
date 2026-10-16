@@ -52,3 +52,22 @@ def test_postgres_engine_can_be_built(monkeypatch):
         assert engine.dialect.driver == "psycopg"
     finally:
         db.reset_engine()
+
+
+def test_production_refuses_a_sqlite_url(monkeypatch):
+    from dedan_platform import db
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("DEDAN_DATABASE_URL", "sqlite:///./dedan_platform.db")
+    monkeypatch.delenv("DEDAN_ALLOW_SQLITE_IN_PRODUCTION", raising=False)
+    with pytest.raises(db.DatabaseNotConfiguredError):
+        db.database_url()
+
+
+def test_single_node_demo_can_opt_in_to_sqlite(monkeypatch):
+    from dedan_platform import db
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("DEDAN_DATABASE_URL", "sqlite:////data/dedan.db")
+    monkeypatch.setenv("DEDAN_ALLOW_SQLITE_IN_PRODUCTION", "true")
+    assert db.database_url() == "sqlite:////data/dedan.db"

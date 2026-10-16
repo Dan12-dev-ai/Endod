@@ -60,14 +60,22 @@ def database_url() -> str:
 
     settings = get_settings()
     url = (os.getenv("DEDAN_DATABASE_URL") or settings.DEDAN_DATABASE_URL or "").strip()
-    if url:
-        return url
     environment = (os.getenv("ENVIRONMENT") or settings.ENVIRONMENT).strip().lower()
-    if environment == "production":
+    if environment != "production":
+        return url or DEFAULT_DATABASE_URL
+    if not url:
         raise DatabaseNotConfiguredError(
             "DEDAN_DATABASE_URL must be set in production (e.g. postgresql+psycopg://...)."
         )
-    return DEFAULT_DATABASE_URL
+    # A SQLite file is refused too (the .env.example value would otherwise be
+    # copied into production), unless a single-node deployment opts in.
+    allow_sqlite = os.getenv("DEDAN_ALLOW_SQLITE_IN_PRODUCTION", "").strip().lower() in ("1", "true", "yes")
+    if url.startswith("sqlite") and not allow_sqlite:
+        raise DatabaseNotConfiguredError(
+            "SQLite is not a production database. Set DEDAN_DATABASE_URL to PostgreSQL, "
+            "or DEDAN_ALLOW_SQLITE_IN_PRODUCTION=true for a single-node demo."
+        )
+    return url
 
 
 _engine: Optional[Engine] = None

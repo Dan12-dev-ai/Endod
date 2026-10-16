@@ -1,6 +1,8 @@
 # DEDAN Health Clinical API (backend-v2).
 #
-#   docker build -t dedan-api backend-v2
+# Built from the repository root, so the web portal it serves at / is included:
+#
+#   docker build -f backend-v2/Dockerfile -t dedan-api .
 #   docker run -p 8000:8000 --env-file backend-v2/.env dedan-api
 #
 # Production needs at least: ENVIRONMENT=production, REALTIME_TOKEN_SECRET,
@@ -14,13 +16,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-WORKDIR /app
+WORKDIR /app/backend-v2
 
 # Dependencies first, so code changes do not reinstall them.
-COPY requirements.txt constraints.txt ./
+COPY backend-v2/requirements.txt backend-v2/constraints.txt ./
 RUN pip install -r requirements.txt -c constraints.txt
 
-COPY . .
+COPY backend-v2/ ./
+# Served at / by main_clinical (it looks for ../web-portal).
+COPY web-portal/ /app/web-portal/
 
 # Never run as root.
 RUN useradd --create-home --uid 10001 dedan \
