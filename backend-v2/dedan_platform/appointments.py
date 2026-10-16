@@ -306,7 +306,16 @@ def update_status(
             title=f"{payload['appointment_type'].title()} completed",
             occurred_at=utcnow(),
             status=EventStatus.COMPLETED,
-            metadata={"appointment_id": appointment_id},
+            source="dedan",
+            # Read by the records screen (dedan_platform.records).
+            metadata={
+                "appointment_id": appointment_id,
+                "record": {
+                    "facility_name": payload.get("location"),
+                    "department": payload["appointment_type"].replace("_", " ").title(),
+                    "medications": [],
+                },
+            },
             correlation_id=correlation_id,
         )
     payload["reminders_cancelled"] = cancelled_reminders
