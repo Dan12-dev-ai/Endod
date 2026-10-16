@@ -84,6 +84,8 @@ _COLUMN_MIGRATIONS: Tuple[ColumnMigration, ...] = (
     # Tokens issued before this instant are rejected (password change signs
     # out other sessions). NULL for existing rows means "no cutoff yet".
     ColumnMigration("credentials", "password_changed_at", "TIMESTAMP WITH TIME ZONE"),
+    # Proof the patient holds the phone; only verified phones sign in.
+    ColumnMigration("profiles", "phone_verified_at", "TIMESTAMP WITH TIME ZONE"),
 )
 
 #: (index name, table, columns). Created only if absent.
@@ -271,6 +273,8 @@ def apply_migrations(engine=None, now=None) -> List[str]:
 
     if ensure_unique_email_index(engine):
         applied.append(UNIQUE_EMAIL_INDEX)
+    if ensure_unique_phone_index(engine):
+        applied.append(UNIQUE_PHONE_INDEX)
     backfill_appointment_links()
     return applied
 
@@ -291,37 +295,56 @@ def _named_index_exists(engine, name: str) -> bool:
         return conn.execute(text(query), {"name": name}).first() is not None
 
 
-def ensure_unique_email_index(engine) -> bool:
-    """Create the unique email index when the data allows it.
+#: One account per verified phone, so a phone signs in to exactly one account.
+UNIQUE_PHONE_INDEX = "uq_profiles_verified_phone"
 
-    Databases created before emails were unique may already hold duplicates.
-    Creating the index there would fail and stop the app from starting, so it is
-    skipped with a warning until those accounts are merged by hand; the
-    application-level check still applies meanwhile. Returns True when the
-    index was created in this call.
+
+def _ensure_unique_index(engine, name: str, create_sql: str, duplicates_sql: str) -> bool:
+    """Create a unique index on `profiles` when the data allows it.
+
+    Databases from before the rule may already hold duplicates. Creating the
+    index there would fail and stop the app from starting, so it is skipped
+    with a warning until those rows are fixed by hand; the application-level
+    check still applies meanwhile. Returns True when created in this call.
     """
     if not _table_exists(engine, "profiles"):
         return False
     with engine.connect() as conn:
-        duplicates = conn.execute(text(
-            "SELECT COUNT(*) FROM (SELECT lower(email) AS e FROM profiles "
-            "WHERE email IS NOT NULL GROUP BY lower(email) HAVING COUNT(*) > 1) AS d"
-        )).scalar()
+        duplicates = conn.execute(text(duplicates_sql)).scalar()
     if duplicates:
-        logger.warning("unique_email_index_skipped duplicate_emails=%d", duplicates)
+        logger.warning("unique_index_skipped index=%s duplicates=%d", name, duplicates)
         return False
-    if _named_index_exists(engine, UNIQUE_EMAIL_INDEX):
+    if _named_index_exists(engine, name):
         return False
     try:
-        _execute(
-            engine,
-            f"CREATE UNIQUE INDEX IF NOT EXISTS {UNIQUE_EMAIL_INDEX} ON profiles (lower(email))",
-        )
+        _execute(engine, create_sql)
     except Exception as exc:  # noqa: BLE001
         if _is_race(exc):
             return False
         raise
     return True
+
+
+def ensure_unique_email_index(engine) -> bool:
+    return _ensure_unique_index(
+        engine,
+        UNIQUE_EMAIL_INDEX,
+        f"CREATE UNIQUE INDEX IF NOT EXISTS {UNIQUE_EMAIL_INDEX} ON profiles (lower(email))",
+        "SELECT COUNT(*) FROM (SELECT lower(email) AS e FROM profiles "
+        "WHERE email IS NOT NULL GROUP BY lower(email) HAVING COUNT(*) > 1) AS d",
+    )
+
+
+def ensure_unique_phone_index(engine) -> bool:
+    # Partial: unverified phones (typed into a profile, never proven) may repeat.
+    return _ensure_unique_index(
+        engine,
+        UNIQUE_PHONE_INDEX,
+        f"CREATE UNIQUE INDEX IF NOT EXISTS {UNIQUE_PHONE_INDEX} ON profiles (phone) "
+        "WHERE phone_verified_at IS NOT NULL",
+        "SELECT COUNT(*) FROM (SELECT phone FROM profiles WHERE phone_verified_at IS NOT NULL "
+        "GROUP BY phone HAVING COUNT(*) > 1) AS d",
+    )
 
 
 def _is_race(exc: Exception) -> bool:
