@@ -11,9 +11,9 @@ carries ``sub`` (the public DEDAN ID), ``iat`` and ``exp`` (unix seconds) and
 Design rules
 ------------
 * **No hard-coded fallback secret.** The signer uses ``REALTIME_TOKEN_SECRET``,
-  then ``ADMIN_API_KEY``. With neither set it refuses to mint or verify, so a
-  deployment that forgot the secret fails loudly instead of signing with a
-  value published in this repository.
+  then ``ADMIN_API_KEY`` (environment or ``.env``). With neither set it refuses
+  to mint or verify, so a deployment that forgot the secret fails loudly
+  instead of signing with a value published in this repository.
 * **Uniform failure.** Malformed, forged and expired tokens all raise
   ``AuthError``; callers translate that to a single 401 so the response does not
   tell an attacker which check failed.
@@ -53,8 +53,28 @@ class AuthError(Exception):
     """A token could not be issued or verified."""
 
 
+def signing_secret() -> str:
+    """The token signing secret, or ``""`` when none is configured.
+
+    ``REALTIME_TOKEN_SECRET`` wins over ``ADMIN_API_KEY``. Each is read from the
+    process environment first and then from settings, so a value that exists
+    only in ``.env`` works too. The startup check uses this same function, so
+    it can never pass while the signer has no secret.
+    """
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    return (
+        os.getenv("REALTIME_TOKEN_SECRET")
+        or settings.REALTIME_TOKEN_SECRET
+        or os.getenv("ADMIN_API_KEY")
+        or settings.ADMIN_API_KEY
+        or ""
+    )
+
+
 def _secret() -> bytes:
-    secret = os.getenv("REALTIME_TOKEN_SECRET") or os.getenv("ADMIN_API_KEY") or ""
+    secret = signing_secret()
     if not secret:
         raise AuthError("No token signing secret configured.")
     return secret.encode("utf-8")
@@ -97,6 +117,8 @@ def decode_token(token: Optional[str]) -> Dict[str, Any]:
     """Verify ``token`` and return its payload. Raises ``AuthError``."""
     if not token or not isinstance(token, str):
         raise AuthError("Missing token.")
+    if not token.isascii():
+        raise AuthError("Malformed token.")
 
     parts = token.split(".")
     if len(parts) != 3 or parts[0] != TOKEN_VERSION:

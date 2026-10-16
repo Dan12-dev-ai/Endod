@@ -176,3 +176,89 @@ class TestRouterMounting:
         assert body["available"] is False
         assert body["text_fallback"] is True
         assert "am" in body["languages"]
+
+
+class TestReviewFixes:
+    """Regression tests for the automated review of the restored modules."""
+
+    @pytest.fixture
+    def platform(self, tmp_path, monkeypatch, secret):
+        from dedan_platform import db as dbmod
+        from dedan_platform.api_auth import router as auth_router
+        from dedan_platform.api_profile import router as profile_router
+
+        monkeypatch.setenv("DEDAN_DATABASE_URL", f"sqlite:///{tmp_path / 'auth.db'}")
+        dbmod.reset_engine()
+        dbmod.create_all()
+        app = FastAPI()
+        app.include_router(auth_router)
+        app.include_router(profile_router)
+        yield TestClient(app)
+        dbmod.reset_engine()
+
+    def _register(self, client):
+        resp = client.post(
+            "/auth/register",
+            json={
+                "first_name": "Abebe",
+                "last_name": "Kebede",
+                "email": "abebe@example.com",
+                "password": "Str0ng-pass!",
+                "password_confirmation": "Str0ng-pass!",
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        return resp.json()["access_token"]
+
+    def test_password_change_signs_out_older_tokens(self, platform):
+        old_token = self._register(platform)
+        # Token `iat` has whole-second precision, and a token from the same
+        # second as the change is deliberately still accepted.
+        time.sleep(1.1)
+
+        resp = platform.post(
+            "/auth/password",
+            headers={"Authorization": old_token},
+            json={
+                "current_password": "Str0ng-pass!",
+                "new_password": "N3w-Str0ng-pass!",
+                "new_password_confirmation": "N3w-Str0ng-pass!",
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        new_token = resp.json()["access_token"]
+
+        assert platform.get("/users/me", headers={"Authorization": old_token}).status_code == 401
+        assert platform.get("/users/me", headers={"Authorization": new_token}).status_code == 200
+
+    def test_bearer_scheme_is_accepted(self, platform):
+        token = self._register(platform)
+        resp = platform.get("/users/me", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
+
+    def test_non_ascii_token_is_401_not_500(self, platform):
+        resp = platform.get("/users/me", headers={"Authorization": "v1.é.abc".encode("utf-8")})
+        assert resp.status_code == 401
+
+    def test_admin_key_from_settings_signs_tokens(self, monkeypatch):
+        from app.core.config import get_settings
+
+        monkeypatch.delenv("REALTIME_TOKEN_SECRET", raising=False)
+        monkeypatch.delenv("ADMIN_API_KEY", raising=False)
+        monkeypatch.setattr(get_settings(), "ADMIN_API_KEY", "from-dotenv")
+        assert auth.identity_from_token(auth.issue_token("DE123456")) == "DE123456"
+
+    def test_rejections_carry_security_headers(self, client):
+        resp = client.post(
+            "/api/analyze",
+            content=b"x" * (64 * 1024 * 1024),
+            headers={"Content-Type": "application/json"},
+        )
+        assert resp.status_code == 413
+        assert resp.headers["x-content-type-options"] == "nosniff"
+
+    def test_registry_includes_the_configured_default_model(self, client):
+        from app.core.config import get_settings
+
+        registry = client.get("/api/providers").json()["registry"]
+        assert get_settings().GEMINI_MODEL in registry

@@ -20,9 +20,9 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
-from dedan_platform import identity
+from dedan_platform import credentials, identity
 from app.core.security import normalize_token
-from realtime.auth import AUTH_HEADER, AuthError, identity_from_token
+from realtime.auth import AUTH_HEADER, AuthError, decode_token
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def current_user_id(
     # both the live-voice socket and the profile REST API.
     token = normalize_token(authorization or request.headers.get(AUTH_HEADER))
     try:
-        subject = identity_from_token(token)
+        payload = decode_token(token)
     except AuthError as exc:
         # Covers malformed, forged and expired tokens uniformly: telling the
         # caller which one it was would help an attacker.
@@ -51,6 +51,7 @@ def current_user_id(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required.",
         ) from exc
+    subject = payload["sub"]
     if not subject:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -65,6 +66,13 @@ def current_user_id(
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated."
+        )
+    # A password change signs out every session issued before it.
+    valid_from = credentials.tokens_valid_from(user.id)
+    if valid_from is not None and payload["iat"] < valid_from:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
         )
     return user.id
 

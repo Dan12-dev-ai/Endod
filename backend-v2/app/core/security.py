@@ -240,7 +240,9 @@ def require_secure_configuration() -> None:
     settings = get_settings()
     problems = []
 
-    if not (os.getenv("REALTIME_TOKEN_SECRET") or settings.ADMIN_API_KEY):
+    from realtime.auth import signing_secret
+
+    if not signing_secret():
         problems.append(
             "REALTIME_TOKEN_SECRET (or ADMIN_API_KEY) is not set: login tokens cannot be signed."
         )
