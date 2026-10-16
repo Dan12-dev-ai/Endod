@@ -77,11 +77,12 @@ def test_http_error_headers_survive():
 
 def test_base64_upload_accepts_data_urls_and_hides_internals(client):
     data_url = "data:image/png;base64," + base64.b64encode(_png()).decode()
-    resp = client.post("/api/images/upload-base64", json={"image_data": data_url, "session_id": "s-1"})
+    resp = client.post("/api/images/upload-base64",
+                       json={"image_data": data_url, "session_id": "s-1", "filename": "rash.png"})
     assert resp.status_code == 200, resp.text
     image_id = resp.json()["image_id"]
     meta = client.get(f"/api/images/{image_id}").json()
-    assert meta["image_id"] == image_id
+    assert meta["image_id"] == image_id and meta["original_filename"] == "rash.png"
     assert not {"stored_filename", "content_hash", "session_id"} & set(meta)
 
 

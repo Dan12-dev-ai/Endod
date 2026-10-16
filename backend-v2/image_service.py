@@ -211,7 +211,9 @@ class ImageService:
                 header, base64_data = base64_data.split(",", 1)
                 mime_type = header.split(":")[1].split(";")[0]
                 ext = mimetypes.guess_extension(mime_type) or ".jpg"
-                filename = f"image{ext}"
+                # Keep a name the client sent; only the default is replaced.
+                if not filename or filename == "image.jpg":
+                    filename = f"image{ext}"
             except Exception:
                 pass
 
