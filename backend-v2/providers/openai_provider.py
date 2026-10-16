@@ -40,6 +40,7 @@ from .models import (
     ProviderSafetyError,
     ProviderTimeoutError,
     MultimodalAIProvider,
+    parse_items,
 )
 
 
@@ -345,22 +346,23 @@ class OpenAIProvider(MultimodalAIProvider):
             img_data = data["image_assessment"]
             result.image_assessment = ImageAssessment(
                 observations=img_data.get("observations", []),
-                possible_explanations=[
-                    PossibleExplanation(**exp) for exp in img_data.get("possible_explanations", [])
-                ],
+                possible_explanations=parse_items(
+                    PossibleExplanation, img_data.get("possible_explanations")
+                ),
                 limitations=img_data.get("limitations", []),
                 requires_better_image=img_data.get("requires_better_image", False),
                 quality_issues=img_data.get("quality_issues", []),
             )
             if "image_quality" in img_data and img_data["image_quality"]:
                 result.image_assessment.image_quality = ImageQuality(**img_data["image_quality"])
-        result.medical_information = [
-            MedicalInformation(**mi) for mi in data.get("medical_information", [])
-        ]
-        result.treatment_information = [
-            TreatmentInformation(**ti) for ti in data.get("treatment_information", [])
-        ]
-        result.sources = [Source(**s) for s in data.get("sources", [])]
+        result.possible_explanations = parse_items(
+            PossibleExplanation, data.get("possible_explanations")
+        )
+        result.medical_information = parse_items(MedicalInformation, data.get("medical_information"))
+        result.treatment_information = parse_items(
+            TreatmentInformation, data.get("treatment_information")
+        )
+        result.sources = parse_items(Source, data.get("sources"))
     
     def _extract_from_text(self, result: AnalysisResponse, text: str):
         """Fallback extraction from unstructured text."""

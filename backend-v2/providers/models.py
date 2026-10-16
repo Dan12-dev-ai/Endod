@@ -188,6 +188,9 @@ class AnalysisResponse(BaseModel):
     image_assessment: Optional[ImageAssessment] = None
     urgency: str = "routine"  # emergency | urgent | routine | self_care
     recommended_next_step: str = ""
+    #: Differential for the patient's description (text, voice or images).
+    #: Image-specific ones also live on `image_assessment`.
+    possible_explanations: List[PossibleExplanation] = field(default_factory=list)
     
     # Evidence-based information
     medical_information: List[MedicalInformation] = field(default_factory=list)
@@ -294,6 +297,23 @@ class ProviderTimeoutError(ProviderError):
 # =============================================================================
 # Abstract Base Provider
 # =============================================================================
+
+def parse_items(model, items: Any) -> List[Any]:
+    """Validate each item of a model-provided list, skipping invalid ones.
+
+    A single malformed entry (a missing field, a wrong type) used to raise and
+    discard the provider's entire answer.
+    """
+    parsed = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            parsed.append(model.model_validate(item))
+        except Exception:  # noqa: BLE001 - pydantic.ValidationError and friends
+            continue
+    return parsed
+
 
 from abc import ABC, abstractmethod
 
