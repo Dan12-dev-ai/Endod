@@ -8,6 +8,7 @@ using the ClinicalResponse schema.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional, TYPE_CHECKING
@@ -22,6 +23,67 @@ from clinical_schema import (
 
 if TYPE_CHECKING:
     from providers.models import AnalysisResponse, PatientContext as ProviderPatientContext
+
+
+def _as_dict(item: Any) -> Dict[str, Any]:
+    """Provider items arrive as pydantic models; older code paths pass dicts.
+
+    Every builder used to check `isinstance(item, dict)` and skip the rest, so
+    the typed items real providers return were all discarded.
+    """
+    if isinstance(item, dict):
+        return item
+    if hasattr(item, "model_dump"):
+        return item.model_dump()
+    return {}
+
+
+#: Provider evidence grades (A-D) -> the patient-facing scale.
+_EVIDENCE_GRADES = {
+    "a": EvidenceLevel.STRONG,
+    "b": EvidenceLevel.MODERATE,
+    "c": EvidenceLevel.LIMITED,
+    "d": EvidenceLevel.THEORETICAL,
+    # The schema's weakest level. (Code here referred to a non-existent
+    # EvidenceLevel.EXPERT_OPINION, which silently broke the first-aid path.)
+    "expert_opinion": EvidenceLevel.THEORETICAL,
+    **{level.value: level for level in EvidenceLevel},
+}
+
+
+def _evidence_from_confidence(confidence: Any) -> EvidenceLevel:
+    try:
+        value = float(confidence)
+    except (TypeError, ValueError):
+        return EvidenceLevel.THEORETICAL
+    if value >= 0.75:
+        return EvidenceLevel.MODERATE
+    if value >= 0.4:
+        return EvidenceLevel.LIMITED
+    return EvidenceLevel.THEORETICAL
+
+
+_DEFAULT_MORE_INFO = ["Physical examination", "Laboratory tests", "Detailed history"]
+
+#: Doses, amounts and schedules. Treatment text is education: anything that
+#: reads as a prescription is replaced, wherever the model put it.
+_DOSE_PATTERNS = re.compile(
+    r"\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|µg|g|ml|iu|units?|tablets?|capsules?|pills?|drops?|puffs?|teaspoons?|tsp)\b"
+    r"|\b(?:once|twice|thrice|\d+\s*(?:x|times))\s*(?:a|per)?\s*(?:day|daily|week)\b"
+    r"|\bevery\s+\d+\s*(?:-\s*\d+\s*)?hours?\b"
+    r"|\b\d+\s*(?:x|times)\s*daily\b",
+    re.IGNORECASE,
+)
+_DOSE_REPLACEMENT = "[dose: ask a clinician or pharmacist]"
+
+
+_REPEATED_REPLACEMENT = re.compile(r"(?:" + re.escape(_DOSE_REPLACEMENT) + r"[\s,;]*){2,}")
+
+
+def _without_doses(text: str) -> str:
+    redacted = _DOSE_PATTERNS.sub(_DOSE_REPLACEMENT, text or "")
+    # "500 mg twice a day" -> one notice, not two.
+    return _REPEATED_REPLACEMENT.sub(_DOSE_REPLACEMENT + " ", redacted).strip()
 
 
 class ResponseTransformer:
@@ -67,7 +129,7 @@ class ResponseTransformer:
         safety = self._build_safety(ai_response, clinical_context)
 
         # Build possible conditions
-        possible_explanations = self._build_possible_explanations(parsed_data)
+        possible_explanations = self._build_possible_explanations(parsed_data, ai_response)
 
         # Build uncertainty statement
         uncertainty = self._build_uncertainty(parsed_data, ai_response)
@@ -213,9 +275,36 @@ class ResponseTransformer:
             professional_review_required=ai_response.requires_professional_review,
         )
 
-    def _build_possible_explanations(self, parsed: Dict[str, Any]) -> List[PossibleExplanation]:
-        """Build possible explanations from parsed data."""
-        explanations = []
+    def _build_possible_explanations(
+        self, parsed: Dict[str, Any], ai_response: Optional["AnalysisResponse"] = None
+    ) -> List[PossibleExplanation]:
+        """Build possible explanations: the provider's differential first, then
+        any embedded JSON (`possible_conditions`), then image findings."""
+        explanations: List[PossibleExplanation] = []
+        seen = set()
+
+        provider_items = list(getattr(ai_response, "possible_explanations", None) or [])
+        image = getattr(ai_response, "image_assessment", None)
+        if image is not None:
+            provider_items.extend(getattr(image, "possible_explanations", None) or [])
+        for item in provider_items:
+            exp = _as_dict(item)
+            label = (exp.get("condition") or "").strip()
+            if not label or label.lower() in seen:
+                continue
+            seen.add(label.lower())
+            observations = [str(o) for o in (exp.get("supporting_observations") or []) if o]
+            why = exp.get("reasoning") or "Matches part of what you described."
+            if observations:
+                why = f"{why} (You mentioned: {'; '.join(observations[:3])}.)"
+            explanations.append(PossibleExplanation(
+                label=label,
+                why_it_fits=why,
+                what_does_not_fit="Needs a clinician's examination to confirm or rule out.",
+                evidence_level=_evidence_from_confidence(exp.get("confidence")),
+                requires_more_info=list(_DEFAULT_MORE_INFO),
+            ))
+
         for c in parsed.get("possible_conditions", []):
             if not isinstance(c, dict):
                 continue
@@ -230,6 +319,8 @@ class ResponseTransformer:
             elif conf_str == "low":
                 confidence = EvidenceLevel.LIMITED
 
+            if (c.get("name") or "").lower() in seen:
+                continue
             explanations.append(PossibleExplanation(
                 label=c.get("name", "Unknown condition"),
                 why_it_fits=c.get("reasoning", "Based on reported symptoms and analysis"),
@@ -275,8 +366,37 @@ class ResponseTransformer:
         education = []
         
         # From AI response treatment information
-        for item in ai_response.treatment_information:
-            if isinstance(item, dict) and item.get("intervention") == "first_aid":
+        for raw in ai_response.treatment_information:
+            item = _as_dict(raw)
+            if item.get("intervention") and item.get("intervention") != "first_aid":
+                # Dosage is deliberately not carried over: DEDAN gives
+                # education, never prescriptions.
+                source_title = item.get("source") or ""
+                description = _without_doses(item.get("description") or "")
+                contraindications = [_without_doses(str(c)) for c in (item.get("contraindications") or []) if c]
+                if contraindications:
+                    description = (
+                        f"{description} Not suitable for everyone, for example: "
+                        f"{'; '.join(contraindications)}. Ask a clinician first."
+                    ).strip()
+                education.append(TreatmentEducation(
+                    category="clinical_care",
+                    title=_without_doses(item["intervention"]),
+                    description=description,
+                    why_it_may_help=(
+                        f"Commonly used for {item['condition']}." if item.get("condition")
+                        else "Commonly used for this kind of problem."
+                    ),
+                    expected_timeline="Ask your clinician",
+                    what_to_monitor=_without_doses("; ".join(item.get("precautions") or [])) or "How your symptoms change",
+                    when_to_reassess="If symptoms worsen or do not improve",
+                    evidence_level=_EVIDENCE_GRADES.get(
+                        str(item.get("evidence_level", "")).lower(), EvidenceLevel.THEORETICAL
+                    ),
+                    sources=[Source(title=source_title, url="", type="guideline")] if source_title else [],
+                ))
+                continue
+            if item.get("intervention") == "first_aid":
                 try:
                     first_aid = json.loads(item.get("description", "[]"))
                     for i, step in enumerate(first_aid, 1):
@@ -289,7 +409,7 @@ class ResponseTransformer:
                                 expected_timeline=step.get("expected_timeline", "Variable"),
                                 what_to_monitor=step.get("what_to_monitor", "Symptom progression"),
                                 when_to_reassess=step.get("when_to_reassess", "If symptoms worsen"),
-                                evidence_level=EvidenceLevel.EXPERT_OPINION,
+                                evidence_level=EvidenceLevel.THEORETICAL,
                             ))
                 except:
                     pass
@@ -305,7 +425,9 @@ class ResponseTransformer:
                     expected_timeline=te.get("expected_timeline", "Variable"),
                     what_to_monitor=te.get("what_to_monitor", "Symptoms"),
                     when_to_reassess=te.get("when_to_reassess", "If not improving"),
-                    evidence_level=EvidenceLevel(te.get("evidence_level", "expert_opinion")),
+                    evidence_level=_EVIDENCE_GRADES.get(
+                        str(te.get("evidence_level", "")).lower(), EvidenceLevel.THEORETICAL
+                    ),
                     sources=[
                         Source(title=s.get("title", ""), url=s.get("url", ""), type=s.get("type", ""), jurisdiction=s.get("jurisdiction", ""))
                         for s in te.get("sources", [])
@@ -405,13 +527,16 @@ class ResponseTransformer:
         sources = []
         
         # From AI response
-        for src in ai_response.sources:
-            if isinstance(src, dict):
+        for raw in ai_response.sources:
+            src = _as_dict(raw)
+            # A citation the patient cannot open is not a citation.
+            if src.get("title") and str(src.get("url") or "").startswith(("https://", "http://")):
                 sources.append(Source(
-                    title=src.get("title", "AI Medical Analysis"),
-                    url=src.get("url", ""),
-                    type=src.get("type", "ai_analysis"),
-                    jurisdiction=src.get("jurisdiction", ""),
+                    title=src["title"],
+                    url=src.get("url") or "",
+                    type=src.get("type") or "ai_analysis",
+                    jurisdiction=src.get("jurisdiction") or "",
+                    date_published=src.get("publication_date"),
                 ))
         
         # From evidence retrieval

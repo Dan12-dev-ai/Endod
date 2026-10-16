@@ -309,6 +309,7 @@ class OfflineProvider(MultimodalAIProvider):
             modality=modality,
             urgency=urgency,
             recommended_next_step=next_step,
+            possible_explanations=explanations,
             medical_information=medical_info,
             treatment_information=treatment_info,
             warning_signs=warning_signs,
