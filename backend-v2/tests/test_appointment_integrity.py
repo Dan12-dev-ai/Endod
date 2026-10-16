@@ -121,3 +121,47 @@ class TestProtectedRecords:
         event = timeline.record_event(user_id=patient, event_type=HealthEventType.MEDICATION,
                                       title="Started vitamin D", source="patient")
         assert timeline.delete_event(patient, event["event_id"]) is True
+
+
+class TestReviewFindings:
+    """Automated review (Qodo) of PR #10."""
+
+    def test_confirmed_and_rescheduled_visits_stay_upcoming(self, patient):
+        from dedan_platform import appointments, timeline
+
+        first = _book(patient, _at(0))
+        second = _book(patient, _at(10))
+        appointments.update_status(patient, first["appointment_id"], "CONFIRMED")
+        appointments.reschedule(patient, second["appointment_id"], _at(30))
+        assert timeline.summarise_timeline(patient)["upcoming"] == 2
+
+    def test_timeline_and_appointment_change_together(self, patient, monkeypatch):
+        from dedan_platform import appointments
+
+        appointment = _book(patient, _at(0))
+
+        def fail(*args, **kwargs):
+            raise RuntimeError("timeline write failed")
+
+        monkeypatch.setattr(appointments, "update_appointment_event", fail)
+        with pytest.raises(RuntimeError):
+            appointments.update_status(patient, appointment["appointment_id"], "CANCELLED")
+        # Rolled back as one unit: the appointment did not change either.
+        assert appointments.get_appointment(patient, appointment["appointment_id"])["status"] == "SCHEDULED"
+
+    def test_postgres_bookings_take_ordered_advisory_locks(self):
+        from types import SimpleNamespace
+
+        from dedan_platform import appointments
+
+        calls = []
+        session = SimpleNamespace(
+            bind=SimpleNamespace(dialect=SimpleNamespace(name="postgresql")),
+            execute=lambda statement, params: calls.append(params["id"]),
+        )
+        appointments._lock_booking(session, ["provider:dr-a", "patient:u1"])
+        assert len(calls) == 2
+        again = []
+        session.execute = lambda statement, params: again.append(params["id"])
+        appointments._lock_booking(session, ["patient:u1", "provider:dr-a"])
+        assert again == calls  # same order regardless of input order: no deadlock

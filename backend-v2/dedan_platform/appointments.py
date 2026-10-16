@@ -143,6 +143,24 @@ def reminder_offsets_for(appointment: Appointment, user_preferences: Optional[st
 _PAST_TOLERANCE = timedelta(minutes=5)
 
 
+def _lock_booking(session: Session, keys: List[str]) -> None:
+    """Serialise bookings that could clash, until this transaction ends.
+
+    Without it, two simultaneous requests for the same patient or provider
+    could both find the slot free and both insert. On PostgreSQL this takes a
+    transaction-scoped advisory lock per key (in a fixed order, so two
+    requests cannot deadlock). SQLite serialises writers itself but not the
+    preceding read, so it is suitable for single-user development only.
+    """
+    if session.bind is None or session.bind.dialect.name != "postgresql":
+        return
+    from sqlalchemy import text
+
+    for key in sorted(set(keys)):
+        lock_id = int.from_bytes(hashlib.sha256(key.encode()).digest()[:8], "big", signed=True)
+        session.execute(text("SELECT pg_advisory_xact_lock(:id)"), {"id": lock_id})
+
+
 def _require_no_overlap(
     session: Session,
     user_id: str,
@@ -157,6 +175,7 @@ def _require_no_overlap(
     a provider cannot be booked twice for the same time. Both used to be
     accepted.
     """
+    _lock_booking(session, [f"patient:{user_id}"] + ([f"provider:{provider_id}"] if provider_id else []))
     end = start + timedelta(minutes=duration_minutes)
     window_start = start - timedelta(minutes=480)  # longest allowed duration
     owner = Appointment.user_id == user_id
@@ -325,10 +344,9 @@ def update_status(
         if appointment is None:
             raise AppointmentError("Appointment not found.")
         _transition(appointment, target_status)
+        update_appointment_event(session, user_id, appointment_id, target_status)
         session.flush()
         payload = _to_payload(appointment)
-
-    update_appointment_event(user_id, appointment_id, target_status)
 
     cancelled_reminders = 0
     if target_status in TERMINAL_STATUSES:
@@ -388,10 +406,11 @@ def reschedule(
         )
         _transition(appointment, EventStatus.RESCHEDULED)
         appointment.scheduled_at = new_time
+        update_appointment_event(
+            session, user_id, appointment_id, EventStatus.RESCHEDULED, occurred_at=new_time
+        )
         session.flush()
         payload = _to_payload(appointment)
-
-    update_appointment_event(user_id, appointment_id, EventStatus.RESCHEDULED, occurred_at=new_time)
 
     # Suppress reminders for the *old* time before anything can fire them.
     # Cancelled rows keep their idempotency key, which embeds the appointment
