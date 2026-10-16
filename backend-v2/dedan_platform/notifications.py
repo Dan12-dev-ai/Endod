@@ -473,8 +473,24 @@ def mark_sent(job_id: str, provider_message_id: Optional[str] = None) -> None:
         )
 
 
+def mark_skipped(job_id: str, reason: str) -> None:
+    """Close a claimed job that cannot be delivered, recording why."""
+    with session_scope() as session:
+        session.execute(
+            update(Notification).where(Notification.id == job_id).values(
+                status=NotificationStatus.SKIPPED,
+                updated_at=utcnow(),
+                last_error=reason[:500],
+            )
+        )
+
+
 def mark_failed(job_id: str, error: str, attempts: int) -> str:
     """Record a failure and decide whether to retry.
+
+    ``attempts`` is the number of delivery attempts made, *including* this one;
+    it is stored as given. (It used to be incremented again here as well, so a
+    job with five allowed attempts failed permanently after three.)
 
     Returns the resulting status so the caller (and tests) can assert on it.
     """
@@ -485,6 +501,7 @@ def mark_failed(job_id: str, error: str, attempts: int) -> str:
                     status=NotificationStatus.FAILED,
                     updated_at=utcnow(),
                     last_error=error[:500],
+                    attempts=attempts,
                 )
             )
         logger.error(
@@ -504,7 +521,7 @@ def mark_failed(job_id: str, error: str, attempts: int) -> str:
                 status=NotificationStatus.RETRYING,
                 updated_at=utcnow(),
                 last_error=error[:500],
-                attempts=attempts + 1,
+                attempts=attempts,
                 scheduled_for=utcnow() + timedelta(seconds=delay),
             )
         )
@@ -562,9 +579,16 @@ def recover_stale_jobs(now: Optional[datetime] = None) -> int:
             )
         ))
         for job in rows:
-            job.status = NotificationStatus.RETRYING
-            job.scheduled_for = now
+            # Counted as an attempt: a job that crashes the worker every time
+            # would otherwise be recovered and retried forever.
+            job.attempts = int(job.attempts or 0) + 1
             job.updated_at = now
+            if job.attempts >= MAX_ATTEMPTS:
+                job.status = NotificationStatus.FAILED
+                job.last_error = "stuck in processing"
+            else:
+                job.status = NotificationStatus.RETRYING
+                job.scheduled_for = now
         if rows:
             logger.info("recovered_stale_notifications", extra={"count": len(rows)})
         return len(rows)

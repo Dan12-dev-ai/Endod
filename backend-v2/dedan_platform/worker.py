@@ -29,12 +29,13 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from dedan_platform import notifications
 from dedan_platform.email_provider import (
-    EmailProviderError, build_provider, render_appointment_reminder,
+    EmailNotConfiguredError, EmailProviderError, build_provider, render_appointment_reminder,
 )
+from dedan_platform.models import NotificationChannel, NotificationStatus
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,9 @@ WORKER_BATCH_SIZE = int(os.getenv("NOTIFICATION_WORKER_BATCH_SIZE", "50"))
 #: Run a reconciliation pass on worker start. Repairs appointments whose
 #: reminders went missing (see `notifications.reconcile_appointments`).
 WORKER_RECONCILE_ON_START = _env_flag("NOTIFICATION_RECONCILE_ON_START", True)
+#: Reconciliation also repeats while running, so an appointment whose reminder
+#: enqueue failed is repaired within this interval rather than at next restart.
+WORKER_RECONCILE_INTERVAL = float(os.getenv("NOTIFICATION_RECONCILE_INTERVAL_SECONDS", "3600"))
 
 
 def schedule_appointment_reminders(
@@ -116,8 +120,15 @@ def deliver_one(job: Dict[str, Any], provider=None) -> str:
     Separated from `run_once` so a test can drive a single job deterministically
     without racing the queue.
     """
+    if job.get("channel", NotificationChannel.EMAIL) != NotificationChannel.EMAIL:
+        # Only email has a transport here. Handing an SMS or push job to the
+        # email provider used a phone number or user id as an email address.
+        notifications.mark_skipped(job["id"], f"channel_not_supported:{job.get('channel')}")
+        return NotificationStatus.SKIPPED
+
     provider = provider or build_provider()
     payload = job.get("payload") or {}
+    attempt = job.get("attempts", 0) + 1
     try:
         rendered = render_appointment_reminder(
             payload, job["user_id"], payload.get("appointment_id", job.get("appointment_id") or "unknown"),
@@ -129,13 +140,9 @@ def deliver_one(job: Dict[str, Any], provider=None) -> str:
             correlation_id=job.get("correlation_id"),
         )
     except EmailProviderError as exc:
-        status = notifications.mark_failed(job["id"], str(exc), job.get("attempts", 0) + 1)
-        return status
+        return notifications.mark_failed(job["id"], str(exc), attempt)
     except Exception as exc:
-        status = notifications.mark_failed(
-            job["id"], f"{type(exc).__name__}", job.get("attempts", 0) + 1
-        )
-        return status
+        return notifications.mark_failed(job["id"], f"{type(exc).__name__}", attempt)
 
     # A transport may return a provider-side reference. Recorded when present,
     # but never required: SMTP returns no id, and "SENT" means submitted to the
@@ -144,25 +151,46 @@ def deliver_one(job: Dict[str, Any], provider=None) -> str:
     return "SENT"
 
 
-def run_once(limit: int = 20, provider=None, now: Optional[datetime] = None) -> Dict[str, int]:
-    """Process one batch of due notifications.
+def run_once(
+    limit: int = 20,
+    provider=None,
+    now: Optional[datetime] = None,
+    should_stop: Optional[Callable[[], bool]] = None,
+) -> Dict[str, int]:
+    """Process up to ``limit`` due notifications.
 
     Returns per-status counts, which is the observability hook the spec asks for
     (`reminders_sent`, `email_failures`).
 
+    Jobs are claimed **one at a time**, immediately before each send. Claiming
+    the whole batch up front left later jobs sitting in PROCESSING while
+    earlier sends ran; with a slow mail server that outlasted the stale
+    threshold, another worker "recovered" them and both sent the reminder.
+
     `now` is injectable so an end-to-end test can advance a controllable clock to
-    a reminder's due time instead of waiting 24 hours for it.
+    a reminder's due time instead of waiting 24 hours for it. `should_stop` is
+    checked between jobs so shutdown never interrupts a send.
     """
-    provider = provider or build_provider()
+    try:
+        provider = provider or build_provider()
+    except EmailNotConfiguredError as exc:
+        # Nothing is claimed: the reminders stay queued until mail is configured.
+        logger.error("notification_delivery_blocked: %s", exc)
+        return {"claimed": 0, "recovered_stale": 0, "SENT": 0, "RETRYING": 0, "FAILED": 0,
+                "blocked": 1}
     recovered = notifications.recover_stale_jobs(now=now)
-    jobs = notifications.claim_due_jobs(limit=limit, now=now)
 
     counts: Dict[str, int] = {"SENT": 0, "RETRYING": 0, "FAILED": 0}
-    for job in jobs:
-        result = deliver_one(job, provider)
+    claimed = 0
+    while claimed < limit and not (should_stop and should_stop()):
+        jobs = notifications.claim_due_jobs(limit=1, now=now)
+        if not jobs:
+            break
+        claimed += 1
+        result = deliver_one(jobs[0], provider)
         counts[result] = counts.get(result, 0) + 1
 
-    summary = {"claimed": len(jobs), "recovered_stale": recovered, **counts}
+    summary = {"claimed": claimed, "recovered_stale": recovered, **counts}
     logger.info("notification_batch_complete", extra=summary)
     return summary
 
@@ -206,6 +234,8 @@ async def worker_loop(stop_event: asyncio.Event, provider=None) -> None:
     Runs the blocking database + SMTP work in a thread so one slow provider
     cannot stall the event loop and take the API's other requests down with it.
     """
+    loop = asyncio.get_running_loop()
+    last_reconcile = loop.time()
     if WORKER_RECONCILE_ON_START:
         await asyncio.to_thread(reconcile)
         logger.info("notification_worker_started", extra={
@@ -216,7 +246,12 @@ async def worker_loop(stop_event: asyncio.Event, provider=None) -> None:
 
     while not stop_event.is_set():
         try:
-            summary = await asyncio.to_thread(run_once, WORKER_BATCH_SIZE, provider)
+            if loop.time() - last_reconcile >= WORKER_RECONCILE_INTERVAL:
+                await asyncio.to_thread(reconcile)
+                last_reconcile = loop.time()
+            summary = await asyncio.to_thread(
+                run_once, WORKER_BATCH_SIZE, provider, None, stop_event.is_set
+            )
             # Queue pressure is only meaningful when something is stuck, so it
             # is emitted on every pass and left to the log pipeline to alert on.
             await asyncio.to_thread(queue_metrics)

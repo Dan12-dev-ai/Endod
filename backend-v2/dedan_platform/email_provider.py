@@ -11,22 +11,21 @@ Content rules enforced here, not left to templates
   screens and notification previews. A subject like "Your diabetes consultation
   tomorrow" discloses a diagnosis to anyone glancing at a phone.
 * **No clinical detail in the payload** the reminder queue carries.
-* **Signed, expiring links** back into DEDAN rather than raw deep links, so a
-  forwarded email cannot be replayed indefinitely.
+* **No credentials or identifiers in links.** The link opens the portal's
+  appointments page, behind sign-in; a forwarded email grants nothing.
 """
 
 from __future__ import annotations
 
 import abc
-import hashlib
-import hmac
 import logging
 import os
 import ssl
-import time
 import uuid
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import Any, Dict, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -137,55 +136,61 @@ def _mask_email(address: str) -> str:
     return f"{keep}***@{domain}"
 
 
+class EmailNotConfiguredError(EmailProviderError):
+    """No mail server is configured where one is required."""
+
+
 def build_provider() -> EmailProvider:
     """Choose a transport from configuration.
 
     Falls back to the console provider when SMTP is absent, which is what keeps a
-    fresh checkout working with no mail server.
+    fresh checkout working with no mail server -- outside production only. In
+    production the console "send" marked every reminder SENT while nothing was
+    delivered, so there it refuses instead and the reminders wait in the queue.
     """
     if os.getenv("SMTP_HOST", "").strip():
         return SmtpEmailProvider()
+    if os.getenv("ENVIRONMENT", "development").strip().lower() == "production":
+        raise EmailNotConfiguredError("SMTP_HOST is not set; reminders cannot be delivered.")
     logger.warning("SMTP_NOT_CONFIGURED_USING_CONSOLE_TRANSPORT")
     return ConsoleEmailProvider()
 
 
-def signed_link(user_id: str, appointment_id: str, ttl_seconds: int = 86400) -> str:
-    """Build a signed, expiring link back into DEDAN.
+def portal_link() -> Optional[str]:
+    """Where a patient manages appointments, or ``None`` if not configured.
 
-    HMAC-signed with the server secret so the link cannot be forged, and
-    time-limited so a forwarded email stops working. Uses `compare_digest` on
-    verification to avoid a timing oracle.
+    The link used to point at ``/appointments/{id}`` on ``localhost:3000`` by
+    default: a page that does not exist, on a host no patient can reach. A
+    reminder without a link is better than one with a broken link.
     """
-    base = os.getenv("PUBLIC_WEB_URL", "http://localhost:3000").rstrip("/")
-    expires_at = int(time.time()) + ttl_seconds
-    message = f"{user_id}.{appointment_id}.{expires_at}".encode("utf-8")
-    signature = hmac.new(_link_secret(), message, hashlib.sha256).hexdigest()
-    return (
-        f"{base}/appointments/{appointment_id}"
-        f"?uid={user_id}&exp={expires_at}&sig={signature}"
-    )
+    base = os.getenv("PUBLIC_WEB_URL", "").strip().rstrip("/")
+    if not base:
+        return None
+    path = os.getenv("PORTAL_APPOINTMENTS_PATH", "/interview").strip() or "/"
+    return f"{base}/{path.lstrip('/')}"
 
 
-def verify_signed_link(user_id: str, appointment_id: str, expires_at: int, signature: str) -> bool:
-    """Verify a signed link. Expiry is checked before the signature."""
+def format_appointment_time(payload: Dict[str, Any]) -> str:
+    """The appointment time in the appointment's own timezone.
+
+    The template used to read a ``scheduled_at_display`` key that nothing ever
+    set, so every reminder said "When: your scheduled time".
+    """
+    raw = payload.get("scheduled_at")
+    if not raw:
+        return "your scheduled time"
     try:
-        expires_at = int(expires_at)
-    except (TypeError, ValueError):
-        return False
-    if expires_at < int(time.time()):
-        return False
-    message = f"{user_id}.{appointment_id}.{expires_at}".encode("utf-8")
-    expected = hmac.new(_link_secret(), message, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature or "")
-
-
-def _link_secret() -> bytes:
-    secret = (
-        os.getenv("REALTIME_TOKEN_SECRET")
-        or os.getenv("ADMIN_API_KEY")
-        or "development-only-link-secret"
-    )
-    return secret.encode("utf-8")
+        when = datetime.fromisoformat(str(raw))
+    except ValueError:
+        return "your scheduled time"
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    zone_name = payload.get("timezone") or "UTC"
+    try:
+        local = when.astimezone(ZoneInfo(zone_name))
+    except (ZoneInfoNotFoundError, ValueError):
+        local, zone_name = when.astimezone(timezone.utc), "UTC"
+    return f"{local.strftime('%A %d %B %Y, %H:%M')} ({zone_name})"
 
 
 def render_appointment_reminder(
@@ -198,10 +203,14 @@ def render_appointment_reminder(
     The body carries logistics only (when, where, how to change it). Any
     clinical context stays in DEDAN behind authentication.
     """
-    when = payload.get("scheduled_at_display", "your scheduled time")
+    when = format_appointment_time(payload)
     kind = str(payload.get("appointment_type", "consultation")).replace("_", " ").title()
     location = payload.get("location") or payload.get("meeting_url") or "Details in DEDAN Health"
-    link = signed_link(user_id, appointment_id)
+    link = portal_link()
+    manage = (
+        f"View or change this appointment (sign in first):\n{link}\n\n" if link
+        else "You can view or change this appointment in DEDAN Health.\n\n"
+    )
 
     body = (
         f"Hello,\n\n"
@@ -209,8 +218,7 @@ def render_appointment_reminder(
         f"  Type:      {kind}\n"
         f"  When:      {when}\n"
         f"  Where:     {location}\n\n"
-        f"View or change this appointment:\n{link}\n\n"
-        f"This link is personal to you and expires in 24 hours.\n\n"
+        f"{manage}"
         f"— DEDAN Health\n"
         f"If you no longer wish to receive reminders, you can turn them off in "
         f"your notification settings."
