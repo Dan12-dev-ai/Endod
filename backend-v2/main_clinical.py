@@ -68,10 +68,11 @@ from models.schemas import (
 from app.core.config import get_settings, Settings
 from app.core.security import (
     BodySizeLimitMiddleware,
+    RateLimitMiddleware,
     SecurityHeadersMiddleware,
     require_secure_configuration,
 )
-from providers.gemini_models import GEMINI_MODELS
+from providers.gemini_models import configured_gemini_models
 from providers import (
     ProviderFactory,
     ImageInput,
@@ -87,97 +88,6 @@ logging.basicConfig(
     format='{"timestamp": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}'
 )
 logger = logging.getLogger(__name__)
-
-# Rate limiting storage
-rate_limit_storage: dict = {}
-# Cap on tracked clients so a flood of new source addresses cannot grow the
-# store without limit (the previous implementation never pruned at all).
-MAX_TRACKED_RATE_LIMIT_CLIENTS = 10_000
-
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Per-IP rate limiter.
-
-    Two defects in the original implementation are fixed:
-
-    1. **Spoofable identity.** It trusted `X-Forwarded-For` unconditionally, so
-       any client could send a different header value per request and bypass the
-       limit entirely. That header is now honoured only when the deployment
-       declares it sits behind a trusted proxy (`TRUST_PROXY_HEADERS=true`);
-       otherwise the direct peer address is used, which is the only identity an
-       untrusted client cannot forge.
-    2. **Unbounded memory.** `rate_limit_storage` grew a list per IP forever and
-       was never pruned for inactive clients, so rotating source IPs exhausted
-       memory. Entries are now evicted once their window has passed, and the
-       number of tracked clients is capped.
-
-    The canonical implementation now lives in `app.core.security`; this class is
-    retained as the app-local name so `create_app` reads unchanged.
-    """
-
-    def __init__(self, app, requests_per_minute: int = 30, window_seconds: int = 60):
-        super().__init__(app)
-        self.requests_per_minute = requests_per_minute
-        self.window_seconds = window_seconds
-
-    async def dispatch(self, request: Request, call_next):
-        if request.url.path in ["/api/health", "/health", "/docs", "/redoc", "/openapi.json"]:
-            return await call_next(request)
-
-        from app.core.security import RateLimitMiddleware as CanonicalRateLimit
-
-        # `self.app` is the *next* middleware in the stack, not the FastAPI app,
-        # so the identity helper is cached on this instance rather than on
-        # `app.state` (which does not exist on a middleware object).
-        limiter = getattr(self, "_limiter", None)
-        if limiter is None:
-            limiter = CanonicalRateLimit(
-                self.app,
-                requests_per_window=self.requests_per_minute,
-                window_seconds=self.window_seconds,
-            )
-            self._limiter = limiter
-
-        # Identical request -> identical bucket, using the corrected identity rule.
-        client_ip = limiter.client_identity(request)
-
-        now = time.time()
-        window_start = now - self.window_seconds
-
-        hits = rate_limit_storage.setdefault(client_ip, [])
-        rate_limit_storage[client_ip] = [ts for ts in hits if ts > window_start]
-
-        if len(rate_limit_storage[client_ip]) >= self.requests_per_minute:
-            return JSONResponse(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                content={
-                    "error": "Rate limit exceeded",
-                    "error_code": "RATE_LIMIT_EXCEEDED",
-                    "details": {
-                        "limit": self.requests_per_minute,
-                        "window_seconds": self.window_seconds,
-                        "retry_after": self.window_seconds,
-                    },
-                    "timestamp": time.time(),
-                },
-                headers={"Retry-After": str(self.window_seconds)},
-            )
-
-        # Bound the number of tracked clients so a flood of new source addresses
-        # cannot grow the store without limit.
-        if len(rate_limit_storage) > MAX_TRACKED_RATE_LIMIT_CLIENTS:
-            for stale_ip, timestamps in list(rate_limit_storage.items()):
-                if not timestamps or timestamps[-1] <= window_start:
-                    rate_limit_storage.pop(stale_ip, None)
-            if len(rate_limit_storage) > MAX_TRACKED_RATE_LIMIT_CLIENTS:
-                oldest = sorted(
-                    rate_limit_storage.items(), key=lambda kv: kv[1][-1] if kv[1] else 0
-                )
-                for stale_ip, _ in oldest[: max(1, MAX_TRACKED_RATE_LIMIT_CLIENTS // 10)]:
-                    rate_limit_storage.pop(stale_ip, None)
-
-        rate_limit_storage[client_ip].append(now)
-        return await call_next(request)
-
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -300,10 +210,9 @@ def create_app(settings = None) -> FastAPI:
     # Fail closed: refuse to serve a clinical API with no credential configured.
     require_secure_configuration()
 
-    # Hardening headers + request body cap. `SessionMiddleware` below signs
-    # cookies, so a wildcard-with-credentials CORS policy would be the worst
-    # possible pairing here.
-    app.add_middleware(SecurityHeadersMiddleware)
+    # Request body cap. `SessionMiddleware` below signs cookies, so a
+    # wildcard-with-credentials CORS policy would be the worst possible pairing
+    # here.
     app.add_middleware(
         BodySizeLimitMiddleware,
         max_bytes=max(16 * 1024 * 1024, int(settings.MAX_IMAGE_SIZE_MB) * 1024 * 1024),
@@ -319,7 +228,7 @@ def create_app(settings = None) -> FastAPI:
     # Rate limiting
     app.add_middleware(
         RateLimitMiddleware,
-        requests_per_minute=settings.RATE_LIMIT_REQUESTS,
+        requests_per_window=settings.RATE_LIMIT_REQUESTS,
         window_seconds=settings.RATE_LIMIT_WINDOW,
     )
 
@@ -351,14 +260,41 @@ def create_app(settings = None) -> FastAPI:
         same_site="lax",
     )
 
-    # --- Realtime + live voice ------------------------------------------------
-    # These were never mounted here, so the documented entrypoint
-    # (`uvicorn main_clinical:app`, what `make run-backend` runs and what the
-    # web portal's VITE_API_URL points at) served 404 for every live-voice route
-    # and never exposed the WebSocket. The voice feature was therefore
-    # unreachable in the default deployment even though `main_v2` mounted it.
-    #
-    # Mounted inside `create_app` so they attach to the concrete app instance.
+    # Added last so it is the outermost middleware: the 413 and 429 responses
+    # that the body-size and rate-limit middleware return directly get the
+    # security headers too.
+    app.add_middleware(SecurityHeadersMiddleware)
+
+    # --- Core platform domains -----------------------------------------------
+    # Identity/profile, health timeline, appointments, care navigation and the
+    # notification queue. These are required: they are mounted outside any
+    # try/except so an import or schema failure stops the app from starting.
+    # They used to share a try block with the optional voice routers, so a
+    # missing voice module silently unmounted login and every `/users/me/*`
+    # route while the health check still reported the app as healthy.
+    from dedan_platform.api_auth import router as platform_auth_router
+    from dedan_platform.api_care import router as platform_care_router
+    from dedan_platform.api_health import router as platform_health_router
+    from dedan_platform.api_notifications import router as platform_notifications_router
+    from dedan_platform.api_profile import router as platform_profile_router
+    from dedan_platform.db import create_all
+    from realtime.voices import SUPPORTED_LANGUAGES
+
+    app.include_router(platform_auth_router)
+    app.include_router(platform_profile_router)
+    app.include_router(platform_health_router)
+    app.include_router(platform_care_router)
+    app.include_router(platform_notifications_router)
+
+    # Additive and idempotent; migrations remain required before schema
+    # changes reach production.
+    create_all()
+    logger.info("platform_routers_mounted")
+
+    # --- Live voice (optional) -----------------------------------------------
+    # Mounted only when its modules are installed. Without them the clinical
+    # API and the platform keep working and the capabilities endpoint below
+    # reports voice as unavailable, so the browser falls back to text.
     try:
         # Native-duplex Live Discussion is the primary voice path.
         # `live_voice` (the older STT->LLM->TTS engine) stays mounted on the same
@@ -367,124 +303,106 @@ def create_app(settings = None) -> FastAPI:
         from realtime.discussion import router as discussion_router
         from live_voice import router as live_voice_router
         from realtime_api import conversations_router, router as realtime_api_router
-
+    except ImportError as exc:
+        live_voice_installed = False
+        logger.warning("live_voice_not_installed: missing module %s", exc.name)
+    else:
+        live_voice_installed = True
         app.include_router(discussion_router)
         app.include_router(live_voice_router)
         app.include_router(realtime_api_router)
         app.include_router(conversations_router)
+        logger.info("realtime_routers_mounted")
 
-        # Core platform domains (Stages 1-3): identity/profile, health timeline,
-        # appointments and the notification queue. Mounted on the documented
-        # entrypoint so `/users/me/*` is reachable from the running app.
-        from dedan_platform.api_auth import router as platform_auth_router
-        from dedan_platform.api_care import router as platform_care_router
-        from dedan_platform.api_health import router as platform_health_router
-        from dedan_platform.api_profile import router as platform_profile_router
-        from dedan_platform.db import create_all
+    @app.get("/dedan/v2/live-voice/capabilities")
+    async def live_voice_capabilities():
+        """Advertise live-voice support so the browser can feature-detect.
 
-        # Signup/login. Mounted with the other platform routers: every other
-        # route in the platform requires a token, and this is where a caller
-        # obtains one, so it must exist on the running app for the portal to
-        # have any authenticated surface to talk to.
-        app.include_router(platform_auth_router)
-        app.include_router(platform_profile_router)
-        app.include_router(platform_health_router)
-        # Care navigation + doctor handoff: the consultation's continuation.
-        # Same `/users/me` ownership model, so no route here can reach another
-        # patient's facilities-booking or handoff.
-        app.include_router(platform_care_router)
+        The portal calls this before offering the voice surface; a 404 here
+        is what makes the UI report live voice as unavailable.
 
-        # What the patient was sent, and why nothing was sent. Same `/users/me`
-        # ownership model as the rest of the platform.
-        from dedan_platform.api_notifications import router as platform_notifications_router
+        This endpoint is the browser's only way to learn what the realtime
+        stack can really do, so every flag is measured rather than asserted.
 
-        app.include_router(platform_notifications_router)
+        It used to hardcode `native_duplex: False` and derive `available`
+        from the *legacy* STT->LLM->TTS factory. That was wrong twice over:
+        it misreported a working native-duplex provider, and it would have
+        advertised the voice surface as live while the provider could not
+        connect at all. A client that trusts this must not be able to be
+        lied to.
 
-        # Additive and idempotent; migrations remain required before schema
-        # changes reach production.
-        create_all()
-        logger.info("platform_routers_mounted")
-
-        @app.get("/dedan/v2/live-voice/capabilities")
-        async def live_voice_capabilities():
-            """Advertise live-voice support so the browser can feature-detect.
-
-            The portal calls this before offering the voice surface; a 404 here
-            is what makes the UI report live voice as unavailable.
-
-            This endpoint is the browser's only way to learn what the realtime
-            stack can really do, so every flag is measured rather than asserted.
-
-            It used to hardcode `native_duplex: False` and derive `available`
-            from the *legacy* STT->LLM->TTS factory. That was wrong twice over:
-            it misreported a working native-duplex provider, and it would have
-            advertised the voice surface as live while the provider could not
-            connect at all. A client that trusts this must not be able to be
-            lied to.
-            """
-            from realtime.discussion import realtime_provider, realtime_enabled
-            from realtime.provider_base import available_providers, build_provider
-
-            # Languages are a *platform* fact (realtime.voices), not a provider
-            # capability. The browser needs this list to build the voice picker
-            # even when no credential is present, so it must not collapse to []
-            # just because a provider failed to build -- otherwise a temporary
-            # provider outage silently disables language selection.
-            from realtime.voices import SUPPORTED_LANGUAGES
-
-            # `available` must mean "a provider can actually be built and can
-            # stream audio", not merely "a key is present in the environment".
-            name = realtime_provider()
-            if not realtime_enabled():
-                return {
-                    "available": False,
-                    "endpoint": "/ws/live-voice",
-                    "transport": "websocket",
-                    "native_duplex": False,
-                    "streaming": False,
-                    "barge_in": False,
-                    "text_fallback": True,
-                    "languages": list(SUPPORTED_LANGUAGES),
-                    "input_sample_rate": 16000,
-                    "output_sample_rate": 24000,
-                    "provider": name,
-                    "providers_registered": available_providers(),
-                    "detail": "Realtime is disabled via REALTIME_ENABLED.",
-                }
-
-            caps = None
-            detail = "No realtime provider is registered."
-            try:
-                caps = build_provider(name).capabilities()
-                detail = caps.notes
-            except Exception as exc:
-                # Never leak a stack trace to the browser: an unavailable
-                # provider is a configuration problem, not a client error.
-                detail = f"provider_unavailable: {type(exc).__name__}"
-
-            streaming = bool(caps and caps.streaming_audio)
+        Languages are a *platform* fact (realtime.voices), not a provider
+        capability, so they are reported even when voice is unavailable.
+        """
+        if not live_voice_installed:
             return {
-                "available": streaming,
+                "available": False,
                 "endpoint": "/ws/live-voice",
                 "transport": "websocket",
-                "native_duplex": bool(caps and caps.native_duplex),
-                "streaming": streaming,
-                "barge_in": bool(caps and caps.supports_interrupt),
+                "native_duplex": False,
+                "streaming": False,
+                "barge_in": False,
                 "text_fallback": True,
                 "languages": list(SUPPORTED_LANGUAGES),
                 "input_sample_rate": 16000,
                 "output_sample_rate": 24000,
-                # Surfaced so a misconfiguration is diagnosable from the browser
-                # instead of looking like an unexplained "unavailable".
-                "provider": name,
-                "providers_registered": available_providers(),
-                "detail": detail,
+                "provider": None,
+                "providers_registered": [],
+                "detail": "Live voice is not installed on this deployment.",
             }
 
-        logger.info("realtime_routers_mounted")
-    except Exception as exc:  # pragma: no cover - defensive
-        # Never let an optional subsystem stop the clinical API from serving.
-        logger.error("realtime_mount_failed: %s", type(exc).__name__)
+        from realtime.discussion import realtime_provider, realtime_enabled
+        from realtime.provider_base import available_providers, build_provider
+
+        # `available` must mean "a provider can actually be built and can
+        # stream audio", not merely "a key is present in the environment".
+        name = realtime_provider()
+        if not realtime_enabled():
+            return {
+                "available": False,
+                "endpoint": "/ws/live-voice",
+                "transport": "websocket",
+                "native_duplex": False,
+                "streaming": False,
+                "barge_in": False,
+                "text_fallback": True,
+                "languages": list(SUPPORTED_LANGUAGES),
+                "input_sample_rate": 16000,
+                "output_sample_rate": 24000,
+                "provider": name,
+                "providers_registered": available_providers(),
+                "detail": "Realtime is disabled via REALTIME_ENABLED.",
+            }
+
+        caps = None
+        detail = "No realtime provider is registered."
+        try:
+            caps = build_provider(name).capabilities()
+            detail = caps.notes
+        except Exception as exc:
+            # Never leak a stack trace to the browser: an unavailable
+            # provider is a configuration problem, not a client error.
+            detail = f"provider_unavailable: {type(exc).__name__}"
+
+        streaming = bool(caps and caps.streaming_audio)
+        return {
+            "available": streaming,
+            "endpoint": "/ws/live-voice",
+            "transport": "websocket",
+            "native_duplex": bool(caps and caps.native_duplex),
+            "streaming": streaming,
+            "barge_in": bool(caps and caps.supports_interrupt),
+            "text_fallback": True,
+            "languages": list(SUPPORTED_LANGUAGES),
+            "input_sample_rate": 16000,
+            "output_sample_rate": 24000,
+            # Surfaced so a misconfiguration is diagnosable from the browser
+            # instead of looking like an unexplained "unavailable".
+            "provider": name,
+            "providers_registered": available_providers(),
+            "detail": detail,
+        }
+
 
     # Exception handlers
     @app.exception_handler(HTTPException)
@@ -788,7 +706,7 @@ def create_app(settings = None) -> FastAPI:
             "fallback_order": list(factory.config.fallback_providers) if factory else [],
             "offline_mode": factory._should_use_offline() if factory else True,
             "health": provider_health,
-            "registry": sorted(GEMINI_MODELS),
+            "registry": sorted(configured_gemini_models()),
         }
 
     @app.get("/health")

@@ -248,7 +248,9 @@ class TestConversationMemory:
         manager = self.manager
         from conversation_memory import ConversationContext
         ctx = ConversationContext("old-session")
-        ctx.created_at = datetime.now() - timedelta(hours=25)
+        # UTC, like the code under test: local time made this pass only on
+        # machines whose clock is at or behind UTC (it failed in Ethiopia, UTC+3).
+        ctx.created_at = datetime.utcnow() - timedelta(hours=25)
         manager._contexts["old-session"] = ctx
         removed = manager.cleanup_expired(max_age_hours=24)
         assert removed >= 1
