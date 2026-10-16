@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 from app.core.security import RateLimitMiddleware
 from dedan_platform import credentials as cred
 from dedan_platform import identity
+from dedan_platform import phone_auth
 from dedan_platform.api_profile import current_user_id
 
 logger = logging.getLogger(__name__)
@@ -188,3 +189,82 @@ def change_password(
         "token_type": "DEDAN",
         "expires_in": cred.SESSION_TTL_SECONDS,
     }
+
+
+# --- Phone sign-up / password reset (SMS code) -------------------------------
+
+
+class PhoneCodeRequest(BaseModel):
+    phone: str = Field(min_length=1, max_length=32)
+
+
+class PhoneVerifyRequest(BaseModel):
+    phone: str = Field(min_length=1, max_length=32)
+    code: str = Field(min_length=1, max_length=12)
+
+
+class PhoneCompleteRequest(BaseModel):
+    verification_token: str = Field(min_length=1, max_length=512)
+    password: str = Field(min_length=1, max_length=200)
+    password_confirmation: Optional[str] = Field(default=None, max_length=200)
+    first_name: Optional[str] = Field(default=None, max_length=60)
+    last_name: Optional[str] = Field(default=None, max_length=60)
+
+
+def _phone_fail(exc: Exception) -> HTTPException:
+    if isinstance(exc, phone_auth.TooManyRequests):
+        return HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+            headers={"Retry-After": str(exc.retry_after)},
+        )
+    if isinstance(exc, phone_auth.SmsUnavailable):
+        return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    if isinstance(exc, phone_auth.InvalidVerification):
+        return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+    if isinstance(exc, phone_auth.PhoneInUse):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if isinstance(exc, phone_auth.AccountDeactivated):
+        return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+@router.post("/phone/request-code", status_code=status.HTTP_202_ACCEPTED)
+def request_phone_code(body: PhoneCodeRequest, request: Request) -> Dict[str, Any]:
+    """Text a 6-digit code. Same answer whether or not the phone has an account."""
+    try:
+        return phone_auth.request_code(
+            body.phone, client=RateLimitMiddleware.client_identity(request)
+        )
+    except phone_auth.PhoneAuthError as exc:
+        raise _phone_fail(exc) from exc
+
+
+@router.post("/phone/verify")
+def verify_phone_code(body: PhoneVerifyRequest) -> Dict[str, Any]:
+    """Exchange a correct code for a short-lived, single-use verification token."""
+    try:
+        return phone_auth.verify_code(body.phone, body.code)
+    except phone_auth.PhoneAuthError as exc:
+        raise _phone_fail(exc) from exc
+
+
+@router.post("/phone/complete")
+def complete_phone_signup(body: PhoneCompleteRequest) -> Dict[str, Any]:
+    """Create the account (or reset its password) and sign in.
+
+    `created` in the response says which happened, so the client can send a
+    new patient to onboarding and a returning one straight into the app.
+    """
+    name = " ".join(part.strip() for part in (body.first_name, body.last_name) if part and part.strip())
+    try:
+        return phone_auth.complete(
+            body.verification_token,
+            body.password,
+            body.password_confirmation,
+            display_name=name or None,
+        )
+    except cred.PasswordPolicyError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except phone_auth.PhoneAuthError as exc:
+        raise _phone_fail(exc) from exc

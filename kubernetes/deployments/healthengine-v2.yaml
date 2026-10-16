@@ -40,6 +40,13 @@ spec:
             secretKeyRef:
               name: dedan-secrets
               key: REDIS_URL
+        # Phone sign-up codes. Required: without it production answers every
+        # code request with 503 rather than pretending to send.
+        - name: SMSETHIOPIA_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: dedan-secrets
+              key: SMSETHIOPIA_API_KEY
         - name: CHROMA_DB_PATH
           value: "/data/clinical_guidelines_db"
         - name: LOG_LEVEL
