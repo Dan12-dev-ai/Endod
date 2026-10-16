@@ -34,6 +34,13 @@ export default function SignUp() {
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [agree, setAgree] = useState(false);
+  // "Forgot password?" on the login page uses the same phone code flow.
+  const [isReset, setIsReset] = useState(false);
+  /* eslint-disable react-hooks/set-state-in-effect -- read the query string once on mount */
+  useEffect(() => {
+    setIsReset(new URLSearchParams(window.location.search).get("reset") === "1");
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ===== Infinite sliding-window carousel =====
   // The track shows a clone of the last slide before the real slides and a
@@ -169,8 +176,13 @@ export default function SignUp() {
           <div className="w-full max-w-[540px] bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10 lg:p-11">
             {/* Card Heading */}
             <h2 className="font-serif text-4xl sm:text-[42px] font-medium text-brand-heading tracking-tight mb-7">
-              Sign Up
+              {isReset ? "Reset password" : "Sign Up"}
             </h2>
+            {isReset && (
+              <p className="text-sm text-brand-muted -mt-5 mb-6">
+                Enter your phone number and we&apos;ll text you a code to set a new password.
+              </p>
+            )}
 
             {/* Registration Form */}
             <form className="space-y-4" data-purpose="signup-form" onSubmit={handleSubmit}>

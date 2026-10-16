@@ -160,12 +160,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The browser tests run against the real backend (offline AI mode).
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend-v2/requirements.txt
+            backend-v2/constraints.txt
+
+      - name: Install backend dependencies
+        working-directory: backend-v2
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -c constraints.txt
+
       # playwright.config.ts drives the `chrome` channel.
       - name: Install Chrome for Playwright
         run: npx playwright install --with-deps chrome
 
-      # The config starts `npm run dev` itself.
+      # The config starts the backend and `npm run dev` itself.
       - name: Run browser tests
+        env:
+          E2E_PYTHON: python
         run: npx playwright test --reporter=list
 
   scripts:

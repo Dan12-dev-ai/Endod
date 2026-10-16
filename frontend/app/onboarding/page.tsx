@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { api, ApiError } from "@/app/lib/api";
 
 const LOOKING_FOR_OPTIONS = [
   { id: "symptoms", label: "Understand my symptoms", hint: "Talk to Endod AI about how you're feeling" },
@@ -12,6 +13,10 @@ const LOOKING_FOR_OPTIONS = [
 ];
 
 const SEX_OPTIONS = ["Male", "Female", "Other", "Prefer not to say"];
+// The values the backend stores for each option.
+const SEX_VALUES: Record<string, string> = {
+  Male: "male", Female: "female", Other: "other", "Prefer not to say": "prefer_not_to_say",
+};
 
 const STEP_TITLES = [
   "What's your name?",
@@ -51,6 +56,10 @@ export default function OnboardingPage() {
 
   // Step 4: age (clinical-style ranges) - UPDATED
   const [ageRange, setAgeRange] = useState<string>('');
+  // Explicit, opt-in consent to store health details (sex and age).
+  const [healthConsent, setHealthConsent] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   const toggleLookingFor = (id: string) => {
     setFormError("");
@@ -141,33 +150,47 @@ export default function OnboardingPage() {
 
   // Keep the newest form values in a ref so timer callbacks (which capture an
   // older render's closure) always save the latest answers, not stale ones.
-  const formRef = useRef({ firstName, middleName, lastName, lookingFor, sex, age: ageRange });
+  const formRef = useRef({ firstName, middleName, lastName, lookingFor, sex, age: ageRange, healthConsent });
   useEffect(() => {
-    formRef.current = { firstName, middleName, lastName, lookingFor, sex, age: ageRange };
-  }, [firstName, middleName, lastName, lookingFor, sex, ageRange]);
+    formRef.current = { firstName, middleName, lastName, lookingFor, sex, age: ageRange, healthConsent };
+  }, [firstName, middleName, lastName, lookingFor, sex, ageRange, healthConsent]);
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     const current = formRef.current;
     if (!current.sex || !current.age) return; // final step not complete yet
+    if (savingRef.current) return;
     clearAdvanceTimer();
     clearFinishTimer();
+    savingRef.current = true;
+    setIsSaving(true);
+    setFormError("");
     try {
-      localStorage.setItem(
-        "dedan_onboarding",
-        JSON.stringify({
-          firstName: current.firstName.trim(),
-          middleName: current.middleName.trim(),
-          lastName: current.lastName.trim(),
-          lookingFor: current.lookingFor,
-          sex: current.sex,
-          age: current.age,
-          completedAt: new Date().toISOString(),
-        }),
-      );
-    } catch {
-      // Storage unavailable (private mode etc.) — continue anyway.
+      await api("users/me", {
+        method: "PATCH",
+        body: {
+          first_name: current.firstName.trim(),
+          middle_name: current.middleName.trim() || null,
+          last_name: current.lastName.trim(),
+        },
+      });
+      if (current.lookingFor.length) {
+        await api("users/me/preferences", { method: "PATCH", body: { onboarding_goals: current.lookingFor } });
+      }
+      // Sex and age are health information: stored only with consent.
+      if (current.healthConsent) {
+        await api("users/me/consent", { method: "PATCH", body: { treatment_processing: true } });
+        await api("users/me/health-profile", {
+          method: "PATCH",
+          body: { sex: SEX_VALUES[current.sex] ?? "other", age_range: current.age },
+        });
+      }
+      router.push("/health-card");
+    } catch (error) {
+      setFormError(error instanceof ApiError ? error.message : "Unable to save your answers. Please try again.");
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
-    router.push("/health-card");
   };
 
   // On the final step, a completed selection auto-saves and moves on.
@@ -422,6 +445,18 @@ export default function OnboardingPage() {
                 <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-brand-heading tracking-tight mb-4">
                   {STEP_TITLES[3]}
                 </h2>
+                <label className="flex items-start gap-2.5 mb-4 text-xs text-brand-muted leading-relaxed cursor-pointer" data-purpose="health-consent">
+                  <input
+                    checked={healthConsent}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-[#1E5852]"
+                    onChange={(e) => setHealthConsent(e.target.checked)}
+                    type="checkbox"
+                  />
+                  <span>
+                    Save my sex and age to my Endod health profile, so advice and safety checks fit me.
+                    Without this, they are not stored.
+                  </span>
+                </label>
                 <div className="flex flex-col gap-2" role="radiogroup" aria-label="Age range">
                   {AGE_RANGES.map((range) => {
                     const selected = ageRange === range.label;
@@ -457,6 +492,10 @@ export default function OnboardingPage() {
 
             </div>
           </div>
+
+          {isSaving && (
+            <p className="mt-4 text-xs text-brand-muted" role="status">Saving your answers...</p>
+          )}
 
           {/* Form Error Message */}
           {formError && (

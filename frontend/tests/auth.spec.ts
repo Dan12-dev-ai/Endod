@@ -1,0 +1,57 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { test, expect } from '@playwright/test';
+
+// Sign-in against the real backend. These start signed out.
+test.use({ storageState: { cookies: [], origins: [] } });
+
+function credentials(): { email: string; password: string } {
+  return JSON.parse(fs.readFileSync(path.join(__dirname, '.auth', 'credentials.json'), 'utf8'));
+}
+
+test.describe('Auth', () => {
+  test('private pages send a signed-out visitor to login', async ({ page }) => {
+    await page.goto('/interview');
+    await expect(page).toHaveURL(/\/login\?next=%2Finterview$/);
+  });
+
+  test('a wrong password shows the backend message', async ({ page }) => {
+    const { email } = credentials();
+    await page.goto('/login');
+    await page.locator('#phone').fill(email);
+    await page.locator('#password').fill('WrongPassword1');
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-purpose="form-error"]')).toContainText('Incorrect');
+  });
+
+  test('signing in returns to the page that asked for it', async ({ page, context }) => {
+    const { email, password } = credentials();
+    await page.goto('/login?next=%2Fhealth-card');
+    await page.locator('#phone').fill(email);
+    await page.locator('#password').fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page).toHaveURL(/\/health-card$/);
+    await expect(page.getByText(/DE\d{6}/).first()).toBeVisible();
+
+    // The session is an httpOnly cookie: not readable by page scripts.
+    const session = (await context.cookies()).find((c) => c.name === 'dedan_session');
+    expect(session?.httpOnly).toBe(true);
+    expect(await page.evaluate(() => document.cookie)).not.toContain('dedan_session');
+  });
+
+  test('an unsafe next= is ignored', async ({ page }) => {
+    const { email, password } = credentials();
+    await page.goto('/login?next=%2F%2Fevil.example');
+    await page.locator('#phone').fill(email);
+    await page.locator('#password').fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page).toHaveURL(/\/interview$/);
+  });
+
+  test('the backend proxy only serves the patient\'s own data', async ({ request }) => {
+    const signedOut = await request.get('/api/backend/users/me');
+    expect(signedOut.status()).toBe(401);
+    const otherPath = await request.get('/api/backend/auth/session');
+    expect(otherPath.status()).toBe(404);
+  });
+});

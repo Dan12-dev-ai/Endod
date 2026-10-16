@@ -4,14 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import { buildHealthCardHtml, HealthCardData } from "./card-svg";
-import { generateQrMatrix, qrMatrixToSvg } from "./qr";
-import {
-  formatPhoneDisplay,
-  generateUserId,
-  getExpiryDate,
-  getFullName,
-  getIssuedDate,
-} from "./health-card-data";
+import { ApiError } from "../lib/api";
+import { loadHealthCard, type HealthCardInfo } from "./health-card-data";
 
 
 // ---------------------------------------------------------------------------
@@ -22,85 +16,46 @@ export default function HealthCardPage() {
   const router = useRouter();
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Read user data from localStorage. This runs only on the client — during
-  // SSR/SSG we render a loading state to avoid hydration mismatches.
-  const [mounted, setMounted] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [middleName, setMiddleName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [createdAt, setCreatedAt] = useState("");
-  const [userId, setUserId] = useState("");
+  // The card comes from the signed-in patient's profile.
+  const [card, setCard] = useState<HealthCardInfo | null>(null);
+  const [loadError, setLoadError] = useState("");
   const [isDownloading, setIsDownloading] = useState(false);
 
-  function readStored(): {
-    onboarding: { firstName?: string; middleName?: string; lastName?: string; completedAt?: string };
-    sessionPhone: string;
-  } {
-    if (typeof window === "undefined") {
-      return { onboarding: {}, sessionPhone: "" };
-    }
-    let onboarding: { firstName?: string; middleName?: string; lastName?: string; completedAt?: string } = {};
-    try {
-      onboarding = JSON.parse(localStorage.getItem("dedan_onboarding") ?? "{}");
-    } catch {
-      // parse error — fall through with defaults
-    }
-    let sessionPhone = "";
-    try {
-      const session = JSON.parse(localStorage.getItem("dedan_session") ?? "{}");
-      sessionPhone = session.phone ?? "";
-    } catch {
-      // parse error — fall through
-    }
-    return { onboarding, sessionPhone };
-  }
-
-  /* eslint-disable react-hooks/set-state-in-effect -- one-time localStorage initialization on mount */
   useEffect(() => {
-    const { onboarding, sessionPhone } = readStored();
-    setFirstName(onboarding.firstName ?? "");
-    setMiddleName(onboarding.middleName ?? "");
-    setLastName(onboarding.lastName ?? "");
-    setCreatedAt(onboarding.completedAt ?? new Date().toISOString());
-    if (sessionPhone) {
-      setPhone(sessionPhone);
-      setUserId(generateUserId(sessionPhone));
-    } else {
-      setUserId("HCA00000001");
-    }
-    // Redirect guard — if no data exists, send to signup
-    const hasOnboarding =
-      !!onboarding &&
-      (onboarding.firstName || onboarding.lastName || onboarding.completedAt);
-    if (!hasOnboarding && !sessionPhone) {
-      router.replace("/signup");
-    }
-    setMounted(true);
-  }, [router]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+    let cancelled = false;
+    loadHealthCard()
+      .then((info) => {
+        if (!cancelled) setCard(info);
+      })
+      .catch((error) => {
+        if (!cancelled) setLoadError(error instanceof ApiError ? error.message : "Unable to load your health card.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const mounted = card !== null;
 
   // Show a loading state during SSR / before mount to avoid hydration mismatch
   if (!mounted) {
     return (
       <main className="w-full min-h-screen flex items-center justify-center py-6 px-2 sm:py-12 sm:px-8 bg-[#DDE9E6] text-brand-primary font-sans antialiased">
         <div className="w-full max-w-[720px] text-center">
+          {loadError ? (
+            <p className="text-sm text-red-600" role="alert">{loadError}</p>
+          ) : (
           <div className="animate-pulse">
             <div className="h-4 bg-slate-200 rounded w-32 mx-auto mb-4"></div>
             <div className="h-3 bg-slate-200 rounded w-48 mx-auto"></div>
           </div>
+          )}
         </div>
       </main>
     );
   }
 
-  const fullName = getFullName(firstName, middleName, lastName);
-  const phoneDisplay = formatPhoneDisplay(phone);
-  const issuedDate = getIssuedDate(createdAt);
-  const expiryDate = getExpiryDate(createdAt);
-
-  const qrData = `endod:${userId}:${createdAt}`;
-  const qrSvg = qrMatrixToSvg(generateQrMatrix(qrData), 152);
+  const { fullName, userId, issuedDate, expiryDate, qrData, qrSvg } = card;
+  const phoneDisplay = card.phone;
 
   const cardData: HealthCardData = {
     fullName,
@@ -158,9 +113,6 @@ export default function HealthCardPage() {
   const downloadAsImage = async () => {
     setIsDownloading(true);
     try {
-      // Build the QR data
-      const qrData = `endod:${userId}:${createdAt}`;
-
       // Create a canvas and draw the card manually using Canvas 2D API.
       // We use the qrcode library's toCanvas for the QR portion to guarantee
       // a scannable code, then draw all other elements with fillText/rect.

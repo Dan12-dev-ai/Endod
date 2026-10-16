@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { passwordProblem } from "@/app/lib/api";
 
 export default function SetPasswordPage() {
   // `useSearchParams()` needs a Suspense boundary for prerendering.
@@ -22,6 +23,7 @@ function SetPassword() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const phone = searchParams.get("phone") ?? "";
+  const isReset = searchParams.get("mode") === "reset";
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -38,8 +40,9 @@ function SetPassword() {
       setFormError("Missing phone number. Please go back and try again.");
       return;
     }
-    if (password.length < 8) {
-      setFormError("Password must be at least 8 characters.");
+    const problem = passwordProblem(password);
+    if (problem) {
+      setFormError(problem);
       return;
     }
     if (password !== confirmPassword) {
@@ -52,7 +55,7 @@ function SetPassword() {
       const response = await fetch("/api/auth/set-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, password }),
+        body: JSON.stringify({ password, passwordConfirmation: confirmPassword }),
       });
       const data = await response.json();
 
@@ -61,16 +64,8 @@ function SetPassword() {
         return;
       }
 
-      try {
-        localStorage.setItem(
-          "dedan_session",
-          JSON.stringify({ phone, createdAt: new Date().toISOString() }),
-        );
-      } catch {
-        // Storage unavailable (private mode etc.) — continue anyway.
-      }
-
-      router.push("/onboarding");
+      // Signed in (httpOnly cookie). New accounts continue to onboarding.
+      router.push(data.created ? "/onboarding" : "/interview");
     } catch {
       setFormError("Unable to save your password right now. Please check your connection and try again.");
     } finally {
@@ -97,7 +92,7 @@ function SetPassword() {
           </div>
 
           <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-brand-heading tracking-tight mb-1">
-            Set your password
+            {isReset ? "Reset your password" : "Set your password"}
           </h2>
           <p className="text-sm text-brand-muted mb-6">
             Create a password for{" "}
@@ -139,7 +134,7 @@ function SetPassword() {
                   </svg>
                 </button>
               </div>
-              <p className="mt-1.5 text-[11px] text-brand-muted">Must be at least 8 characters.</p>
+              <p className="mt-1.5 text-[11px] text-brand-muted">At least 10 characters, with upper and lower case letters.</p>
             </div>
             {/* Confirm Password Field */}
             <div data-purpose="form-field-confirm-password">

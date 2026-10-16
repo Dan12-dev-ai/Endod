@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { safeNext } from "@/app/lib/api";
 
 type Testimonial = {
   quote: string;
@@ -85,7 +86,7 @@ export default function LoginPage() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, password }),
+        body: JSON.stringify({ identifier: phone, password }),
       });
       const data = await response.json();
 
@@ -94,16 +95,8 @@ export default function LoginPage() {
         return;
       }
 
-      try {
-        localStorage.setItem(
-          "dedan_session",
-          JSON.stringify({ phone, createdAt: new Date().toISOString() }),
-        );
-      } catch {
-        // Storage unavailable (private mode etc.) — continue anyway.
-      }
-
-      router.push("/interview");
+      // The session is an httpOnly cookie set by the route handler.
+      router.push(safeNext(new URLSearchParams(window.location.search).get("next"), "/interview"));
     } catch {
       setFormError("Unable to sign in right now. Please check your connection and try again.");
     } finally {
@@ -254,7 +247,7 @@ export default function LoginPage() {
                   value={phone}
                 />
                 <p className="mt-1.5 text-[11px] text-brand-muted">
-                  Use the phone number you registered with.
+                  Use the phone number you registered with (or your email or DEDAN ID).
                 </p>
               </div>
 
@@ -290,6 +283,12 @@ export default function LoginPage() {
                     </svg>
                   </button>
                 </div>
+              </div>
+
+              <div className="text-right -mt-1">
+                <Link className="text-[11px] text-brand-accent font-semibold hover:underline" href="/signup?reset=1">
+                  Forgot password?
+                </Link>
               </div>
 
               {/* Form Error Message */}
