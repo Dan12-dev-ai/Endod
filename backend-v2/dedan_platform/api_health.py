@@ -79,7 +79,11 @@ def read_timeline_event(
 def delete_timeline_event(
     event_id: str, user_id: str = Depends(current_user_id)
 ) -> Dict[str, Any]:
-    if not tl.delete_event(user_id, event_id):
+    try:
+        deleted = tl.delete_event(user_id, event_id)
+    except tl.ProtectedEventError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
     return {"deleted": True, "event_id": event_id}
 
