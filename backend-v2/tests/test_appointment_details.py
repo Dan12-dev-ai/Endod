@@ -140,3 +140,22 @@ class TestFacilityBrowse:
 
     def test_requires_sign_in(self, client):
         assert client.get("/users/me/care/facilities").status_code == 401
+
+
+def test_legacy_invalid_timezone_can_still_be_rescheduled(client, auth):
+    from sqlalchemy import update
+
+    from dedan_platform.db import session_scope
+    from dedan_platform.models import Appointment
+
+    appt = book(client, auth).json()["appointment"]
+    with session_scope() as session:
+        session.execute(update(Appointment).values(timezone="EAT", time_window=None))
+    resp = client.post(f"/users/me/appointments/{appt['appointment_id']}/reschedule",
+                       headers=auth, json={"scheduled_at": local(11, days=4)})
+    assert resp.status_code == 200, resp.text
+
+
+def test_blank_city_filter_is_ignored(client, auth):
+    body = client.get("/users/me/care/facilities", headers=auth, params={"city": " "}).json()
+    assert body["total"] == 6

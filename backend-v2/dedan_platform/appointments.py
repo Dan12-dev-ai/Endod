@@ -549,7 +549,12 @@ def reschedule(
             session, user_id, new_time, appointment.duration_minutes or 30,
             appointment.provider_id, exclude_id=appointment.id,
         )
-        zone = _zone(appointment.timezone or "UTC")
+        # Rows booked before timezones were validated may hold a name that
+        # is not a zone; they read as UTC rather than becoming unmovable.
+        try:
+            zone = _zone(appointment.timezone or "UTC")
+        except AppointmentError:
+            zone = ZoneInfo("UTC")
         if time_window is not None:
             appointment.time_window = _validate_time_window(time_window, new_time, zone)
         else:

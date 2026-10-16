@@ -545,12 +545,13 @@ def browse(
     if sort == "distance" and not location_used:
         raise CareNavigationError("Sorting by distance needs your location.")
     needle = (query or "").strip().lower()
+    city = (city or "").strip().lower()
 
     rows = []
     for facility in DIRECTORY:
         if country and facility.country != country.upper():
             continue
-        if city and facility.city.lower() != city.strip().lower():
+        if city and facility.city.lower() != city:
             continue
         if department and department not in facility.departments:
             continue
