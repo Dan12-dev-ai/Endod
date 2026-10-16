@@ -351,14 +351,36 @@ def create_app(settings = None) -> FastAPI:
         same_site="lax",
     )
 
-    # --- Realtime + live voice ------------------------------------------------
-    # These were never mounted here, so the documented entrypoint
-    # (`uvicorn main_clinical:app`, what `make run-backend` runs and what the
-    # web portal's VITE_API_URL points at) served 404 for every live-voice route
-    # and never exposed the WebSocket. The voice feature was therefore
-    # unreachable in the default deployment even though `main_v2` mounted it.
-    #
-    # Mounted inside `create_app` so they attach to the concrete app instance.
+    # --- Core platform domains -----------------------------------------------
+    # Identity/profile, health timeline, appointments, care navigation and the
+    # notification queue. These are required: they are mounted outside any
+    # try/except so an import or schema failure stops the app from starting.
+    # They used to share a try block with the optional voice routers, so a
+    # missing voice module silently unmounted login and every `/users/me/*`
+    # route while the health check still reported the app as healthy.
+    from dedan_platform.api_auth import router as platform_auth_router
+    from dedan_platform.api_care import router as platform_care_router
+    from dedan_platform.api_health import router as platform_health_router
+    from dedan_platform.api_notifications import router as platform_notifications_router
+    from dedan_platform.api_profile import router as platform_profile_router
+    from dedan_platform.db import create_all
+    from realtime.voices import SUPPORTED_LANGUAGES
+
+    app.include_router(platform_auth_router)
+    app.include_router(platform_profile_router)
+    app.include_router(platform_health_router)
+    app.include_router(platform_care_router)
+    app.include_router(platform_notifications_router)
+
+    # Additive and idempotent; migrations remain required before schema
+    # changes reach production.
+    create_all()
+    logger.info("platform_routers_mounted")
+
+    # --- Live voice (optional) -----------------------------------------------
+    # Mounted only when its modules are installed. Without them the clinical
+    # API and the platform keep working and the capabilities endpoint below
+    # reports voice as unavailable, so the browser falls back to text.
     try:
         # Native-duplex Live Discussion is the primary voice path.
         # `live_voice` (the older STT->LLM->TTS engine) stays mounted on the same
@@ -367,124 +389,106 @@ def create_app(settings = None) -> FastAPI:
         from realtime.discussion import router as discussion_router
         from live_voice import router as live_voice_router
         from realtime_api import conversations_router, router as realtime_api_router
-
+    except ImportError as exc:
+        live_voice_installed = False
+        logger.warning("live_voice_not_installed: missing module %s", exc.name)
+    else:
+        live_voice_installed = True
         app.include_router(discussion_router)
         app.include_router(live_voice_router)
         app.include_router(realtime_api_router)
         app.include_router(conversations_router)
+        logger.info("realtime_routers_mounted")
 
-        # Core platform domains (Stages 1-3): identity/profile, health timeline,
-        # appointments and the notification queue. Mounted on the documented
-        # entrypoint so `/users/me/*` is reachable from the running app.
-        from dedan_platform.api_auth import router as platform_auth_router
-        from dedan_platform.api_care import router as platform_care_router
-        from dedan_platform.api_health import router as platform_health_router
-        from dedan_platform.api_profile import router as platform_profile_router
-        from dedan_platform.db import create_all
+    @app.get("/dedan/v2/live-voice/capabilities")
+    async def live_voice_capabilities():
+        """Advertise live-voice support so the browser can feature-detect.
 
-        # Signup/login. Mounted with the other platform routers: every other
-        # route in the platform requires a token, and this is where a caller
-        # obtains one, so it must exist on the running app for the portal to
-        # have any authenticated surface to talk to.
-        app.include_router(platform_auth_router)
-        app.include_router(platform_profile_router)
-        app.include_router(platform_health_router)
-        # Care navigation + doctor handoff: the consultation's continuation.
-        # Same `/users/me` ownership model, so no route here can reach another
-        # patient's facilities-booking or handoff.
-        app.include_router(platform_care_router)
+        The portal calls this before offering the voice surface; a 404 here
+        is what makes the UI report live voice as unavailable.
 
-        # What the patient was sent, and why nothing was sent. Same `/users/me`
-        # ownership model as the rest of the platform.
-        from dedan_platform.api_notifications import router as platform_notifications_router
+        This endpoint is the browser's only way to learn what the realtime
+        stack can really do, so every flag is measured rather than asserted.
 
-        app.include_router(platform_notifications_router)
+        It used to hardcode `native_duplex: False` and derive `available`
+        from the *legacy* STT->LLM->TTS factory. That was wrong twice over:
+        it misreported a working native-duplex provider, and it would have
+        advertised the voice surface as live while the provider could not
+        connect at all. A client that trusts this must not be able to be
+        lied to.
 
-        # Additive and idempotent; migrations remain required before schema
-        # changes reach production.
-        create_all()
-        logger.info("platform_routers_mounted")
-
-        @app.get("/dedan/v2/live-voice/capabilities")
-        async def live_voice_capabilities():
-            """Advertise live-voice support so the browser can feature-detect.
-
-            The portal calls this before offering the voice surface; a 404 here
-            is what makes the UI report live voice as unavailable.
-
-            This endpoint is the browser's only way to learn what the realtime
-            stack can really do, so every flag is measured rather than asserted.
-
-            It used to hardcode `native_duplex: False` and derive `available`
-            from the *legacy* STT->LLM->TTS factory. That was wrong twice over:
-            it misreported a working native-duplex provider, and it would have
-            advertised the voice surface as live while the provider could not
-            connect at all. A client that trusts this must not be able to be
-            lied to.
-            """
-            from realtime.discussion import realtime_provider, realtime_enabled
-            from realtime.provider_base import available_providers, build_provider
-
-            # Languages are a *platform* fact (realtime.voices), not a provider
-            # capability. The browser needs this list to build the voice picker
-            # even when no credential is present, so it must not collapse to []
-            # just because a provider failed to build -- otherwise a temporary
-            # provider outage silently disables language selection.
-            from realtime.voices import SUPPORTED_LANGUAGES
-
-            # `available` must mean "a provider can actually be built and can
-            # stream audio", not merely "a key is present in the environment".
-            name = realtime_provider()
-            if not realtime_enabled():
-                return {
-                    "available": False,
-                    "endpoint": "/ws/live-voice",
-                    "transport": "websocket",
-                    "native_duplex": False,
-                    "streaming": False,
-                    "barge_in": False,
-                    "text_fallback": True,
-                    "languages": list(SUPPORTED_LANGUAGES),
-                    "input_sample_rate": 16000,
-                    "output_sample_rate": 24000,
-                    "provider": name,
-                    "providers_registered": available_providers(),
-                    "detail": "Realtime is disabled via REALTIME_ENABLED.",
-                }
-
-            caps = None
-            detail = "No realtime provider is registered."
-            try:
-                caps = build_provider(name).capabilities()
-                detail = caps.notes
-            except Exception as exc:
-                # Never leak a stack trace to the browser: an unavailable
-                # provider is a configuration problem, not a client error.
-                detail = f"provider_unavailable: {type(exc).__name__}"
-
-            streaming = bool(caps and caps.streaming_audio)
+        Languages are a *platform* fact (realtime.voices), not a provider
+        capability, so they are reported even when voice is unavailable.
+        """
+        if not live_voice_installed:
             return {
-                "available": streaming,
+                "available": False,
                 "endpoint": "/ws/live-voice",
                 "transport": "websocket",
-                "native_duplex": bool(caps and caps.native_duplex),
-                "streaming": streaming,
-                "barge_in": bool(caps and caps.supports_interrupt),
+                "native_duplex": False,
+                "streaming": False,
+                "barge_in": False,
                 "text_fallback": True,
                 "languages": list(SUPPORTED_LANGUAGES),
                 "input_sample_rate": 16000,
                 "output_sample_rate": 24000,
-                # Surfaced so a misconfiguration is diagnosable from the browser
-                # instead of looking like an unexplained "unavailable".
-                "provider": name,
-                "providers_registered": available_providers(),
-                "detail": detail,
+                "provider": None,
+                "providers_registered": [],
+                "detail": "Live voice is not installed on this deployment.",
             }
 
-        logger.info("realtime_routers_mounted")
-    except Exception as exc:  # pragma: no cover - defensive
-        # Never let an optional subsystem stop the clinical API from serving.
-        logger.error("realtime_mount_failed: %s", type(exc).__name__)
+        from realtime.discussion import realtime_provider, realtime_enabled
+        from realtime.provider_base import available_providers, build_provider
+
+        # `available` must mean "a provider can actually be built and can
+        # stream audio", not merely "a key is present in the environment".
+        name = realtime_provider()
+        if not realtime_enabled():
+            return {
+                "available": False,
+                "endpoint": "/ws/live-voice",
+                "transport": "websocket",
+                "native_duplex": False,
+                "streaming": False,
+                "barge_in": False,
+                "text_fallback": True,
+                "languages": list(SUPPORTED_LANGUAGES),
+                "input_sample_rate": 16000,
+                "output_sample_rate": 24000,
+                "provider": name,
+                "providers_registered": available_providers(),
+                "detail": "Realtime is disabled via REALTIME_ENABLED.",
+            }
+
+        caps = None
+        detail = "No realtime provider is registered."
+        try:
+            caps = build_provider(name).capabilities()
+            detail = caps.notes
+        except Exception as exc:
+            # Never leak a stack trace to the browser: an unavailable
+            # provider is a configuration problem, not a client error.
+            detail = f"provider_unavailable: {type(exc).__name__}"
+
+        streaming = bool(caps and caps.streaming_audio)
+        return {
+            "available": streaming,
+            "endpoint": "/ws/live-voice",
+            "transport": "websocket",
+            "native_duplex": bool(caps and caps.native_duplex),
+            "streaming": streaming,
+            "barge_in": bool(caps and caps.supports_interrupt),
+            "text_fallback": True,
+            "languages": list(SUPPORTED_LANGUAGES),
+            "input_sample_rate": 16000,
+            "output_sample_rate": 24000,
+            # Surfaced so a misconfiguration is diagnosable from the browser
+            # instead of looking like an unexplained "unavailable".
+            "provider": name,
+            "providers_registered": available_providers(),
+            "detail": detail,
+        }
+
 
     # Exception handlers
     @app.exception_handler(HTTPException)

@@ -120,7 +120,9 @@ def register(body: RegisterRequest) -> Dict[str, Any]:
             status_code=500, detail="Could not finish setting up the account. Please retry."
         ) from exc
 
-    token = cred.issue_token(created["dedan_user_id"], scope="portal")
+    token = cred.issue_token(
+        created["dedan_user_id"], expires_in=cred.SESSION_TTL_SECONDS, scope="portal"
+    )
     logger.info("register_success dedan_user_id=%s", created["dedan_user_id"])
     return {
         "access_token": token,
