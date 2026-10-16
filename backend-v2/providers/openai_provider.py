@@ -16,6 +16,8 @@ from typing import Any, Dict, List, Optional
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 
+import clinical_triage
+
 from .models import (
     Modality,
     ProviderCapabilities,
@@ -312,13 +314,25 @@ class OpenAIProvider(MultimodalAIProvider):
             result.raw_response = response_text
             self._extract_from_text(result, response_text)
         except Exception as e:
+            # An unreadable answer is not reassurance: ask for a clinician
+            # rather than defaulting to the model contract's "routine".
             result.raw_response = str(e)
-            result.safety_flags.append(f"Parse error: {e}")
+            result.safety_flags.append(f"provider_response_unreadable:{type(e).__name__}")
+            # Escalate only: the model may already have said "emergency"
+            # before a later field failed to parse.
+            result.urgency = clinical_triage.max_urgency(result.urgency, "see_doctor_soon")
+            result.requires_professional_review = True
+            if not result.recommended_next_step:
+                result.recommended_next_step = (
+                    "We could not complete this assessment. Please see a clinician, "
+                    "and seek emergency care if your symptoms are severe."
+                )
         return result
     
     def _populate_from_dict(self, result: AnalysisResponse, data: Dict[str, Any]):
         """Populate AnalysisResponse from parsed JSON."""
-        result.urgency = data.get("urgency", "routine")
+        # A missing urgency is not reassurance.
+        result.urgency = data.get("urgency") or "see_doctor_soon"
         result.recommended_next_step = data.get("recommended_next_step", "")
         result.confidence_score = float(data.get("confidence_score", 0.0))
         result.uncertainty = data.get("uncertainty", "")

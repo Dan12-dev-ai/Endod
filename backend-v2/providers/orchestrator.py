@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+import clinical_triage
+
 from .models import (
     Modality,
     MultimodalAIProvider,
@@ -219,7 +221,6 @@ class SafetyValidator:
     """Validates AI responses for medical safety."""
     
     REVIEW_TRIGGERS = {
-        "emergency": ["chest pain", "difficulty breathing", "unconscious", "severe bleeding", "stroke", "heart attack"],
         "high_risk": ["pregnancy", "child", "infant", "elderly", "immunocompromised", "cancer"],
         "uncertainty": ["cannot determine", "unclear", "insufficient", "need better image", "blurry", "dark"],
     }
@@ -228,27 +229,30 @@ class SafetyValidator:
         self.threshold = threshold
     
     def validate(self, response: AnalysisResponse, context: MultimodalClinicalContext) -> AnalysisResponse:
-        combined_text = " ".join(filter(None, [
-            context.text,
-            context.voice_transcript,
-            response.recommended_next_step,
-        ])).lower()
-        
-        for keyword in self.REVIEW_TRIGGERS["emergency"]:
-            if keyword in combined_text:
-                response.safety_flags.append(f"emergency_keyword:{keyword}")
-                response.requires_professional_review = True
-                if response.urgency != "emergency":
-                    response.urgency = "urgent"
+        # Red-flag rules on what the patient said (text and voice). This used
+        # to force any emergency keyword to "urgent", which capped real
+        # emergencies below "emergency"; it now escalates only.
+        profile = context.patient_profile
+        triage = clinical_triage.assess(
+            " ".join(filter(None, [context.text, context.voice_transcript])),
+            age_years=profile.age if profile else None,
+            pregnant=bool(profile and profile.pregnancy_status),
+        )
+        if clinical_triage.urgency_rank(triage.urgency) > clinical_triage.urgency_rank(response.urgency):
+            response.safety_flags.append(f"triage_escalation:{triage.urgency}")
+            response.urgency = triage.urgency
+        if clinical_triage.urgency_rank(triage.urgency) >= clinical_triage.urgency_rank("urgent"):
+            response.requires_professional_review = True
         
         if context.patient_profile:
             if context.patient_profile.pregnancy_status:
                 response.safety_flags.append("pregnant_patient")
                 response.requires_professional_review = True
-            if context.patient_profile.age and context.patient_profile.age < 5:
+            # `is not None`: age 0 (an infant) is falsy.
+            if context.patient_profile.age is not None and context.patient_profile.age < 5:
                 response.safety_flags.append("pediatric_patient")
                 response.requires_professional_review = True
-            if context.patient_profile.age and context.patient_profile.age > 75:
+            if context.patient_profile.age is not None and context.patient_profile.age >= 75:
                 response.safety_flags.append("geriatric_patient")
         
         if context.image_quality and not context.image_quality.is_usable:
