@@ -42,7 +42,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 from fastapi import FastAPI, Request, HTTPException, status, Depends, BackgroundTasks, UploadFile, File, Form
@@ -194,17 +194,24 @@ async def periodic_cleanup():
 class ConsultationRequest(BaseModel):
     """What the patient describes; everything else comes from their profile."""
 
+    # Unknown fields (e.g. a patient_age meant for someone else) are an error,
+    # not silently ignored.
+    model_config = ConfigDict(extra="forbid")
+
     symptom_description: str = Field(..., min_length=10, max_length=3000)
     symptom_duration: Optional[str] = Field(default=None, max_length=200)
     symptom_severity: Optional[Literal["mild", "moderate", "severe"]] = None
     image_ids: List[str] = Field(default_factory=list, max_length=10)
     voice_transcript: Optional[str] = Field(default=None, max_length=5000)
-    session_id: Optional[str] = Field(default=None, max_length=100)
+    #: Fits the timeline's conversation_id column.
+    session_id: Optional[str] = Field(default=None, max_length=64)
     conversation_history: List[Dict[str, str]] = Field(default_factory=list, max_length=50)
     pregnant: bool = False
-    #: Overrides for this consultation only (e.g. asking for a child).
-    patient_age: Optional[int] = Field(default=None, ge=0, le=150)
-    patient_sex: Optional[Literal["male", "female", "other"]] = None
+
+
+#: Languages the analysis pipeline answers in; other profile languages fall
+#: back to English rather than failing the consultation.
+_ANALYSIS_LANGUAGES = {"en", "sw", "am", "es", "fr"}
 
 
 def _record_consultation(user_id: str, result: Dict[str, Any]) -> None:
@@ -216,6 +223,26 @@ def _record_consultation(user_id: str, result: Dict[str, Any]) -> None:
         safety = result.get("safety") or {}
         urgency = safety.get("urgency", "routine")
         explanations = [e.get("label") for e in result.get("possible_explanations") or [] if e.get("label")]
+    except Exception:  # noqa: BLE001
+        logger.exception("consultation_timeline_not_recorded")
+        return
+    # The safety alert is written first and on its own, so a failure writing
+    # the conversation entry can never drop it.
+    if urgency == "emergency":
+        try:
+            record_event(
+                user_id=user_id,
+                event_type=HealthEventType.SAFETY_ALERT,
+                title="Emergency care recommended",
+                description=safety.get("emergency_message"),
+                status=EventStatus.COMPLETED,
+                source="dedan",
+                conversation_id=result.get("session_id"),
+                metadata={"response_id": result.get("response_id")},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("consultation_safety_alert_not_recorded error=%s", type(exc).__name__)
+    try:
         record_event(
             user_id=user_id,
             event_type=HealthEventType.AI_CONVERSATION,
@@ -230,19 +257,9 @@ def _record_consultation(user_id: str, result: Dict[str, Any]) -> None:
                 "possible_explanations": explanations[:3],
             },
         )
-        if urgency == "emergency":
-            record_event(
-                user_id=user_id,
-                event_type=HealthEventType.SAFETY_ALERT,
-                title="Emergency care recommended",
-                description=safety.get("emergency_message"),
-                status=EventStatus.COMPLETED,
-                source="dedan",
-                conversation_id=result.get("session_id"),
-                metadata={"response_id": result.get("response_id")},
-            )
-    except Exception:  # noqa: BLE001
-        logger.exception("consultation_timeline_not_recorded")
+    except Exception as exc:  # noqa: BLE001
+        # Type only: the exception text can carry the bound health details.
+        logger.error("consultation_timeline_not_recorded error=%s", type(exc).__name__)
 
 
 def create_app(settings = None) -> FastAPI:
@@ -789,19 +806,24 @@ def create_app(settings = None) -> FastAPI:
         or age range), sex, location, allergies, medications, conditions and
         language -- so the age- and risk-based safety rules always see them.
         The result is recorded on the patient's timeline.
+
+        It is always about the account holder: their conditions, medicines and
+        allergies are used and the result goes on their record, so it takes
+        no age or sex override (asking for a child needs a dependent profile).
         """
-        profile = platform_identity.get_profile_payload(user_id)
+        profile = await run_in_threadpool(platform_identity.get_profile_payload, user_id)
         if not profile["consent"]["treatment_processing"]:
             raise HTTPException(status_code=403, detail="Consent to store health information is required.")
-        health = platform_identity.get_health_profile_payload(user_id)
+        health = await run_in_threadpool(platform_identity.get_health_profile_payload, user_id)
 
-        age = body.patient_age if body.patient_age is not None else health.get("age_years")
+        age = health.get("age_years")
         if age is None:
             raise HTTPException(
                 status_code=400,
                 detail="Add your age (date of birth or age range) to your health profile first.",
             )
-        sex = body.patient_sex or {"female": "female", "male": "male"}.get(health.get("sex") or "", "other")
+        sex = {"female": "female", "male": "male"}.get(health.get("sex") or "", "other")
+        language = profile.get("preferences", {}).get("language") or "en"
         location = ", ".join(p for p in (profile.get("city"), profile.get("country_code")) if p) or None
 
         analyze_request = AnalyzeRequest(
@@ -812,7 +834,7 @@ def create_app(settings = None) -> FastAPI:
             patient_chronic_conditions=health.get("conditions") or [],
             patient_medications=health.get("medications") or [],
             patient_allergies=health.get("allergies") or [],
-            patient_language=profile.get("preferences", {}).get("language", "en"),
+            patient_language=language if language in _ANALYSIS_LANGUAGES else "en",
             symptom_description=body.symptom_description,
             symptom_duration=body.symptom_duration,
             symptom_severity=body.symptom_severity,
@@ -823,7 +845,7 @@ def create_app(settings = None) -> FastAPI:
             consent=True,
         )
         result = await analyze(analyze_request, background_tasks)
-        _record_consultation(user_id, result)
+        await run_in_threadpool(_record_consultation, user_id, result)
         return result
 
     @app.get("/api/health", response_model=HealthCheckResponse)

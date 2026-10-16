@@ -82,3 +82,47 @@ def test_profile_allergies_are_used(client, auth, monkeypatch):
     client.post("/users/me/consultations", headers=auth,
                 json={"symptom_description": "sore throat and mild fever"})
     assert seen["allergies"] == ["penicillin"]
+
+
+@pytest.mark.parametrize("language", ["en", "am", "om", "ti", "so", "sw"])
+def test_every_profile_language_gets_a_consultation(client, auth, language):
+    _consent_and_profile(client, auth, age_range="21-40")
+    assert client.patch("/users/me/preferences", headers=auth,
+                        json={"language": language}).status_code == 200
+    resp = client.post("/users/me/consultations", headers=auth,
+                       json={"symptom_description": "I have crushing chest pain and can't breathe"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["safety"]["urgency"] == "emergency"
+
+
+def test_no_age_override_for_someone_else(client, auth):
+    _consent_and_profile(client, auth, age_range="21-40")
+    resp = client.post("/users/me/consultations", headers=auth,
+                       json={"symptom_description": "my child has a fever", "patient_age": 3})
+    assert resp.status_code == 422
+
+
+def test_long_session_ids_are_rejected(client, auth):
+    _consent_and_profile(client, auth, age_range="21-40")
+    resp = client.post("/users/me/consultations", headers=auth,
+                       json={"symptom_description": "headache for two days", "session_id": "s" * 65})
+    assert resp.status_code == 422
+
+
+def test_safety_alert_survives_a_failed_conversation_entry(client, auth, monkeypatch):
+    from dedan_platform import timeline
+    from dedan_platform.models import HealthEventType
+
+    original = timeline.record_event
+
+    def flaky(**kwargs):
+        if kwargs["event_type"] == HealthEventType.AI_CONVERSATION:
+            raise RuntimeError("insert failed")
+        return original(**kwargs)
+
+    monkeypatch.setattr(timeline, "record_event", flaky)
+    _consent_and_profile(client, auth, age_range="21-40")
+    assert client.post("/users/me/consultations", headers=auth,
+                       json={"symptom_description": "I have crushing chest pain and can't breathe"}).status_code == 200
+    kinds = {e["event_type"] for e in client.get("/users/me/timeline", headers=auth).json()["events"]}
+    assert "SAFETY_ALERT" in kinds
