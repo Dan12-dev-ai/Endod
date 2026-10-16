@@ -168,6 +168,10 @@ class Profile(Base):
     display_name: Mapped[Optional[str]] = mapped_column(String(120))
     email: Mapped[Optional[str]] = mapped_column(String(255), index=True)
     phone: Mapped[Optional[str]] = mapped_column(String(32))
+    #: Set when the patient proved they hold `phone` with an SMS code. Only a
+    #: verified phone can be used to sign in, and it is unique among verified
+    #: phones (see `migrations.ensure_unique_phone_index`).
+    phone_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     locale: Mapped[str] = mapped_column(String(8), default="en", nullable=False)
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", nullable=False)
     country_code: Mapped[str] = mapped_column(String(2), default="KE", nullable=False)
@@ -587,4 +591,38 @@ class Notification(Base):
         # status); the composite keeps that from degrading into a scan as the
         # table grows.
         Index("ix_notifications_appointment_status", "appointment_id", "status"),
+    )
+
+
+class PhoneVerification(Base):
+    """One SMS code sent to a phone number.
+
+    The code itself is never stored: only an HMAC of it, keyed by the token
+    signing secret and bound to this row's id, so a leaked table does not
+    reveal live codes. A verification moves through three states:
+    sent (`verified_at` empty) -> verified -> used (`used_at` set once the
+    account is created or its password reset), and can be used only once.
+    """
+
+    __tablename__ = "phone_verifications"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    #: E.164, e.g. "+251911234567".
+    phone: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: Caller address, for abuse investigation.
+    client: Mapped[Optional[str]] = mapped_column(String(64))
+    #: Reference returned by the SMS provider, when it gives one.
+    provider_message_id: Mapped[Optional[str]] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False,
+    )
+
+    __table_args__ = (
+        # Rate limiting counts recent codes per phone.
+        Index("ix_phone_verifications_phone_created", "phone", "created_at"),
     )

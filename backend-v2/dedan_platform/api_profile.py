@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["profile"])
 
 
+#: Token scopes that authenticate a patient: portal logins and the realtime
+#: (live voice) session token.
+SESSION_SCOPES = frozenset({"portal", "realtime"})
+
+
 def current_user_id(
     request: Request,
     authorization: Optional[str] = Header(None, alias=AUTH_HEADER),
@@ -52,7 +57,9 @@ def current_user_id(
             detail="Authentication required.",
         ) from exc
     subject = payload["sub"]
-    if not subject:
+    # Only session tokens sign a patient in. A phone-verification token (or any
+    # future single-purpose token) carries a different scope and subject.
+    if not subject or payload.get("scope") not in SESSION_SCOPES:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required.",
@@ -83,7 +90,7 @@ def _error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=400, detail=str(exc))
     if isinstance(exc, identity.UserNotFound):
         return HTTPException(status_code=404, detail=str(exc))
-    if isinstance(exc, identity.EmailInUse):
+    if isinstance(exc, (identity.EmailInUse, identity.PhoneInUse)):
         return HTTPException(status_code=409, detail=str(exc))
     return HTTPException(status_code=400, detail=str(exc))
 
