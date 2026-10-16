@@ -33,7 +33,7 @@ from pydantic import BaseModel, Field
 
 from app.core.security import RateLimitMiddleware
 from dedan_platform import credentials as cred
-from dedan_platform import identity
+from dedan_platform import identity, inbox
 from dedan_platform import phone_auth
 from dedan_platform.api_profile import current_user_id
 
@@ -180,6 +180,10 @@ def change_password(
         )
     except cred.CredentialError as exc:
         raise _fail(exc) from exc
+    inbox.add_item(
+        user_id, "security", "password_changed", "Your password was changed",
+        body="If this wasn't you, reset your password by phone and contact support.",
+    )
     # Every token issued before the change is now rejected, including the one
     # that made this request, so hand the caller a fresh one.
     dedan_user_id = identity.get_user_by_internal_id(user_id).dedan_user_id
