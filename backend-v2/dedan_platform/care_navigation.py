@@ -587,15 +587,23 @@ def search(
     longitude: Optional[float] = None,
     limit: int = 5,
     query: Optional[str] = None,
+    country: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Care-navigation payload for the consultation.
 
     `location_used` is explicit: the patient is told whether their coordinates
     were used, and if not, why ranking fell back to relevance alone.
     """
+    if limit < 1:
+        raise CareNavigationError("limit must be at least 1.")
+    # Rank everything, filter, then cut to `limit`: filtering after the cut
+    # dropped matches that ranked just below it.
     ranked = rank_facilities(
-        context, latitude=latitude, longitude=longitude, limit=limit,
+        context, latitude=latitude, longitude=longitude, limit=len(DIRECTORY),
     )
+    if country:
+        ranked = [item for item in ranked if item.facility.country == country.upper()]
+    query_matched = None
 
     if query:
         needle = query.strip().lower()
@@ -606,13 +614,17 @@ def search(
                 or needle in item.facility.city.lower()
                 or needle in item.facility.address.lower()
             ]
+            # No match falls back to the ranked list, but says so.
+            query_matched = bool(filtered)
             ranked = filtered or ranked
+    ranked = ranked[:limit]
 
     location_used = latitude is not None and longitude is not None
     return {
         "required_departments": required_departments(context),
         "location_used": location_used,
         "facilities": [item.to_payload() for item in ranked],
+        "query_matched": query_matched,
         "directory_version": DIRECTORY_VERSION,
         "directory_source": FACILITY_SOURCE,
         "directory_source_note": FACILITY_SOURCE_NOTE,

@@ -133,7 +133,8 @@ def create_user(
         # reminders (transactional, not marketing) go by SMS unless they turn
         # them off in settings.
         user.preferences = Preferences(
-            language=locale, sms_notifications=bool(phone and phone_verified)
+            language=locale if locale in SUPPORTED_LANGUAGES else "en",
+            sms_notifications=bool(phone and phone_verified)
         )
         user.health_profile = HealthProfile()
         # Consent starts fully withdrawn: nothing is assumed on the user's behalf.
@@ -568,6 +569,36 @@ _PREFERENCE_FIELDS = {
     "onboarding_goals", "care_search_radius_km",
 }
 
+THEMES = ("system", "light", "dark")
+VOICE_GENDERS = ("female", "male", "neutral")
+#: Reminder offsets are seconds before the appointment: at most 5, up to 30 days.
+MAX_REMINDER_OFFSETS = 5
+MAX_REMINDER_OFFSET_SECONDS = 30 * 86400
+
+
+def _clean_reminder_offsets(raw: Any) -> str:
+    """Positive whole seconds, as a list or comma-separated text, stored as text."""
+    if isinstance(raw, str):
+        parts = [p.strip() for p in raw.split(",") if p.strip()]
+    elif isinstance(raw, list):
+        parts = raw
+    else:
+        raise IdentityError("reminder_offsets must be a list of seconds before the appointment.")
+    offsets = []
+    for part in parts:
+        try:
+            value = int(part) if not isinstance(part, bool) else None
+        except (TypeError, ValueError):
+            value = None
+        if value is None or not 0 < value <= MAX_REMINDER_OFFSET_SECONDS:
+            raise IdentityError("Each reminder offset must be 1 second to 30 days, in seconds.")
+        offsets.append(value)
+    offsets = sorted(set(offsets), reverse=True)
+    if not offsets or len(offsets) > MAX_REMINDER_OFFSETS:
+        raise IdentityError(f"Give 1 to {MAX_REMINDER_OFFSETS} reminder offsets.")
+    return ",".join(str(o) for o in offsets)
+
+
 #: What onboarding offers ("What are you looking for?").
 ONBOARDING_GOALS = ("symptoms", "hospitals", "appointments", "treatment", "history")
 
@@ -608,6 +639,19 @@ def update_preferences(
         ):
             raise IdentityError(f"onboarding_goals must be a list of {list(ONBOARDING_GOALS)}.")
         changes = {**changes, "onboarding_goals": ",".join(dict.fromkeys(goals)) or None}
+    for field in ("email_notifications", "sms_notifications", "push_notifications"):
+        if field in changes and not isinstance(changes[field], bool):
+            raise IdentityError(f"{field} must be true or false.")
+    if "theme" in changes and changes["theme"] not in THEMES:
+        raise IdentityError(f"theme must be one of {list(THEMES)}.")
+    if "voice_gender" in changes and changes["voice_gender"] not in (None, *VOICE_GENDERS):
+        raise IdentityError(f"voice_gender must be one of {list(VOICE_GENDERS)}.")
+    if "preferred_contact_window" in changes:
+        window = changes["preferred_contact_window"]
+        if window is not None and (not isinstance(window, str) or len(window) > 64):
+            raise IdentityError("preferred_contact_window must be text of at most 64 characters.")
+    if "reminder_offsets" in changes:
+        changes = {**changes, "reminder_offsets": _clean_reminder_offsets(changes["reminder_offsets"])}
     if "care_search_radius_km" in changes:
         radius = changes["care_search_radius_km"]
         if radius is not None and (not isinstance(radius, int) or isinstance(radius, bool) or not 1 <= radius <= 200):
@@ -640,6 +684,8 @@ SEX_VALUES = ("female", "male", "other", "undisclosed")
 _SEX_ALIASES = {"prefer_not_to_say": "undisclosed", "not_stated": "undisclosed"}
 #: Onboarding age buckets.
 AGE_RANGES = ("0-20", "21-40", "41-60", "61-80", "81+")
+#: Other spellings accepted on input (the Next.js onboarding buttons).
+_AGE_RANGE_ALIASES = {"1-20": "0-20", "81-100": "81+", "80+": "81+"}
 BLOOD_TYPES = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
 
 
@@ -668,6 +714,8 @@ def _validate_health_changes(changes: Dict[str, Any]) -> Dict[str, Any]:
         if sex not in SEX_VALUES:
             raise IdentityError(f"sex must be one of {list(SEX_VALUES)}.")
         clean["sex"] = sex
+    if clean.get("age_range") is not None:
+        clean["age_range"] = _AGE_RANGE_ALIASES.get(str(clean["age_range"]).strip(), clean["age_range"])
     if "age_range" in clean and clean["age_range"] is not None and clean["age_range"] not in AGE_RANGES:
         raise IdentityError(f"age_range must be one of {list(AGE_RANGES)}.")
     if "blood_type" in clean and clean["blood_type"] is not None:

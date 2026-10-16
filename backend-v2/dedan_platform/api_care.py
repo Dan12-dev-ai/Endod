@@ -44,6 +44,8 @@ class CareSearchRequest(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     query: Optional[str] = Field(default=None, max_length=120)
+    #: ISO country code to search in (e.g. "ET"); all countries when omitted.
+    country: Optional[str] = Field(default=None, min_length=2, max_length=2)
     limit: int = Field(default=5, ge=1, le=20)
     #: Set by the client only when the patient granted geolocation. Informational
     #: for the audit trail; the coordinates themselves are the evidence.
@@ -76,6 +78,7 @@ def search_facilities(
             longitude=longitude,
             limit=body.limit,
             query=body.query,
+            country=body.country,
         )
     except cn.CareNavigationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -270,8 +273,40 @@ def create_handoff_summary(
     return {**approved, "patient_explanation": explanation}
 
 
+def _prepared_handoff(user_id: str, handoff_id: str) -> Optional[Dict[str, Any]]:
+    """The "summary prepared" event for this handoff, however old.
+
+    Looked up directly rather than in a recent page of the timeline (which
+    missed older summaries), and only the prepared event, which carries the
+    fingerprint -- not a later "shared" event for the same handoff.
+    """
+    from sqlalchemy import select
+
+    from dedan_platform.db import session_scope
+    from dedan_platform.models import HealthEvent
+    from dedan_platform.timeline import _to_payload
+
+    with session_scope() as session:
+        rows = session.scalars(
+            select(HealthEvent).where(
+                HealthEvent.user_id == user_id,
+                HealthEvent.event_type == HealthEventType.DOCUMENT,
+                # Narrows the scan; the exact match is checked below.
+                HealthEvent.metadata_json.contains(handoff_id),
+            )
+        ).all()
+        events = [_to_payload(row) for row in rows]
+    return next(
+        (
+            e for e in events
+            if e["metadata"].get("handoff_id") == handoff_id and e["metadata"].get("fingerprint")
+        ),
+        None,
+    )
+
+
 class HandoffShareRequest(BaseModel):
-    handoff_id: str
+    handoff_id: str = Field(..., pattern=r"^[0-9a-f]{32}$")
     fingerprint: str = Field(default="", max_length=128)
 
 
@@ -293,13 +328,7 @@ def share_handoff(
         "Consent to share your information with clinicians is required.",
     )
 
-    from dedan_platform import timeline as tl
-
-    events = tl.list_events(user_id=user_id, limit=100, event_type=HealthEventType.DOCUMENT)
-    stored = next(
-        (e for e in events["events"] if e["metadata"].get("handoff_id") == body.handoff_id),
-        None,
-    )
+    stored = _prepared_handoff(user_id, body.handoff_id)
     if stored is None:
         # 404, not 403: do not confirm that someone else's handoff exists.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Handoff not found.")

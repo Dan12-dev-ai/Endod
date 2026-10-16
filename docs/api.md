@@ -312,9 +312,11 @@ Returns (and PATCH returns) the `preferences` object only.
 | `voice_preference` | `warm`, `calm`, `clear` |
 | `onboarding_goals` | array (or comma string) of `symptoms`, `hospitals`, `appointments`, `treatment`, `history` |
 | `care_search_radius_km` | integer 1-200 or `null` |
-| `reminder_offsets` | comma string of seconds before an appointment, e.g. `"86400,3600"` |
-| `email_notifications`, `sms_notifications`, `push_notifications` | boolean |
-| `theme`, `voice_gender`, `preferred_contact_window` | string (not validated) |
+| `reminder_offsets` | 1-5 seconds-before values (array or comma string), each up to 30 days; stored as e.g. `"86400,3600"` |
+| `email_notifications`, `sms_notifications`, `push_notifications` | boolean (JSON true/false only) |
+| `theme` | `system`, `light`, `dark` |
+| `voice_gender` | `female`, `male`, `neutral` or `null` |
+| `preferred_contact_window` | text, max 64, or `null` |
 
 ### `GET /users/me/consent` / `PATCH /users/me/consent`
 
@@ -381,7 +383,7 @@ Requires auth **and** `consent.treatment_processing`; otherwise 403
 | Field | Accepted values |
 | --- | --- |
 | `sex` | `female`, `male`, `other`, `undisclosed` (`prefer_not_to_say` is accepted as `undisclosed`) |
-| `age_range` | `0-20`, `21-40`, `41-60`, `61-80`, `81+` |
+| `age_range` | `0-20`, `21-40`, `41-60`, `61-80`, `81+` (`1-20` and `81-100` are accepted and stored as `0-20` / `81+`) |
 | `date_of_birth` | `YYYY-MM-DD`, not in the future, under 130 years ago |
 | `blood_type` | `A+ A- B+ B- AB+ AB- O+ O-` |
 | `allergies`, `medications`, `conditions` | array of strings (stored comma-joined, so do not put commas inside an item) |
@@ -970,7 +972,8 @@ Ranks facilities for a consultation (clinical fit 72 %, distance 28 %).
 | `language` | string | `en` | |
 | `latitude`, `longitude` | float | null | **ignored unless `location_granted` is true** |
 | `location_granted` | bool | false | |
-| `query` | string | null | max 120; filters the ranked results by name/city/address (falls back to unfiltered if nothing matches) |
+| `query` | string | null | max 120; filters by name/city/address before `limit` is applied. If nothing matches, the unfiltered list is returned and `query_matched` is `false` |
+| `country` | string | null | ISO code, e.g. `ET`; all countries when omitted |
 | `limit` | int | 5 | 1-20 |
 
 With coordinates, facilities more than 150 km away are dropped.
@@ -1164,7 +1167,7 @@ Value mapping the UI needs:
 | "Exact Arrival Time" / "Morning (08:00 - 12:00)" / "Afternoon" / "Evening" | `time_window`: `exact` / `morning` / `afternoon` / `evening` |
 | "in-person" / "telehealth" | `visit_mode`: `in_person` / `telehealth` |
 | Specialty filter (Cardiology, General Medicine, Emergency & Trauma, Pediatrics) | `department`: `cardiology`, `general_medicine`, `emergency`, `pediatrics` |
-| Onboarding age "1–20" ... "81–100" | `age_range`: `0-20` ... `81+` |
+| Onboarding age "1–20" ... "81–100" | `age_range`: send `1-20` ... `81-100` as is (normalised to `0-20` ... `81+`) |
 | Onboarding goals (symptoms, hospitals, ...) | `onboarding_goals` ids are identical |
 
 `frontend/app/api/auth/*` (`send-otp`, `resend-otp`, `verify-otp`,
@@ -1186,8 +1189,6 @@ and send SMS directly. Replace them with the backend calls above
   unchecked opaque string. There is no doctor list endpoint.
 - **Availability not integrated.** `/availability` never returns slots and
   booking does not check any; "Slots Today" style badges cannot be backed.
-- Ranked search has no country filter: without coordinates, Kenyan and
-  Ethiopian facilities are ranked together.
 - No email password reset; no token refresh; no account deletion endpoint.
 - Live voice is not mounted on this branch.
 - Inbox categories `records` and `messages` have no producers.
