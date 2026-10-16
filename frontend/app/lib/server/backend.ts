@@ -22,11 +22,24 @@ function backendBase(): string {
   return (process.env.DEDAN_API_URL ?? "http://localhost:8001").replace(/\/+$/, "");
 }
 
-/** The caller's address, passed on so the backend's rate limits are per person. */
-function clientAddress(request: NextRequest): string | null {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
-  return request.headers.get("x-real-ip");
+/**
+ * The caller's address, passed on so the backend's rate limits are per person.
+ *
+ * The left end of X-Forwarded-For is whatever the client sent, so it is never
+ * used: each proxy appends the address it saw, and the entry added by the
+ * outermost proxy we run is TRUSTED_PROXY_HOPS from the right (default 1, a
+ * load balancer or reverse proxy in front of this app; Next.js itself adds
+ * the socket address when the header is missing). Deploy behind such a proxy:
+ * when this app is reachable directly, a client can choose this value.
+ */
+export function clientAddress(request: NextRequest): string | null {
+  const hops = Math.max(1, Number.parseInt(process.env.TRUSTED_PROXY_HOPS ?? "1", 10) || 1);
+  const entries = (request.headers.get("x-forwarded-for") ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const address = entries[entries.length - hops];
+  return address && /^[0-9A-Fa-f:.]{2,45}$/.test(address) ? address : null;
 }
 
 export async function callBackend(

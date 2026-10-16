@@ -10,6 +10,10 @@ import {
 const SEGMENT = /^[A-Za-z0-9_.:-]{1,128}$/;
 const MAX_BODY_BYTES = 1_000_000;
 
+function tooLarge() {
+  return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+}
+
 async function forward(request: NextRequest, ctx: RouteContext<"/api/backend/[...path]">) {
   const { path } = await ctx.params;
   if (
@@ -25,10 +29,10 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/backend/[..
 
   let rawBody: string | undefined;
   if (request.method === "POST" || request.method === "PATCH") {
+    // Refuse a declared oversize body before reading it, then count bytes.
+    if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return tooLarge();
     rawBody = await request.text();
-    if (rawBody.length > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
-    }
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) return tooLarge();
     if (!rawBody) rawBody = undefined;
   }
 
@@ -38,7 +42,9 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/backend/[..
     rawBody,
     search: request.nextUrl.search,
   });
-  const response = NextResponse.json(result.raw, { status: result.status });
+  const response = result.status === 204 || result.status === 304
+    ? new NextResponse(null, { status: result.status })
+    : NextResponse.json(result.raw, { status: result.status });
   if (result.status === 401) clearSessionCookie(response);
   return response;
 }

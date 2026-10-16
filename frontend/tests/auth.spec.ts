@@ -39,13 +39,31 @@ test.describe('Auth', () => {
     expect(await page.evaluate(() => document.cookie)).not.toContain('dedan_session');
   });
 
-  test('an unsafe next= is ignored', async ({ page }) => {
-    const { email, password } = credentials();
-    await page.goto('/login?next=%2F%2Fevil.example');
-    await page.locator('#phone').fill(email);
-    await page.locator('#password').fill(password);
-    await page.getByRole('button', { name: 'Sign in' }).click();
-    await expect(page).toHaveURL(/\/interview$/);
+  // Protocol-relative, tab-split and backslash forms all resolve off-site.
+  for (const next of ['%2F%2Fevil.example', '%2F%09%2Fevil.example%2Fphish', '%2F%5C%5Cevil.example']) {
+    test(`an unsafe next= is ignored (${next})`, async ({ page }) => {
+      const { email, password } = credentials();
+      await page.goto(`/login?next=${next}`);
+      await page.locator('#phone').fill(email);
+      await page.locator('#password').fill(password);
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await expect(page).toHaveURL(/localhost:3100\/interview$/);
+    });
+  }
+
+  test('a spoofed X-Forwarded-For does not escape the per-client SMS limit', async ({ request }) => {
+    // As behind one trusted proxy: the client-chosen part is on the left,
+    // the address the proxy saw on the right.
+    const statuses: number[] = [];
+    for (let i = 0; i < 32; i++) {
+      const phone = `09${String(10_000_000 + i * 997 + Math.floor(Math.random() * 1000)).slice(0, 8)}`;
+      const response = await request.post('/api/auth/send-otp', {
+        data: { phone },
+        headers: { 'X-Forwarded-For': `10.9.${i}.1, 203.0.113.7` },
+      });
+      statuses.push(response.status());
+    }
+    expect(statuses).toContain(429);
   });
 
   test('the backend proxy only serves the patient\'s own data', async ({ request }) => {

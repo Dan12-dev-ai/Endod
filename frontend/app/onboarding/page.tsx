@@ -73,7 +73,7 @@ export default function OnboardingPage() {
     if (next.length > 0) {
       advanceTimer.current = setTimeout(() => {
         advanceTimer.current = null;
-        goNext();
+        goNextRef.current();
       }, 650);
     }
   };
@@ -131,13 +131,20 @@ export default function OnboardingPage() {
     setStep((current) => Math.min(current + 1, STEP_TITLES.length - 1));
   };
 
+  // Timers fire after later renders, so they call the newest goNext (which
+  // sees the answer just given), not the one from the render that set them.
+  const goNextRef = useRef(goNext);
+  useEffect(() => {
+    goNextRef.current = goNext;
+  });
+
   // Advance after a short beat so the selection is visibly applied first.
   const autoAdvance = (delay = 550) => {
     clearAdvanceTimer();
     clearFinishTimer();
     advanceTimer.current = setTimeout(() => {
       advanceTimer.current = null;
-      goNext();
+      goNextRef.current();
     }, delay);
   };
 
@@ -191,16 +198,6 @@ export default function OnboardingPage() {
       savingRef.current = false;
       setIsSaving(false);
     }
-  };
-
-  // On the final step, a completed selection auto-saves and moves on.
-  const autoFinish = (delay = 550) => {
-    clearAdvanceTimer();
-    clearFinishTimer();
-    finishTimer.current = setTimeout(() => {
-      finishTimer.current = null;
-      handleFinish();
-    }, delay);
   };
 
   // Name step: advance once both required fields have content (on blur/Enter).
@@ -476,9 +473,10 @@ export default function OnboardingPage() {
                           value={range.label}
                           checked={selected}
                           onChange={(e) => {
+                            // No auto-finish here: the consent choice above
+                            // must be made before anything is saved.
                             setAgeRange(e.target.value);
                             setFormError("");
-                            autoFinish();
                           }}
                           className="sr-only"
                           aria-label={range.label}
@@ -507,8 +505,8 @@ export default function OnboardingPage() {
             </p>
           )}
 
-          {/* Navigation: Back only — steps advance automatically once completed */}
-          <div className="mt-7 flex items-center" data-purpose="step-navigation">
+          {/* Navigation: steps advance automatically; the last one has an explicit Finish */}
+          <div className="mt-7 flex items-center justify-between" data-purpose="step-navigation">
             <button
               className={`px-5 py-3 rounded-full text-sm font-medium text-brand-muted hover:text-brand-heading transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer ${step === 0 ? "invisible" : ""}`}
               disabled={step === 0}
@@ -517,6 +515,17 @@ export default function OnboardingPage() {
             >
               Back
             </button>
+            {step === STEP_TITLES.length - 1 && (
+              <button
+                className="px-6 py-3 rounded-full text-sm font-semibold bg-[#1E5852] text-white hover:bg-[#174640] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                data-purpose="finish-onboarding"
+                disabled={!ageRange || isSaving}
+                onClick={() => void handleFinish()}
+                type="button"
+              >
+                {isSaving ? "Saving..." : "Finish"}
+              </button>
+            )}
           </div>
         </div>
 

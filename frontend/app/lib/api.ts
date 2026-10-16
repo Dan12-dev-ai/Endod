@@ -67,7 +67,18 @@ export function passwordProblem(password: string): string | null {
   return null;
 }
 
-/** A safe in-app path from ?next=, or the fallback. */
+/**
+ * A safe in-app path from ?next=, or the fallback.
+ *
+ * Resolved the way the browser will resolve it (which drops tabs and
+ * newlines and treats "\\" like "/"), then kept only if it stays on this site.
+ */
 export function safeNext(next: string | null, fallback: string): string {
-  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : fallback;
+  if (!next || !next.startsWith("/")) return fallback;
+  try {
+    const url = new URL(next, window.location.origin);
+    return url.origin === window.location.origin ? url.pathname + url.search + url.hash : fallback;
+  } catch {
+    return fallback;
+  }
 }
