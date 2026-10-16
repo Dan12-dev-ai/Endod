@@ -1,0 +1,23 @@
+# Build context is the repository root (see backend-v2/Dockerfile).
+**/.env
+**/.env.*
+!**/.env.example
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/*.db
+**/*.sqlite
+**/node_modules/
+.git/
+.github/
+.venv/
+frontend/
+backend/
+mobile/
+mobile-app/
+web/
+clinic-dashboard/
+messaging-backend/
+kubernetes/
+docs/
+backend-v2/tests/

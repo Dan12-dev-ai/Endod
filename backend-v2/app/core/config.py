@@ -72,12 +72,27 @@ class Settings(BaseSettings):
 
     # External Services (for pharmacy guidance)
     GOOGLE_MAPS_API_KEY: Optional[str] = Field(default=None, description="Google Maps API key for pharmacy lookup")
-    COUNTRY_CODE: str = Field(default="KE", description="Default country code for pharmacy guidance")
+    COUNTRY_CODE: str = Field(default="ET", description="Default country code for pharmacy guidance")
+
+    # Database. Declared here so a value in `.env` is honoured: it used to be
+    # read from the process environment only, so a production Postgres URL in
+    # `.env` was ignored and the app silently wrote to a local SQLite file.
+    DEDAN_DATABASE_URL: Optional[str] = Field(default=None, description="SQLAlchemy database URL")
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+
+    @field_validator("ENVIRONMENT", mode="before")
+    @classmethod
+    def _normalise_environment(cls, value: Any) -> Any:
+        """Lower-cased once, here, so every `== "production"` check holds.
+
+        "Production" used to skip TrustedHost, secure cookies and the
+        production secret check, which compared case-sensitively.
+        """
+        return value.strip().lower() if isinstance(value, str) else value
 
     @field_validator("CORS_ORIGINS", "ALLOWED_IMAGE_TYPES", mode="before")
     @classmethod
