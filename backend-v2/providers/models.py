@@ -4,6 +4,7 @@ Provider-agnostic request/response models for multimodal AI.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -298,6 +299,9 @@ class ProviderTimeoutError(ProviderError):
 # Abstract Base Provider
 # =============================================================================
 
+_items_logger = logging.getLogger("providers.models")
+
+
 def parse_items(model, items: Any) -> List[Any]:
     """Validate each item of a model-provided list, skipping invalid ones.
 
@@ -305,13 +309,17 @@ def parse_items(model, items: Any) -> List[Any]:
     discard the provider's entire answer.
     """
     parsed = []
-    for item in items if isinstance(items, list) else []:
+    for index, item in enumerate(items if isinstance(items, list) else []):
         if not isinstance(item, dict):
+            _items_logger.warning("provider_item_discarded model=%s index=%d reason=not_an_object",
+                                  model.__name__, index)
             continue
         try:
             parsed.append(model.model_validate(item))
-        except Exception:  # noqa: BLE001 - pydantic.ValidationError and friends
-            continue
+        except Exception as exc:  # noqa: BLE001 - pydantic.ValidationError and friends
+            fields = sorted({str(err.get("loc", ("?",))[0]) for err in getattr(exc, "errors", lambda: [])()})
+            _items_logger.warning("provider_item_discarded model=%s index=%d fields=%s",
+                                  model.__name__, index, ",".join(fields) or type(exc).__name__)
     return parsed
 
 

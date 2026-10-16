@@ -210,6 +210,10 @@ class ClinicalResponse:
                     "what_to_monitor": te.what_to_monitor,
                     "when_to_reassess": te.when_to_reassess,
                     "evidence_level": te.evidence_level.value,
+                    "sources": [
+                        {"title": s.title, "url": s.url, "type": s.type, "jurisdiction": s.jurisdiction}
+                        for s in te.sources
+                    ],
                 }
                 for te in self.treatment_education
             ],

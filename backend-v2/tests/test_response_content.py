@@ -105,3 +105,68 @@ class TestEndToEnd:
         labels = [e["label"] for e in body["possible_explanations"]]
         assert "Malaria" in labels
         assert not labels[0].startswith("Undetermined")
+
+
+class TestReviewFindings:
+    """Automated review (Qodo) of PR #6."""
+
+    def test_prompt_asks_for_a_top_level_differential(self):
+        from providers.orchestrator import MultimodalContextBuilder
+
+        prompt = MultimodalContextBuilder()._get_default_system_prompt()
+        assert prompt.index('"possible_explanations"') < prompt.index('"image_assessment"')
+
+    def test_supporting_observations_support_the_condition(self):
+        response = _response(possible_explanations=[
+            PossibleExplanation(condition="Malaria", likelihood="likely", confidence=0.8,
+                                reasoning="Typical pattern", supporting_observations=["fever", "chills"]),
+        ])
+        explanation = response_transformer.transform(response).possible_explanations[0]
+        assert "fever" in explanation.why_it_fits
+        assert "fever" not in explanation.what_does_not_fit
+
+    def test_doses_in_free_text_are_removed(self):
+        response = _response(treatment_information=[
+            TreatmentInformation(condition="Fever", intervention="Paracetamol 500 mg",
+                                 description="Take 2 tablets every 6 hours, twice a day.",
+                                 evidence_level="A", source="WHO", precautions=["Max 4 g per day"]),
+        ])
+        payload = json.dumps(response_transformer.transform(response).to_dict())
+        for dose in ("500 mg", "2 tablets", "every 6 hours", "twice a day", "4 g"):
+            assert dose not in payload, dose
+        assert "ask a clinician or pharmacist" in payload
+
+    def test_contraindications_are_shown(self):
+        response = _response(treatment_information=[
+            TreatmentInformation(condition="Pain", intervention="Anti-inflammatory medicine",
+                                 description="Reduces pain and swelling.", evidence_level="B",
+                                 source="WHO", contraindications=["stomach ulcers", "late pregnancy"]),
+        ])
+        education = response_transformer.transform(response).treatment_education
+        text = next(t for t in education if t.title == "Anti-inflammatory medicine").description
+        assert "stomach ulcers" in text and "late pregnancy" in text
+
+    def test_treatment_sources_are_serialised(self):
+        response = _response(treatment_information=[
+            TreatmentInformation(condition="Malaria", intervention="Antimalarial treatment",
+                                 description="After a positive test.", evidence_level="A",
+                                 source="WHO malaria guidelines"),
+        ])
+        treatments = response_transformer.transform(response).to_dict()["treatment_education"]
+        assert treatments[0]["sources"][0]["title"] == "WHO malaria guidelines"
+
+    def test_citations_without_a_link_are_not_published(self):
+        response = _response(sources=[
+            Source(id="a", title="Unlinked textbook", type="textbook"),
+            Source(id="b", title="WHO", type="guideline", url="https://www.who.int"),
+        ])
+        titles = [s.title for s in response_transformer.transform(response).sources]
+        assert titles == ["WHO"]
+
+    def test_discarded_items_are_logged(self, caplog):
+        from providers.models import parse_items
+
+        with caplog.at_level("WARNING"):
+            parse_items(Source, [{"title": "missing id and type"}])
+        assert "provider_item_discarded" in caplog.text
+        assert "model=Source" in caplog.text
