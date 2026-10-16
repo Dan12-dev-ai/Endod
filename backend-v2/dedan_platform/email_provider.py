@@ -140,6 +140,16 @@ class EmailNotConfiguredError(EmailProviderError):
     """No mail server is configured where one is required."""
 
 
+def _is_production() -> bool:
+    # The process environment first, then settings, which also read `.env`: a
+    # production ENVIRONMENT set only in `.env` was missed by os.getenv alone,
+    # and the console transport then marked reminders SENT undelivered.
+    from app.core.config import get_settings
+
+    value = os.getenv("ENVIRONMENT") or get_settings().ENVIRONMENT
+    return value.strip().lower() == "production"
+
+
 def build_provider() -> EmailProvider:
     """Choose a transport from configuration.
 
@@ -150,7 +160,7 @@ def build_provider() -> EmailProvider:
     """
     if os.getenv("SMTP_HOST", "").strip():
         return SmtpEmailProvider()
-    if os.getenv("ENVIRONMENT", "development").strip().lower() == "production":
+    if _is_production():
         raise EmailNotConfiguredError("SMTP_HOST is not set; reminders cannot be delivered.")
     logger.warning("SMTP_NOT_CONFIGURED_USING_CONSOLE_TRANSPORT")
     return ConsoleEmailProvider()

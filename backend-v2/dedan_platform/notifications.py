@@ -53,9 +53,19 @@ logger = logging.getLogger(__name__)
 # provider would otherwise retry forever and block the queue head.
 MAX_ATTEMPTS = int(os.getenv("NOTIFICATION_MAX_ATTEMPTS", "5"))
 BASE_BACKOFF_SECONDS = int(os.getenv("NOTIFICATION_BASE_BACKOFF", "60"))
+#: Extra candidates read per claim, so concurrent workers rarely come up empty.
+CLAIM_HEADROOM = 10
 
 # A PROCESSING job older than this is assumed orphaned by a crashed worker.
-STALE_PROCESSING_SECONDS = int(os.getenv("NOTIFICATION_STALE_SECONDS", "300"))
+#
+# Jobs are claimed one at a time, so a PROCESSING job is at most one send old.
+# The threshold is kept well above the longest a send can take (several SMTP
+# operations, each bounded by SMTP_TIMEOUT_SECONDS), so recovery never takes a
+# job whose send is still running.
+STALE_PROCESSING_SECONDS = max(
+    int(os.getenv("NOTIFICATION_STALE_SECONDS", "300")),
+    6 * int(os.getenv("SMTP_TIMEOUT_SECONDS", "20")) + 60,
+)
 
 # What to do with a reminder whose window has already passed -- a booking made
 # less than 24h (or less than 1h) before the appointment.
@@ -421,6 +431,9 @@ def claim_due_jobs(limit: int = 20, now: Optional[datetime] = None) -> List[Dict
     now = now or utcnow()
     claimed: List[Dict[str, Any]] = []
     with session_scope() as session:
+        # More candidates than needed: with several workers polling together,
+        # losing the conditional UPDATE on one candidate moves on to the next
+        # instead of returning nothing (which ended that worker's whole pass).
         candidates = list(session.scalars(
             select(Notification)
             .where(
@@ -428,9 +441,11 @@ def claim_due_jobs(limit: int = 20, now: Optional[datetime] = None) -> List[Dict
                 Notification.scheduled_for <= now,
             )
             .order_by(Notification.scheduled_for)
-            .limit(limit)
+            .limit(limit + CLAIM_HEADROOM)
         ))
         for job in candidates:
+            if len(claimed) >= limit:
+                break
             result = session.execute(
                 update(Notification)
                 .where(Notification.id == job.id)
@@ -497,7 +512,10 @@ def mark_failed(job_id: str, error: str, attempts: int) -> str:
     if attempts >= MAX_ATTEMPTS:
         with session_scope() as session:
             session.execute(
-                update(Notification).where(Notification.id == job_id).values(
+                update(Notification)
+                .where(Notification.id == job_id)
+                .where(Notification.status == NotificationStatus.PROCESSING)
+                .values(
                     status=NotificationStatus.FAILED,
                     updated_at=utcnow(),
                     last_error=error[:500],
@@ -517,7 +535,10 @@ def mark_failed(job_id: str, error: str, attempts: int) -> str:
     delay = BASE_BACKOFF_SECONDS * (2 ** max(0, attempts - 1))
     with session_scope() as session:
         session.execute(
-            update(Notification).where(Notification.id == job_id).values(
+            update(Notification)
+            .where(Notification.id == job_id)
+            .where(Notification.status == NotificationStatus.PROCESSING)
+            .values(
                 status=NotificationStatus.RETRYING,
                 updated_at=utcnow(),
                 last_error=error[:500],
@@ -586,6 +607,10 @@ def recover_stale_jobs(now: Optional[datetime] = None) -> int:
             if job.attempts >= MAX_ATTEMPTS:
                 job.status = NotificationStatus.FAILED
                 job.last_error = "stuck in processing"
+                logger.error(
+                    "notification_failed_permanently",
+                    extra={"job": job.id, "attempts": job.attempts, "reason": "stuck_in_processing"},
+                )
             else:
                 job.status = NotificationStatus.RETRYING
                 job.scheduled_for = now
@@ -726,14 +751,20 @@ def reconcile_appointments(horizon_days: int = 30, now: Optional[datetime] = Non
                 },
             )
 
-    # Terminal appointments must not be holding open reminders.
+    # Terminal appointments must not be holding open reminders. Only those
+    # that still do are selected (one joined query), rather than every
+    # terminal appointment ever, which grew without bound and ran hourly.
     with session_scope() as session:
         terminal = session.scalars(
-            select(Appointment.id).where(
+            select(Appointment.id)
+            .join(Notification, Notification.appointment_id == Appointment.id)
+            .where(
                 Appointment.status.in_([
                     EventStatus.CANCELLED, EventStatus.COMPLETED, EventStatus.MISSED,
-                ])
+                ]),
+                Notification.status.in_(list(NotificationStatus.CLAIMABLE)),
             )
+            .distinct()
         )
         for appointment_id in list(terminal):
             result["cancelled"] += cancel_for_appointment(appointment_id)

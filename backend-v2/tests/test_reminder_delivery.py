@@ -192,3 +192,64 @@ class TestReminderContent:
         body = render_appointment_reminder(self.PAYLOAD, "user-123", "appt-9")["body"]
         assert "https://app.example.org/interview" in body
         assert "user-123" not in body  # no internal ids in links
+
+
+class TestReviewFindings:
+    """Automated review (Qodo) of PR #5."""
+
+    def test_failure_never_overwrites_a_recorded_send(self, user):
+        import dedan_platform.notifications as nt
+        from dedan_platform.models import Notification
+
+        _queue_one(user["internal_user_id"])
+        job_id = _jobs()[0]["id"]
+        with nt.session_scope() as session:
+            session.execute(update(Notification).where(Notification.id == job_id).values(
+                status=nt.NotificationStatus.SENT))
+        nt.mark_failed(job_id, "late failure", 5)
+        assert next(j for j in _jobs() if j["id"] == job_id)["status"] == "SENT"
+
+    def test_stale_threshold_outlasts_a_send(self):
+        import dedan_platform.email_provider as ep
+        import dedan_platform.notifications as nt
+
+        assert nt.STALE_PROCESSING_SECONDS > 4 * ep.SMTP_TIMEOUT_SECONDS
+
+    def test_claim_takes_exactly_the_requested_number(self, user):
+        import dedan_platform.notifications as nt
+
+        _queue_one(user["internal_user_id"])
+        _due_now()
+        assert len(nt.claim_due_jobs(limit=1)) == 1
+
+    def test_production_set_only_in_settings_is_honoured(self, monkeypatch):
+        from app.core.config import get_settings
+        from dedan_platform import email_provider, sms_provider
+
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+        monkeypatch.delenv("SMTP_HOST", raising=False)
+        monkeypatch.delenv("SMSETHIOPIA_API_KEY", raising=False)
+        monkeypatch.setattr(get_settings(), "ENVIRONMENT", "production")
+        with pytest.raises(email_provider.EmailNotConfiguredError):
+            email_provider.build_provider()
+        with pytest.raises(sms_provider.SmsNotConfiguredError):
+            sms_provider.build_provider()
+
+    def test_one_shot_worker_exits_non_zero_when_blocked(self, db, monkeypatch, capsys):
+        from dedan_platform import worker_main
+
+        monkeypatch.delenv("SMTP_HOST", raising=False)
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        assert worker_main.main(["--once"]) == 2
+
+    def test_reconcile_cancels_open_reminders_of_cancelled_appointments(self, user):
+        import dedan_platform.notifications as nt
+        from dedan_platform.models import Appointment, EventStatus
+
+        appointment = _queue_one(user["internal_user_id"])
+        with nt.session_scope() as session:
+            session.execute(update(Appointment).where(Appointment.id == appointment["appointment_id"]).values(
+                status=EventStatus.CANCELLED))
+        result = nt.reconcile_appointments()
+        assert result["cancelled"] >= 1
+        assert not any(j["status"] in ("PENDING", "RETRYING") for j in _jobs())

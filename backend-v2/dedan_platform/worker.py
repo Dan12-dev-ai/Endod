@@ -57,63 +57,6 @@ WORKER_RECONCILE_ON_START = _env_flag("NOTIFICATION_RECONCILE_ON_START", True)
 WORKER_RECONCILE_INTERVAL = float(os.getenv("NOTIFICATION_RECONCILE_INTERVAL_SECONDS", "3600"))
 
 
-def schedule_appointment_reminders(
-    user_id: str,
-    appointment_id: str,
-    scheduled_at: "datetime | str",
-    offsets,
-    email_address: Optional[str],
-    appointment_type: str = "consultation",
-    location: Optional[str] = None,
-    meeting_url: Optional[str] = None,
-    correlation_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Queue the reminders for an appointment. Called by the appointment service.
-
-    Accepts `scheduled_at` as a datetime or an ISO string, because the
-    appointment API returns serialised payloads and callers naturally pass those
-    straight through. Requiring one type here would have pushed a needless
-    re-parse onto every caller.
-
-    Deliberately returns rather than sends: this is what keeps email out of the
-    request path.
-
-    The production path is `scheduler.schedule_reminders`, which derives offsets
-    from stored preferences rather than from arguments. This function stays for
-    callers that already know their offsets.
-    """
-    if isinstance(scheduled_at, str):
-        # A naive ISO string is rejected for the same reason `create_appointment`
-        # rejects a naive datetime: it would be silently read as UTC.
-        scheduled_at = datetime.fromisoformat(scheduled_at)
-        if scheduled_at.tzinfo is None:
-            raise ValueError("scheduled_at must include a timezone offset.")
-    if not email_address:
-        logger.info("reminders_skipped_no_address", extra={"appointment": appointment_id})
-        return {"queued": 0, "job_ids": [], "skipped": [
-            {"reason": "no_consented_destination"}]}
-
-    # Payloads are logistics-only. The appointment type is included because it
-    # tells the patient what to prepare for; no condition or diagnosis ever is.
-    payload = {
-        "appointment_id": appointment_id,
-        "scheduled_at": scheduled_at.isoformat(),
-        "appointment_type": appointment_type,
-        "location": location,
-        "meeting_url": meeting_url,
-    }
-    outcome = notifications.enqueue_reminders(
-        user_id=user_id,
-        appointment_id=appointment_id,
-        scheduled_at=scheduled_at,
-        offsets=list(offsets),
-        destination=email_address,
-        payload=payload,
-        correlation_id=correlation_id,
-    )
-    return {"queued": outcome.queued, "job_ids": outcome.created, "skipped": outcome.skipped}
-
-
 def deliver_one(job: Dict[str, Any], provider=None) -> str:
     """Attempt one job. Returns the resulting status.
 
