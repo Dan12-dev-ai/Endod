@@ -23,6 +23,8 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
+import clinical_triage
+
 from .models import (
     AnalysisResponse,
     ImageAnalysisRequest,
@@ -38,51 +40,6 @@ from .models import (
     TreatmentInformation,
     MultimodalAIProvider,
 )
-
-# Red-flag phrases -> escalate to emergency. Ordered most-severe first.
-_EMERGENCY_PATTERNS = [
-    r"chest pain",
-    r"difficulty breathing",
-    r"shortness of breath",
-    r"can'?t breathe",
-    r"severe bleeding",
-    r"unconscious",
-    r"loss of consciousness",
-    r"stroke",
-    r"facial droop",
-    r"slurred speech",
-    r"seizure",
-    r"anaphyla\w*",
-    r"suicidal",
-    r"vomiting blood",
-    r"black tarry",
-    r"severe head injury",
-    r"poisoning",
-    r"overdose",
-    r"drowning",
-    r"blue lips",
-    r"stiff neck.*fever",
-    r"confusion",
-]
-
-# Urgent-but-not-emergency phrases.
-_URGENT_PATTERNS = [
-    r"high fever",
-    r"fever above 39",
-    r"fever.*\b39\b",
-    r"persistent vomiting",
-    r"severe pain",
-    r"bloody diarrhea",
-    r"dehydrat\w*",
-    r"worsening symptom",
-    r"spreading redness",
-    r"difficulty swallowing",
-    r"rash.*fever",
-    r"fever.*rash",
-    r"pregnan\w*.*bleeding",
-    r"newborn.*fever",
-    r"fever.*elderly",
-]
 
 # Symptom -> likely condition mapping used to build educational differentials.
 _CONDITION_PATTERNS: List[tuple] = [
@@ -137,14 +94,6 @@ _OFFLINE_NOTICE = (
     "This is educational guidance, NOT a medical diagnosis. Always confirm with "
     "a qualified clinician."
 )
-
-
-def _match_any(patterns: List[str], text: str) -> Optional[str]:
-    for pattern in patterns:
-        m = re.search(pattern, text, flags=re.IGNORECASE)
-        if m:
-            return m.group(0)
-    return None
 
 
 def _token_hash(text: str) -> str:
@@ -238,23 +187,30 @@ class OfflineProvider(MultimodalAIProvider):
             combined += " " + " ".join(str(v) for v in patient_context.values())
         haystack = combined.lower()
 
-        # --- urgency (safety escalates, never downgrades) ---
-        emergency_hit = _match_any(_EMERGENCY_PATTERNS, haystack)
-        urgent_hit = _match_any(_URGENT_PATTERNS, haystack)
-        if emergency_hit:
-            urgency = "emergency"
+        # --- urgency: the shared red-flag rules (clinical_triage) ---
+        context = patient_context or {}
+        triage = clinical_triage.assess(
+            text,
+            age_years=context.get("age"),
+            pregnant=bool(context.get("pregnancy_status")),
+        )
+        urgency = triage.urgency
+        if urgency == "emergency":
             next_step = (
                 "Seek emergency care now. Do not wait - this pattern can be "
                 "life-threatening."
             )
-        elif urgent_hit:
-            urgency = "urgent"
+        elif urgency == "urgent":
             next_step = (
                 "See a clinician within 24 hours. Your symptoms suggest you "
                 "should be evaluated promptly."
             )
+        elif urgency == "see_doctor_soon":
+            next_step = (
+                "See a clinician in the next day or two, sooner if symptoms "
+                "get worse."
+            )
         else:
-            urgency = "routine"
             next_step = (
                 "Schedule a routine appointment with a clinician, or use "
                 "self-care and re-check if symptoms worsen."
@@ -366,12 +322,10 @@ class OfflineProvider(MultimodalAIProvider):
             safety_notice=_OFFLINE_NOTICE,
             confidence_score=0.55 if urgency == "routine" else 0.7,
             raw_response=f"offline_rules:{_token_hash(combined)}",
-            safety_flags=(
-                [f"offline_emergency_match:{emergency_hit}"] if emergency_hit else []
-            ),
+            safety_flags=[f"triage:{reason}" for reason in triage.reasons],
             content_filtered=False,
             image_assessment=self._image_assessment(has_image),
-            metadata={"offline": True, "rules_version": 1},
+            metadata={"offline": True, "rules_version": 2},
         )
 
     def _image_assessment(self, has_image: bool) -> Optional[ImageAssessment]:

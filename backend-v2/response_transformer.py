@@ -12,6 +12,7 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional, TYPE_CHECKING
 
+import clinical_triage
 from clinical_schema import (
     ClinicalResponse, HealthSummary, SafetyClassification,
     PossibleExplanation, UncertaintyStatement, TreatmentEducation,
@@ -199,7 +200,9 @@ class ResponseTransformer:
             "self_care": UrgencyLevel.ROUTINE,
         }
         
-        urgency = urgency_map.get(ai_response.urgency.lower(), UrgencyLevel.SOON)
+        # Unknown labels ("critical", "EMERGENCY - call now") are normalised by
+        # rank rather than defaulted, so they can never read as reassurance.
+        urgency = urgency_map[clinical_triage.max_urgency(ai_response.urgency)]
         
         return SafetyClassification(
             urgency=urgency,
