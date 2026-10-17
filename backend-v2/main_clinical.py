@@ -308,7 +308,9 @@ def create_app(settings = None) -> FastAPI:
     if settings.ENVIRONMENT == "production":
         app.add_middleware(
             TrustedHostMiddleware,
-            allowed_hosts=["*.dedanhealth.org", "dedanhealth.org", "localhost", "127.0.0.1"],
+            # Configured per deployment; it used to be fixed to another
+            # domain, which refused every request from the web app.
+            allowed_hosts=list(settings.ALLOWED_HOSTS or ["localhost", "127.0.0.1"]),
         )
 
     # Rate limiting

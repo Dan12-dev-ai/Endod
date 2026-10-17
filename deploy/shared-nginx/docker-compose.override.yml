@@ -1,0 +1,17 @@
+# Used when an existing nginx container on the server fronts Endod instead
+# of the Cloudflare Tunnel:
+#   docker compose -f docker-compose.yml -f shared-nginx/docker-compose.override.yml up -d
+services:
+  frontend:
+    environment:
+      # Cloudflare appends the visitor, then the shared nginx appends Cloudflare.
+      TRUSTED_PROXY_HOPS: "2"
+    networks:
+      default: {}
+      shared_edge:
+        aliases: [endod-frontend]
+
+networks:
+  shared_edge:
+    external: true
+    name: ${SHARED_NGINX_NETWORK:-eyita_edge}

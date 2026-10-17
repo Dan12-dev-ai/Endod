@@ -745,7 +745,7 @@ def reconcile_appointments(horizon_days: int = 30, now: Optional[datetime] = Non
                 appointment_id, channel,
                 eligible=scheduler.current_destination(channel, profile) is not None,
             )
-            for channel in scheduler.REMINDER_CHANNELS
+            for channel in scheduler.reminder_channels()
         )
         if existing >= expected:
             continue

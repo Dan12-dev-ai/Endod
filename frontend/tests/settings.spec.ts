@@ -145,15 +145,17 @@ test.describe('Interview — Settings', () => {
 
   test('notification preferences are saved', async ({ page }) => {
     await openSection(page, 'Setting', 'settings-view');
-    const email = page.locator('[data-purpose="pref-email"]');
-    const before = await email.isChecked();
+    // Reminders go by SMS only (no email in this deployment).
+    await expect(page.locator('[data-purpose="pref-email"]')).toHaveCount(0);
+    const sms = page.locator('[data-purpose="pref-sms"]');
+    const before = await sms.isChecked();
     try {
-      await email.setChecked(!before);
-      await expect(email).toBeEnabled();
+      await sms.setChecked(!before);
+      await expect(sms).toBeEnabled();
       const prefs = await (await page.request.get('/api/backend/users/me/preferences')).json();
-      expect(prefs.email_notifications).toBe(!before);
+      expect(prefs.sms_notifications).toBe(!before);
     } finally {
-      await patch(page.request, '/preferences', { email_notifications: before });
+      await patch(page.request, '/preferences', { sms_notifications: before });
     }
   });
 });

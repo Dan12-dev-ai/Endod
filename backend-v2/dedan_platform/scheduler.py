@@ -32,6 +32,8 @@ worker's job, out of band, so a mail outage can never fail a booking.
 
 from __future__ import annotations
 
+import os
+
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -248,9 +250,27 @@ def _reminder_payload(appointment, scheduled_at: datetime) -> Dict[str, Any]:
     }
 
 
-#: Channels reminders are scheduled on. Each honours its own preference and
-#: is recorded as SKIPPED (with the reason) when it does not apply.
+#: Every channel reminders can use. Each honours its own preference and is
+#: recorded as SKIPPED (with the reason) when it does not apply.
 REMINDER_CHANNELS = (NotificationChannel.EMAIL, NotificationChannel.SMS)
+
+
+def reminder_channels() -> tuple:
+    """The channels this deployment sends reminders on.
+
+    ``REMINDER_CHANNELS`` in the environment (comma-separated, e.g. ``sms``)
+    narrows them: a deployment without a mail server sends by SMS only, and
+    queues no email reminders that could never be delivered.
+    """
+    configured = os.getenv("REMINDER_CHANNELS", "").strip().lower()
+    if not configured:
+        return REMINDER_CHANNELS
+    wanted = {part.strip() for part in configured.split(",") if part.strip()}
+    chosen = tuple(c for c in REMINDER_CHANNELS if c in wanted)
+    if not chosen:
+        logger.warning("reminder_channels_invalid value=%s", configured)
+        return REMINDER_CHANNELS
+    return chosen
 
 
 def schedule_all_channels(
@@ -260,7 +280,7 @@ def schedule_all_channels(
 ) -> Dict[str, Any]:
     """`schedule_reminders` for every reminder channel, merged into one report."""
     merged: Dict[str, Any] = {"queued": 0, "job_ids": [], "skipped": [], "offsets": [], "channels": {}}
-    for channel in REMINDER_CHANNELS:
+    for channel in reminder_channels():
         report = schedule_reminders(user_id, appointment_id, correlation_id=correlation_id, channel=channel)
         merged["queued"] += report.get("queued", 0)
         merged["job_ids"].extend(report.get("job_ids", []))
