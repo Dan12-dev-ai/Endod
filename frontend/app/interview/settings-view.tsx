@@ -537,8 +537,6 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
             "Store my health information", "Needed for your health profile, medical records, AI consultations and the health card details.")}
           {toggle("consent-sharing", profile.consent.data_sharing_with_clinicians, (v) => void setConsent("data_sharing_with_clinicians", v),
             "Share visit summaries with clinicians", "Only summaries you review and approve are ever shared.")}
-          {toggle("pref-email", profile.preferences.email_notifications, (v) => void setNotification("email_notifications", v),
-            "Email reminders", "Appointment reminders by email.")}
           {toggle("pref-sms", profile.preferences.sms_notifications, (v) => void setNotification("sms_notifications", v),
             "SMS reminders", "Appointment reminders by text message to your verified phone.")}
         </section>

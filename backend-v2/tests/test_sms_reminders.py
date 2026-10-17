@@ -299,3 +299,22 @@ class TestReviewFindings:
         self._deliver_all()
         statuses = {j["status"] for j in _jobs() if j["channel"] == "whatsapp"}
         assert statuses == {"SKIPPED"}
+
+
+class TestSmsOnlyDeployment:
+    """REMINDER_CHANNELS=sms: a deployment without a mail server."""
+
+    def test_only_sms_reminders_are_queued(self, db, monkeypatch):
+        from dedan_platform import identity
+
+        monkeypatch.setenv("REMINDER_CHANNELS", "sms")
+        user = identity.create_user(email="both@example.com", phone="+251911234567", phone_verified=True)
+        _book(user["internal_user_id"])
+        channels = {job["channel"] for job in _jobs()}
+        assert channels == {"sms"}
+
+    def test_unknown_value_falls_back_to_all_channels(self, monkeypatch):
+        from dedan_platform import scheduler
+
+        monkeypatch.setenv("REMINDER_CHANNELS", "pigeon")
+        assert scheduler.reminder_channels() == scheduler.REMINDER_CHANNELS

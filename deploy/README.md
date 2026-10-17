@@ -33,10 +33,15 @@ The API creates and migrates its tables on start.
 
 ## Staging vs production
 
-`ENVIRONMENT=staging` works without SMS/email accounts: verification codes
-and emails are written to the API log (`docker compose logs backend | grep -i code`).
-Switch to `ENVIRONMENT=production` once `SMSETHIOPIA_API_KEY` (and SMTP,
-for email reminders) are set; production refuses to fake a send. Turn on
+All messages go by SMS through SMS Ethiopia: verification codes and
+appointment reminders (`REMINDER_CHANNELS=sms`; there is no email). The
+patient app has no AI agent, so no model key is configured
+(`AI_PROVIDER_MODE=offline`).
+
+`ENVIRONMENT=staging` works before the SMS Ethiopia key exists: codes are
+written to the API log (`docker compose logs backend | grep -i code`).
+Switch to `ENVIRONMENT=production` once `SMSETHIOPIA_API_KEY` is set
+(production refuses to fake a send), and turn on
 `NOTIFICATION_WORKER_ENABLED=true` at the same time so reminders go out.
 
 ## Backups
