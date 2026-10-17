@@ -1,7 +1,5 @@
-"""Shared primitives for authenticated sessions and voice configuration.
+"""Signed session tokens (`realtime.auth`) for the patient API.
 
-Only the pieces the platform depends on live here today: token signing
-(`realtime.auth`) and the supported-language / voice registry
-(`realtime.voices`). The live-voice transport is not part of this package yet;
-`main_clinical` mounts it only when its modules are present.
+The package name is historical: it once also held live-voice configuration.
+Live voice is not part of the patient app (it belongs to the hospital side).
 """

@@ -10,7 +10,7 @@ user can only ever reach their own records. `/users/me` makes that structurally
 impossible rather than merely policed by code review.
 
 The realtime signed token (`realtime.auth`) is the credential, reused rather than
-reimplemented -- the browser already holds one for the live-voice socket.
+reimplemented.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/users", tags=["profile"])
 
 
 #: Token scopes that authenticate a patient: portal logins and the realtime
-#: (live voice) session token.
+#: session token.
 SESSION_SCOPES = frozenset({"portal", "realtime"})
 
 
@@ -47,7 +47,7 @@ def current_user_id(
     how cross-patient access happens.
     """
     # Normalised exactly as the websocket path does, so one credential works for
-    # both the live-voice socket and the profile REST API.
+    # the patient REST API.
     token = normalize_token(authorization or request.headers.get(AUTH_HEADER))
     try:
         payload = decode_token(token)

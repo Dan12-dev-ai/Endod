@@ -234,10 +234,14 @@
     var prefs = state.preferences;
     mount('dedan-ai', [
       DEDAN.el('div', { class: 'grid grid-cols-1 md:grid-cols-2 gap-space-md' }, [
-        field('Conversation language', selectInput('ai-language', prefs.language || 'en', [
+        // The languages the backend accepts (dedan_platform/languages.py).
+        field('Language', selectInput('ai-language', prefs.language || 'en', [
           { value: 'en', label: 'English' },
-          { value: 'sw', label: 'Kiswahili' },
-          { value: 'fr', label: 'Français' }
+          { value: 'am', label: 'አማርኛ (Amharic)' },
+          { value: 'om', label: 'Afaan Oromoo' },
+          { value: 'ti', label: 'ትግርኛ (Tigrinya)' },
+          { value: 'so', label: 'Soomaali' },
+          { value: 'sw', label: 'Kiswahili' }
         ])),
         field('Theme', selectInput('ai-theme', prefs.theme || 'system', [
           { value: 'system', label: 'Match device' },
@@ -245,14 +249,11 @@
           { value: 'dark', label: 'Dark' }
         ]))
       ]),
-      field('Preferred voice', textInput('ai-voice', prefs.voice_preference),
-        'Leave blank to use the default voice for your language.'),
       DEDAN.el('div', { class: 'flex gap-space-sm' }, [saveButton('Save AI preferences')])
     ], function () {
       return DEDAN.patch('/users/me/preferences', {
         language: document.getElementById('ai-language').value,
-        theme: document.getElementById('ai-theme').value,
-        voice_preference: document.getElementById('ai-voice').value.trim() || null
+        theme: document.getElementById('ai-theme').value
       }).then(function (prefs) {
         state.preferences = prefs;
       });

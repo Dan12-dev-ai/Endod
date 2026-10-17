@@ -33,7 +33,7 @@ from dedan_platform.models import (
     Consent, HealthProfile, Preferences, Profile, User, UserEvent,
     generate_dedan_user_id, utcnow,
 )
-from realtime.voices import SUPPORTED_LANGUAGES, VoiceUnavailableError, get_voice
+from dedan_platform.languages import SUPPORTED_LANGUAGES
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ def create_user(
 
     Every supporting record is created up front so no later code path has to
     handle a half-provisioned account (a missing `Preferences` row would
-    otherwise surface as a 500 the first time someone changes their voice).
+    otherwise surface as a 500 the first time someone changes a preference).
     """
     with session_scope() as session:
         if email:
@@ -328,8 +328,6 @@ def _profile_payload(user: User, include_health: bool = False) -> Dict[str, Any]
         "country_code": getattr(profile, "country_code", "ET"),
         "preferences": {
             "language": getattr(prefs, "language", "en"),
-            "voice_preference": getattr(prefs, "voice_preference", None),
-            "voice_gender": getattr(prefs, "voice_gender", None),
             "theme": getattr(prefs, "theme", "system"),
             "email_notifications": getattr(prefs, "email_notifications", True),
             "sms_notifications": getattr(prefs, "sms_notifications", False),
@@ -576,7 +574,7 @@ def update_profile(
 
 
 _PREFERENCE_FIELDS = {
-    "language", "voice_preference", "voice_gender", "theme",
+    "language", "theme",
     "email_notifications", "sms_notifications", "push_notifications",
     "reminder_offsets", "preferred_contact_window",
     "onboarding_goals", "care_search_radius_km",
@@ -590,7 +588,6 @@ def _language_from_locale(locale: Optional[str]) -> str:
     """App language from a locale such as "am-ET": its language part, if supported."""
     lang = str(locale or "").replace("_", "-").split("-")[0].strip().lower()
     return lang if lang in SUPPORTED_LANGUAGES else "en"
-VOICE_GENDERS = ("female", "male", "neutral")
 #: Reminder offsets are seconds before the appointment: at most 5, up to 30 days.
 MAX_REMINDER_OFFSETS = 5
 MAX_REMINDER_OFFSET_SECONDS = 30 * 86400
@@ -633,11 +630,10 @@ def update_preferences(
     changes: Dict[str, Any],
     correlation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Patch preferences, validating the voice against the realtime catalog.
+    """Patch preferences, validating every value before it is stored.
 
-    Validating here rather than at read time means an invalid voice id can never
-    be persisted, so the live-voice handshake cannot later fail on a value this
-    service accepted.
+    Validating here rather than at read time means an invalid value can never
+    be persisted and break a later reader.
     """
     unknown = set(changes) - _PREFERENCE_FIELDS
     if unknown:
@@ -648,11 +644,6 @@ def update_preferences(
             f"Unsupported language '{changes['language']}'. "
             f"Supported: {list(SUPPORTED_LANGUAGES)}"
         )
-    if changes.get("voice_preference"):
-        try:
-            get_voice(changes["voice_preference"])
-        except VoiceUnavailableError as exc:
-            raise IdentityError(str(exc)) from exc
     if "onboarding_goals" in changes:
         goals = changes["onboarding_goals"] or []
         if isinstance(goals, str):
@@ -669,8 +660,6 @@ def update_preferences(
             raise IdentityError(f"{field} must be true or false.")
     if "theme" in changes and changes["theme"] not in THEMES:
         raise IdentityError(f"theme must be one of {list(THEMES)}.")
-    if "voice_gender" in changes and changes["voice_gender"] not in (None, *VOICE_GENDERS):
-        raise IdentityError(f"voice_gender must be one of {list(VOICE_GENDERS)}.")
     if "preferred_contact_window" in changes:
         window = changes["preferred_contact_window"]
         if window is not None and (not isinstance(window, str) or len(window) > 64):

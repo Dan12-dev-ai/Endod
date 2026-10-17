@@ -91,7 +91,7 @@ class TestCareSearch:
 
 class TestPreferences:
     @pytest.mark.parametrize("change", [
-        {"email_notifications": "false"}, {"theme": "neon"}, {"voice_gender": "robot"},
+        {"email_notifications": "false"}, {"theme": "neon"},
         {"preferred_contact_window": "x" * 65}, {"reminder_offsets": "abc"},
         {"reminder_offsets": [0]}, {"reminder_offsets": [1, 2, 3, 4, 5, 6]},
         {"reminder_offsets": [40 * 86400]},
@@ -99,6 +99,14 @@ class TestPreferences:
     def test_bad_values_are_400(self, client, change):
         auth = register(client)
         assert client.patch("/users/me/preferences", headers=auth, json=change).status_code == 400
+
+    @pytest.mark.parametrize("field", ["voice_preference", "voice_gender"])
+    def test_removed_voice_fields_are_rejected(self, client, field):
+        # Live voice is not part of the patient app.
+        auth = register(client)
+        resp = client.patch("/users/me/preferences", headers=auth, json={field: "warm"})
+        assert resp.status_code == 400
+        assert field not in client.get("/users/me/preferences", headers=auth).json()
 
     def test_reminder_offsets_are_normalised(self, client):
         auth = register(client)

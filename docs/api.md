@@ -12,10 +12,10 @@ Contents: [Basics](#1-basics) · [Auth](#2-auth) ·
 [Reminder log](#8-reminder-delivery-log) · [Medical records](#9-medical-records) ·
 [Consultations and analysis](#10-consultations-and-anonymous-analysis) ·
 [Images](#11-image-upload) · [Care navigation](#12-care-navigation) ·
-[Handoff](#13-doctor-handoff) · [Live voice](#14-live-voice) ·
-[Service endpoints](#15-service-endpoints) ·
-[Screen to endpoint map](#16-frontend-screen--endpoint-map) ·
-[Known gaps](#17-known-gaps)
+[Handoff](#13-doctor-handoff) ·
+[Service endpoints](#14-service-endpoints) ·
+[Screen to endpoint map](#15-frontend-screen--endpoint-map) ·
+[Known gaps](#16-known-gaps)
 
 ---
 
@@ -274,7 +274,7 @@ fields you change. Unknown fields return 400
   "phone": "+251911234567", "phone_verified": true,
   "locale": "en", "timezone": "Africa/Addis_Ababa", "country_code": "ET",
   "preferences": {
-    "language": "en", "voice_preference": null, "voice_gender": null,
+    "language": "en",
     "theme": "system", "email_notifications": true, "sms_notifications": true,
     "push_notifications": true, "reminder_offsets": "604800,86400,3600",
     "preferred_contact_window": null,
@@ -311,13 +311,11 @@ Returns (and PATCH returns) the `preferences` object only.
 | Field | Accepted values |
 | --- | --- |
 | `language` | `en`, `am`, `om`, `ti`, `so`, `sw` |
-| `voice_preference` | `warm`, `calm`, `clear` |
 | `onboarding_goals` | array (or comma string) of `symptoms`, `hospitals`, `appointments`, `treatment`, `history` |
 | `care_search_radius_km` | integer 1-200 or `null` |
 | `reminder_offsets` | 1-5 seconds-before values (array or comma string), each up to 30 days; stored as e.g. `"86400,3600"`. Empty resets to the default `604800,86400,3600` |
 | `email_notifications`, `sms_notifications`, `push_notifications` | boolean (JSON true/false only) |
 | `theme` | `system`, `light`, `dark` |
-| `voice_gender` | `female`, `male`, `neutral` or `null` |
 | `preferred_contact_window` | text, max 64, or `null` |
 
 ### `GET /users/me/consent` / `PATCH /users/me/consent`
@@ -1100,39 +1098,7 @@ a timeline event; no clinician system receives anything yet.
 
 ---
 
-## 14. Live voice
-
-The realtime routers (`realtime.discussion`, `live_voice`, `realtime_api`)
-are imported inside a `try` and **are not present on this branch**, so
-nothing is mounted at `/ws/live-voice`. Only the capability probe exists.
-
-### `GET /dedan/v2/live-voice/capabilities` (no auth)
-
-```json
-{
-  "available": false,
-  "endpoint": "/ws/live-voice",
-  "transport": "websocket",
-  "native_duplex": false,
-  "streaming": false,
-  "barge_in": false,
-  "text_fallback": true,
-  "languages": ["en", "am", "om", "ti", "so", "sw"],
-  "input_sample_rate": 16000,
-  "output_sample_rate": 24000,
-  "provider": null,
-  "providers_registered": [],
-  "detail": "Live voice is not installed on this deployment."
-}
-```
-
-Use it to hide the voice UI when `available` is false. The AI interview
-screen should use `POST /users/me/consultations` (text, optional
-`voice_transcript`).
-
----
-
-## 15. Service endpoints
+## 14. Service endpoints
 
 | Method + path | Auth | Response |
 | --- | --- | --- |
@@ -1144,7 +1110,7 @@ screen should use `POST /users/me/consultations` (text, optional
 
 ---
 
-## 16. Frontend screen → endpoint map
+## 15. Frontend screen → endpoint map
 
 Screens are the `activeNav` views in `frontend/app/interview/page.tsx`, plus
 the auth and onboarding pages.
@@ -1155,7 +1121,7 @@ the auth and onboarding pages.
 | Login (`app/login`) | `POST /auth/login` (phone, DEDAN ID or email as `identifier`); on load `GET /auth/session` |
 | Forgot password | phone OTP flow; `complete` returns `created: false` |
 | Onboarding (`app/onboarding`) | `PATCH /users/me`, `PATCH /users/me/preferences` (`onboarding_goals`), `PATCH /users/me/consent`, `PATCH /users/me/health-profile` (`sex`, `age_range`) |
-| Live Discussion / AI interview (`live`) | `GET /dedan/v2/live-voice/capabilities`; `POST /api/images/upload`; `POST /users/me/consultations`; then `POST /users/me/care/facilities` (ranked), `POST /users/me/care/navigation`, `POST /users/me/handoff/summary` / `share` |
+| Home (`home`) | `GET /users/me/appointments?upcoming_only=true&limit=1`, `GET /users/me/inbox?limit=1` |
 | Booking / hospital directory (`booking`) | `GET /users/me/care/facilities` (filters: `department`, `q`, `sort=distance` with coordinates); `GET /users/me/care/facilities/{id}`; `GET .../availability`; book with `POST /users/me/appointments` (`facility_id`, `department`, `time_window`, `visit_mode`, `notes`) |
 | Appointments (`appointment`) | `GET /users/me/appointments` (split into upcoming/past/cancelled client side); book `POST /users/me/appointments` (`provider_name`, `visit_mode`); reschedule `POST .../{id}/reschedule`; cancel/confirm `PATCH .../{id}/status` |
 | Medical Record (`followup`) | `GET /users/me/records`; `POST /users/me/records`; `GET /users/me/timeline` for history |
@@ -1180,7 +1146,7 @@ and send SMS directly. Replace them with the backend calls above
 
 ---
 
-## 17. Known gaps
+## 16. Known gaps
 
 - **Facility directory**: 6 hard-coded entries, only 2 in Ethiopia
   (`et-addis-black-lion`, `et-addis-stpeter`); the other 4 are in Kenya. It
@@ -1192,7 +1158,7 @@ and send SMS directly. Replace them with the backend calls above
 - **Availability not integrated.** `/availability` never returns slots and
   booking does not check any; "Slots Today" style badges cannot be backed.
 - No email password reset; no token refresh; no account deletion endpoint.
-- Live voice is not mounted on this branch.
+- Live voice is not part of the patient app; it belongs to the hospital side. `POST /users/me/consultations` (text) remains for a future symptom checker.
 - Inbox categories `records` and `messages` have no producers.
 - Image endpoints have no auth or ownership (an image id acts as the access
   key, as `/api/analyze` is anonymous), and images are lost on restart.

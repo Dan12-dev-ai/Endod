@@ -4,25 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { healthCardFromProfile, loadHealthCard, type HealthCardInfo } from "../health-card/health-card-data";
 import AppointmentsView from "./appointments-view";
 import BookingView from "./booking-view";
+import HomeView from "./home-view";
 import NotificationsView from "./notifications-view";
 import RecordsView from "./records-view";
 import SettingsView from "./settings-view";
 import { logout } from "../lib/api";
 
 export default function Interview() {
-  const [toggles, setToggles] = useState({ mic: false, camera: false, speaker: false, pause: false });
-
-  const toggle = (key: "mic" | "camera" | "speaker" | "pause") =>
-    setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  const [activeNav, setActiveNav] = useState("live");
-  const [liveStarted, setLiveStarted] = useState(false);
+  const [activeNav, setActiveNav] = useState("home");
   // Shared: which card/record a notification click should highlight on the target page
   const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
 
   const navItems = [
     { id: "home", label: "Home", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
-    { id: "live", label: "Live Discussion", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "booking", label: "Booking", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "appointment", label: "Appointment", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "followup", label: "Medical Record", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
@@ -76,9 +70,6 @@ export default function Interview() {
   // Reset notification state when navigating away
   const prevActiveNavRef4 = useRef(activeNav);
   useEffect(() => {
-    if (prevActiveNavRef4.current !== activeNav && activeNav !== "live") {
-      setLiveStarted(false);
-    }
     // Clear the cross-page notification highlight once we land where it can't apply
     if (prevActiveNavRef4.current !== activeNav && activeNav !== "appointment" && activeNav !== "followup" && activeNav !== "message") {
       setHighlightTarget(null);
@@ -86,13 +77,11 @@ export default function Interview() {
     prevActiveNavRef4.current = activeNav;
   }, [activeNav]);
 
-  // ===== Refs for DOM interactions (drawer & fullscreen) =====
+  // ===== Refs for DOM interactions (mobile drawer) =====
   const mobileMenuBtnRef = useRef<HTMLButtonElement>(null);
   const drawerCloseBtnRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
-  const videoStageRef = useRef<HTMLElement>(null);
-  const fullscreenBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     // --- Responsive drawer: open/close mobile sidebar ---
@@ -133,62 +122,6 @@ export default function Interview() {
       if (window.innerWidth >= 1024) closeDrawer();
     };
     window.addEventListener("resize", handleResize);
-
-    // --- Fullscreen toggle for video stage ---
-    const stage = videoStageRef.current;
-    const btn = fullscreenBtnRef.current;
-    if (stage && btn) {
-      const stageEl = stage;
-      const btnEl = btn;
-      const pathEl = btnEl.querySelector("path");
-      const expandPath = "M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4";
-      const collapsePath = "M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5 5.25 5.25";
-
-      function setIcon(isFs: boolean) {
-        if (pathEl) pathEl.setAttribute("d", isFs ? collapsePath : expandPath);
-        btnEl.title = isFs ? "Exit fullscreen" : "Toggle fullscreen";
-      }
-
-      function enter() {
-        let p: Promise<unknown> | null = null;
-        const stageWithWebkit = stageEl as HTMLElement & {
-          webkitRequestFullscreen?: () => Promise<unknown>;
-        };
-        if (stageEl.requestFullscreen) p = stageEl.requestFullscreen();
-        else if (stageWithWebkit.webkitRequestFullscreen) p = stageWithWebkit.webkitRequestFullscreen();
-        if (p && p.catch) p.catch(function () {});
-      }
-
-      function exit() {
-        let p: Promise<unknown> | null = null;
-        const docWithWebkit = document as Document & {
-          webkitExitFullscreen?: () => Promise<unknown>;
-        };
-        if (document.exitFullscreen) p = document.exitFullscreen();
-        else if (docWithWebkit.webkitExitFullscreen) p = docWithWebkit.webkitExitFullscreen();
-        if (p && p.catch) p.catch(function () {});
-      }
-
-      btnEl.addEventListener("click", function () {
-        const docWithWebkit = document as Document & {
-          webkitFullscreenElement?: Element | null;
-          webkitExitFullscreen?: () => Promise<unknown>;
-        };
-        const fsEl = document.fullscreenElement || docWithWebkit.webkitFullscreenElement;
-        if (!fsEl) enter();
-        else exit();
-      });
-
-      document.addEventListener("fullscreenchange", function () {
-        setIcon(!!document.fullscreenElement);
-      });
-      document.addEventListener("webkitfullscreenchange", function () {
-        const docWithWebkit = document as Document & {
-          webkitFullscreenElement?: Element | null;
-        };
-        setIcon(!!docWithWebkit.webkitFullscreenElement);
-      });
-    }
 
     return () => {
       if (mobileMenuBtn) mobileMenuBtn.removeEventListener("click", openDrawer);
@@ -353,113 +286,15 @@ export default function Interview() {
           {/* ===== Notification View ===== */}
           {activeNav === "message" && <NotificationsView onOpen={openNotifTarget} onToast={showToast} />}
 
-          {activeNav !== "booking" && activeNav !== "setting" && activeNav !== "appointment" && activeNav !== "followup" && activeNav !== "message" && (
-          <>
-          {!liveStarted ? (
-            /* ===== Start Screen ===== */
-            <div data-purpose="live-start-screen" className="flex-1 min-h-0 flex flex-col items-center justify-center bg-[#F6F9FA] rounded-2xl p-8">
-              <div className="text-center max-w-md">
-                <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <svg className="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-2">Live Consultation</h2>
-                <p className="text-sm text-slate-500 mb-8">Connect with ENDOD AI for real-time medical consultation, symptom analysis, and health guidance.</p>
-                <button
-                  type="button"
-                  data-purpose="start-live-btn"
-                  onClick={() => setLiveStarted(true)}
-                  className="inline-flex items-center space-x-2 px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-full shadow-md transition"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <span>Start Live Discussion</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-          <>
-          {/* ===== Center Video Stage ===== */}
-
-          <section ref={videoStageRef} className="relative flex-1 min-h-0 w-full rounded-2xl overflow-hidden border border-slate-200 bg-white flex items-center justify-center text-slate-400" data-purpose="video-consultation-stage">
-
-            {/* AI Speaking Sound Wave Signal */}
-            <div className={`${toggles.pause ? "paused" : "speaking"} absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 flex items-center justify-center`} id="vocalVisualizer">
-              <div className="relative flex items-center justify-center">
-                {/* soft signal glow */}
-                <span aria-hidden="true" className="absolute -inset-10 rounded-full bg-cyan-400/10 blur-3xl"></span>
-                <div className="relative flex items-center justify-center gap-[3px] sm:gap-1 h-20 sm:h-24" id="vocalBarsContainer">
-                  {Array.from({ length: 33 }).map((_, i) => {
-                    const envelope = Math.sin((i / 32) * Math.PI);
-                    const height = Math.max(8, Math.round(8 + envelope * 72));
-                    return (
-                      <span
-                        key={i}
-                        className="wave-bar w-[3px] sm:w-1 rounded-full bg-gradient-to-t from-teal-500 via-cyan-400 to-emerald-300 shadow-[0_0_6px_rgba(34,211,238,0.35)]"
-                        style={{ height: `${height}px`, animationDelay: `${(i * 0.045).toFixed(3)}s` }}
-                      ></span>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Top-right: HD quality + Fullscreen (zoom) */}
-            <div className="absolute top-3 sm:top-4 right-3 sm:right-4 flex items-center space-x-1.5 sm:space-x-2">
-              <span className="bg-slate-100 text-slate-700 text-[10px] sm:text-[11px] font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded">HD</span>
-              <button ref={fullscreenBtnRef} className="bg-slate-100 p-1.5 rounded text-slate-600 hover:text-emerald-600 transition" title="Toggle fullscreen" type="button">
-                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            </div>
-          </section>
-
-          {/* ===== Call Control Bar ===== */}
-          <section className="flex-shrink-0 bg-white border border-slate-200 text-slate-800 rounded-2xl py-3 px-4 sm:px-6 shadow-md flex items-center justify-between" data-purpose="call-controls">
-            <div className="flex items-center space-x-3 sm:space-x-6 mx-auto md:mx-0">
-              {/* Mic */}
-              <button type="button" aria-pressed={toggles.mic} onClick={() => toggle("mic")} className="flex flex-col items-center group">
-                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition ${toggles.mic ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-600 group-hover:bg-slate-200"}`}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <span className={`text-[10px] sm:text-[11px] mt-1 ${toggles.mic ? "text-emerald-600" : "text-slate-500"}`}>Mic</span>
-              </button>
-              {/* Speaker */}
-              <button type="button" aria-pressed={toggles.speaker} onClick={() => toggle("speaker")} className="flex flex-col items-center group">
-                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition ${toggles.speaker ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-600 group-hover:bg-slate-200"}`}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <span className={`text-[10px] sm:text-[11px] mt-1 ${toggles.speaker ? "text-emerald-600" : "text-slate-500"}`}>Speaker</span>
-              </button>
-              {/* Pause */}
-              <button type="button" aria-pressed={toggles.pause} onClick={() => toggle("pause")} className="flex flex-col items-center group">
-                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition ${toggles.pause ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-600 group-hover:bg-slate-200"}`}>
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
-                  </svg>
-                </div>
-                <span className={`text-[10px] sm:text-[11px] mt-1 ${toggles.pause ? "text-emerald-600" : "text-slate-500"}`}>Pause</span>
-              </button>
-            </div>
-            <button className="flex items-center space-x-2 bg-[#D92D20] hover:bg-red-700 text-white font-semibold px-4 sm:px-6 py-2.5 rounded-full transition shadow-md">
-              <svg className="w-4 h-4 transform rotate-[135deg]" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 4V3z" />
-              </svg>
-              <span className="text-xs hidden sm:inline">End Consultation</span>
-              <span className="text-xs sm:hidden">End</span>
-            </button>
-          </section>
-          </>
-          )}
-          </>
+          {/* ===== Home ===== */}
+          {activeNav === "home" && (
+            <HomeView
+              firstName={healthCard?.firstName ?? ""}
+              onNavigate={(nav) => {
+                setHighlightTarget(null);
+                setActiveNav(nav);
+              }}
+            />
           )}
         </main>
       </div>

@@ -108,7 +108,6 @@ export default function Header() {
             </button>
             <div className="absolute left-0 top-full pt-2 w-48 hidden group-hover:block transition-all duration-200 z-50">
               <div className="bg-white text-slate-800 rounded-md shadow-2xl py-2 border border-slate-100 flex flex-col font-normal text-[14px]">
-                <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#action-video">Documentation</a>
                 <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#contact-section">Support</a>
               </div>
             </div>
