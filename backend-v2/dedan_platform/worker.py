@@ -177,25 +177,34 @@ def run_once(
     # Each channel is delivered only if its transport is configured; the
     # other channel's jobs are not claimed and wait in the queue. (A missing
     # mail server used to stop every reminder, including SMS.)
+    # A channel this deployment does not use (REMINDER_CHANNELS, e.g. SMS
+    # only) is not a blocked channel: no transport is built and nothing is
+    # logged as an error for it.
+    from dedan_platform import scheduler
+
+    in_use = set(scheduler.reminder_channels())
     channels = []
-    try:
-        provider = provider or build_provider()
-        channels.append(NotificationChannel.EMAIL)
-    except EmailNotConfiguredError as exc:
-        logger.error("notification_delivery_blocked channel=email: %s", exc)
-    try:
-        sms_provider = sms_provider or sms.build_provider()
-        channels.append(NotificationChannel.SMS)
-    except sms.SmsNotConfiguredError as exc:
-        logger.error("notification_delivery_blocked channel=sms: %s", exc)
+    if provider is not None or NotificationChannel.EMAIL in in_use:
+        try:
+            provider = provider or build_provider()
+            channels.append(NotificationChannel.EMAIL)
+        except EmailNotConfiguredError as exc:
+            logger.error("notification_delivery_blocked channel=email: %s", exc)
+    if sms_provider is not None or NotificationChannel.SMS in in_use:
+        try:
+            sms_provider = sms_provider or sms.build_provider()
+            channels.append(NotificationChannel.SMS)
+        except sms.SmsNotConfiguredError as exc:
+            logger.error("notification_delivery_blocked channel=sms: %s", exc)
     # Channels without a transport are claimed only to be closed as SKIPPED,
     # so they do not sit in the queue forever.
     channels.extend(
         c for c in NotificationChannel.ALL
         if c not in (NotificationChannel.EMAIL, NotificationChannel.SMS)
     )
-    blocked = 2 - sum(c in channels for c in (NotificationChannel.EMAIL, NotificationChannel.SMS))
-    if blocked == 2:
+    wanted = {NotificationChannel.EMAIL, NotificationChannel.SMS} & (in_use | set(channels))
+    blocked = sum(c not in channels for c in wanted)
+    if wanted and blocked == len(wanted):
         return {"claimed": 0, "recovered_stale": 0, "SENT": 0, "RETRYING": 0, "FAILED": 0,
                 "blocked": 1}
     recovered = notifications.recover_stale_jobs(now=now)

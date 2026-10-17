@@ -318,3 +318,17 @@ class TestSmsOnlyDeployment:
 
         monkeypatch.setenv("REMINDER_CHANNELS", "pigeon")
         assert scheduler.reminder_channels() == scheduler.REMINDER_CHANNELS
+
+
+    def test_sms_only_worker_does_not_report_email_as_blocked(self, db, monkeypatch, caplog):
+        import logging
+
+        from dedan_platform import worker as wk
+
+        monkeypatch.setenv("REMINDER_CHANNELS", "sms")
+        monkeypatch.delenv("SMTP_HOST", raising=False)
+        monkeypatch.setenv("ENVIRONMENT", "production")
+        with caplog.at_level(logging.ERROR):
+            summary = wk.run_once(sms_provider=FakeSms())
+        assert "blocked_channels" not in summary
+        assert "channel=email" not in caplog.text
