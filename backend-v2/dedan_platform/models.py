@@ -207,8 +207,7 @@ class Preferences(Base):
         nullable=False,
     )
     language: Mapped[str] = mapped_column(String(8), default="en", nullable=False)
-    # Catalog voice id, validated against `realtime.voices` at the API boundary
-    # so an invalid id cannot be persisted.
+    # Unused since live voice left the patient app; kept so existing rows load.
     voice_preference: Mapped[Optional[str]] = mapped_column(String(64))
     voice_gender: Mapped[Optional[str]] = mapped_column(String(8))
     theme: Mapped[str] = mapped_column(String(16), default="system", nullable=False)

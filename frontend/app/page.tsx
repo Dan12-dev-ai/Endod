@@ -1,7 +1,6 @@
 import Header from './components/header';
 import Hero from './components/hero';
 import Bottleneck from './components/bottleneck';
-import VideoShowcase from './components/video-showcase';
 import BuildLab from './components/build-lab';
 import CloudLab from './components/cloud-lab';
 import SocialProof from './components/social-proof';
@@ -15,7 +14,6 @@ export default function Home() {
       <Header />
       <Hero />
       <Bottleneck />
-      <VideoShowcase />
       <BuildLab />
       <CloudLab />
       <SocialProof />

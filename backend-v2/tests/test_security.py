@@ -15,7 +15,7 @@ from app.core.security import (
     normalize_token,
 )
 from realtime import auth
-from realtime.voices import SUPPORTED_LANGUAGES, VoiceUnavailableError, get_voice
+from dedan_platform.languages import SUPPORTED_LANGUAGES
 
 
 @pytest.fixture
@@ -88,14 +88,10 @@ class TestNormalizeToken:
         assert normalize_token(value) == expected
 
 
-class TestVoices:
+class TestLanguages:
     def test_languages_include_english_and_amharic(self):
         assert SUPPORTED_LANGUAGES[0] == "en"
         assert "am" in SUPPORTED_LANGUAGES
-
-    def test_unknown_voice_is_rejected(self):
-        with pytest.raises(VoiceUnavailableError):
-            get_voice("no-such-voice")
 
 
 def _app_with(*middleware):
@@ -162,7 +158,7 @@ class TestHttpHardening:
 
 
 class TestRouterMounting:
-    """The platform routes must exist on the real app even without live voice."""
+    """The platform routes must exist on the real app."""
 
     def test_login_route_is_mounted(self, client):
         resp = client.post("/auth/login", json={"identifier": "DE000000", "password": "x"})
@@ -171,11 +167,8 @@ class TestRouterMounting:
     def test_profile_requires_auth(self, client):
         assert client.get("/users/me").status_code == 401
 
-    def test_voice_capabilities_report_unavailable(self, client):
-        body = client.get("/dedan/v2/live-voice/capabilities").json()
-        assert body["available"] is False
-        assert body["text_fallback"] is True
-        assert "am" in body["languages"]
+    def test_live_voice_is_not_part_of_the_patient_api(self, client):
+        assert client.get("/dedan/v2/live-voice/capabilities").status_code == 404
 
 
 class TestReviewFixes:

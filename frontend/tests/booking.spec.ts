@@ -76,7 +76,7 @@ test.describe('Interview — Booking page', () => {
     await expect(modal).toHaveCount(0);
 
     await page.locator('[data-purpose="hospital-search"]').fill('Peter');
-    await page.locator('aside').getByRole('link', { name: 'Live Discussion' }).click();
+    await page.locator('aside').getByRole('link', { name: 'Home' }).click();
     await expect(page.locator('[data-purpose="booking-view"]')).toHaveCount(0);
     await page.locator('aside').getByRole('link', { name: 'Booking' }).click();
     await expect(page.locator('[data-purpose="booking-view"]')).toBeVisible();

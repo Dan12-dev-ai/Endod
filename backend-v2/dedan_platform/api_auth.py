@@ -20,7 +20,7 @@ Two design points are inherited from the platform rather than chosen here:
 
 Token shape matches the realtime websocket path (`realtime.auth.issue_token`),
 so one credential in `localStorage` authorises both the REST calls on these
-pages and the live-voice socket.
+pages.
 """
 
 from __future__ import annotations

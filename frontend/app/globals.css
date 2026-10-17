@@ -79,28 +79,6 @@ body {
   pointer-events: auto;
 }
 
-/* ===== AI Interview: speaking sound wave signal ===== */
-@keyframes soundwaveMove {
-  from { transform: scaleY(0.22); }
-  to   { transform: scaleY(1); }
-}
-
-.wave-bar {
-  transform-origin: center;
-  transform: scaleY(0.3);
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-
-.speaking .wave-bar {
-  animation: soundwaveMove 0.9s ease-in-out infinite alternate;
-}
-
-.paused .wave-bar {
-  transform: scaleY(0.18);
-  opacity: 0.45;
-  animation: none !important;
-}
-
 /* ===== Sign Up page: testimonial quote typography ===== */
 .quote-text {
   letter-spacing: -0.01em;

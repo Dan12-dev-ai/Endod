@@ -1,5 +1,5 @@
 """
-Signed session tokens for the portal REST API and the live-voice socket.
+Signed session tokens for the patient REST API.
 
 Format
 ------
