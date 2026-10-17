@@ -1,0 +1,65 @@
+# Endod Health: Postgres, the API, the patient web app and a Cloudflare Tunnel.
+#
+# Nothing is published on the host: the only way in is the tunnel, which
+# reaches the web app, and the web app reaches the API on the private
+# network. See deploy/README.md.
+#
+#   cd deploy && docker compose --env-file .env up -d --build
+
+name: endod
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: endod
+      POSTGRES_USER: endod
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U endod -d endod"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend-v2/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DEDAN_DATABASE_URL: postgresql+psycopg://endod:${POSTGRES_PASSWORD}@postgres:5432/endod
+      # Reached only by the web app, by this name.
+      ALLOWED_HOSTS: backend,localhost,127.0.0.1
+      # The web app forwards the patient's address; per-patient rate limits.
+      TRUST_PROXY_HEADERS: "true"
+      DEBUG: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build: ../frontend
+    restart: unless-stopped
+    environment:
+      DEDAN_API_URL: http://backend:8000
+      # Cloudflare appends the client address it saw: one hop from the right.
+      TRUSTED_PROXY_HOPS: "1"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  cloudflared:
+    image: cloudflare/cloudflared:2025.10.0
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in deploy/.env}
+    depends_on:
+      - frontend
+
+volumes:
+  pgdata:

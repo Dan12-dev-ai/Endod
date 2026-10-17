@@ -71,3 +71,20 @@ def test_single_node_demo_can_opt_in_to_sqlite(monkeypatch):
     monkeypatch.setenv("DEDAN_DATABASE_URL", "sqlite:////data/dedan.db")
     monkeypatch.setenv("DEDAN_ALLOW_SQLITE_IN_PRODUCTION", "true")
     assert db.database_url() == "sqlite:////data/dedan.db"
+
+
+def test_allowed_hosts_come_from_settings(monkeypatch):
+    monkeypatch.setenv("REALTIME_TOKEN_SECRET", "test-secret")
+    from fastapi.testclient import TestClient
+
+    import main_clinical
+    from app.core.config import get_settings
+
+    settings = get_settings().model_copy(update={
+        "ENVIRONMENT": "production", "DEBUG": False, "ALLOWED_HOSTS": ["backend", "localhost"],
+        "ADMIN_API_KEY": "test-admin-key",
+    })
+    client = TestClient(main_clinical.create_app(settings), base_url="http://backend")
+    assert client.get("/health").status_code == 200
+    other = TestClient(main_clinical.create_app(settings), base_url="http://evil.example")
+    assert other.get("/health").status_code == 400

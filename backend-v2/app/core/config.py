@@ -23,6 +23,12 @@ class Settings(BaseSettings):
         default=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],
         description="Allowed CORS origins (comma-separated or JSON array)",
     )
+    #: Host headers the API answers in production (TrustedHost). Behind the
+    #: Next.js app the API is reached by its internal name, e.g. ``backend``.
+    ALLOWED_HOSTS: Annotated[List[str], NoDecode] = Field(
+        default=["localhost", "127.0.0.1"],
+        description="Allowed Host headers in production (comma-separated or JSON array)",
+    )
 
     # AI Providers
     # `AI_PROVIDER_MODE` pins every capability to the deterministic offline
@@ -94,7 +100,7 @@ class Settings(BaseSettings):
         """
         return value.strip().lower() if isinstance(value, str) else value
 
-    @field_validator("CORS_ORIGINS", "ALLOWED_IMAGE_TYPES", mode="before")
+    @field_validator("CORS_ORIGINS", "ALLOWED_IMAGE_TYPES", "ALLOWED_HOSTS", mode="before")
     @classmethod
     def _split_comma_separated(cls, value: Any) -> Any:
         """Accept comma-separated env values as well as JSON arrays.
