@@ -1,0 +1,8 @@
+[Unit]
+Description=Keep Endod's config in the shared nginx container
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/endod/deploy/shared-nginx/sync.sh

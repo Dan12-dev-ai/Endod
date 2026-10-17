@@ -52,12 +52,15 @@ services:
       backend:
         condition: service_healthy
 
+  # Only with the tunnel: `docker compose --profile tunnel up -d`.
+  # (Alternatively an existing nginx fronts the app: see shared-nginx/.)
   cloudflared:
     image: cloudflare/cloudflared:2025.10.0
+    profiles: [tunnel]
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in deploy/.env}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     depends_on:
       - frontend
 
