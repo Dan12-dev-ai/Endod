@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Newsreader, Plus_Jakarta_Sans } from "next/font/google";
+import { I18nProvider, LANGUAGE_INIT_SCRIPT } from "./lib/i18n";
 import "./globals.css";
 
 const newsreader = Newsreader({
@@ -18,6 +19,9 @@ export const metadata: Metadata = {
   title: "Endod Health OS | Patients & Hospitals, Connected",
   description:
     "Endod Health OS — understand your symptoms, reach the right hospital faster, and arrive with a clear record. You stay in control of your health data.",
+  icons: {
+    icon: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -25,8 +29,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${newsreader.variable} ${plusJakartaSans.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <head>
+        {/* Applies the stored language to <html lang> before the first paint. */}
+        <script dangerouslySetInnerHTML={{ __html: LANGUAGE_INIT_SCRIPT }} />
+      </head>
+      <body className="min-h-full flex flex-col">
+        <I18nProvider>{children}</I18nProvider>
+      </body>
     </html>
   );
 }

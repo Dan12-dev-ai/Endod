@@ -3,30 +3,33 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError } from "@/app/lib/api";
+import { useI18n, type TranslationKey } from "@/app/lib/i18n";
 
-const LOOKING_FOR_OPTIONS = [
-  { id: "symptoms", label: "Understand my symptoms", hint: "Talk to Endod AI about how you're feeling" },
-  { id: "hospitals", label: "Find the right hospital", hint: "Nearby hospitals with live crowd levels" },
-  { id: "appointments", label: "Book an appointment", hint: "Reserve a slot with SMS reminders" },
-  { id: "treatment", label: "Follow my treatment plan", hint: "Timelines, doses and remaining counts" },
-  { id: "history", label: "Access my medical history", hint: "One record across all hospitals" },
+const LOOKING_FOR_OPTIONS: { id: string; labelKey: TranslationKey; hintKey: TranslationKey }[] = [
+  { id: "symptoms", labelKey: "onboarding.option.symptoms.label", hintKey: "onboarding.option.symptoms.hint" },
+  { id: "hospitals", labelKey: "onboarding.option.hospitals.label", hintKey: "onboarding.option.hospitals.hint" },
+  { id: "appointments", labelKey: "onboarding.option.appointments.label", hintKey: "onboarding.option.appointments.hint" },
+  { id: "treatment", labelKey: "onboarding.option.treatment.label", hintKey: "onboarding.option.treatment.hint" },
+  { id: "history", labelKey: "onboarding.option.history.label", hintKey: "onboarding.option.history.hint" },
 ];
 
-const SEX_OPTIONS = ["Male", "Female", "Other", "Prefer not to say"];
-// The values the backend stores for each option.
-const SEX_VALUES: Record<string, string> = {
-  Male: "male", Female: "female", Other: "other", "Prefer not to say": "prefer_not_to_say",
-};
+// The id is also the value the backend stores.
+const SEX_OPTIONS: { id: string; labelKey: TranslationKey }[] = [
+  { id: "male", labelKey: "onboarding.sex.male" },
+  { id: "female", labelKey: "onboarding.sex.female" },
+  { id: "other", labelKey: "onboarding.sex.other" },
+  { id: "prefer_not_to_say", labelKey: "onboarding.sex.preferNotToSay" },
+];
 
-const STEP_TITLES = [
-  "What's your name?",
-  "What are you looking for?",
-  "What's your sex?",
-  "What's your age?",
+const STEP_TITLE_KEYS: TranslationKey[] = [
+  "onboarding.title.name",
+  "onboarding.title.lookingFor",
+  "onboarding.title.sex",
+  "onboarding.title.age",
 ];
 
 // Age is collected in clinical-style ranges (as common in medical software)
-// rather than exact years.
+// rather than exact years. The range labels are numerals: language-neutral.
 const AGE_RANGES = [
   { value: 1, label: "1–20" },
   { value: 21, label: "21–40" },
@@ -37,12 +40,12 @@ const AGE_RANGES = [
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { t } = useI18n();
 
   const [step, setStep] = useState(0);
   const [formError, setFormError] = useState("");
 
-  // Step 1: name (updated) - second update - FINAL - EXTRA
-// INSERTED LINE FOR TESTING
+  // Step 1: name
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -52,9 +55,8 @@ export default function OnboardingPage() {
 
   // Step 3: sex
   const [sex, setSex] = useState("");
-// AGE SLIDER REPLACED WITH RADIO BUTTONS - VERIFIED
 
-  // Step 4: age (clinical-style ranges) - UPDATED
+  // Step 4: age (clinical-style ranges)
   const [ageRange, setAgeRange] = useState<string>('');
   // Explicit, opt-in consent to store health details (sex and age).
   const [healthConsent, setHealthConsent] = useState(false);
@@ -80,19 +82,19 @@ export default function OnboardingPage() {
 
   const validateStep = (): boolean => {
     if (step === 0 && (!firstName.trim() || !lastName.trim())) {
-      setFormError("Please enter your first and last name.");
+      setFormError(t("onboarding.error.name"));
       return false;
     }
     if (step === 1 && lookingFor.length === 0) {
-      setFormError("Please select at least one option.");
+      setFormError(t("onboarding.error.lookingFor"));
       return false;
     }
     if (step === 2 && !sex) {
-      setFormError("Please select an option.");
+      setFormError(t("onboarding.error.sex"));
       return false;
      }
      if (step === 3 && !ageRange) {
-       setFormError("Please select an age range.");
+       setFormError(t("onboarding.error.age"));
        return false;
      }
     return true;
@@ -128,7 +130,7 @@ export default function OnboardingPage() {
   const goNext = () => {
     if (!validateStep()) return;
     setFormError("");
-    setStep((current) => Math.min(current + 1, STEP_TITLES.length - 1));
+    setStep((current) => Math.min(current + 1, STEP_TITLE_KEYS.length - 1));
   };
 
   // Timers fire after later renders, so they call the newest goNext (which
@@ -188,12 +190,12 @@ export default function OnboardingPage() {
         await api("users/me/consent", { method: "PATCH", body: { treatment_processing: true } });
         await api("users/me/health-profile", {
           method: "PATCH",
-          body: { sex: SEX_VALUES[current.sex] ?? "other", age_range: current.age },
+          body: { sex: current.sex, age_range: current.age },
         });
       }
       router.push("/health-card");
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : "Unable to save your answers. Please try again.");
+      setFormError(error instanceof ApiError ? error.message : t("onboarding.error.save"));
     } finally {
       savingRef.current = false;
       setIsSaving(false);
@@ -209,62 +211,11 @@ export default function OnboardingPage() {
     clearFinishTimer();
     advanceTimer.current = setTimeout(() => {
       advanceTimer.current = null;
-      setStep((current) => Math.min(current + 1, STEP_TITLES.length - 1));
+      setStep((current) => Math.min(current + 1, STEP_TITLE_KEYS.length - 1));
     }, delay);
   };
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-   
-
-  const progress = ((step + 1) / STEP_TITLES.length) * 100;
+  const progress = ((step + 1) / STEP_TITLE_KEYS.length) * 100;
 
   return (
     <main
@@ -275,10 +226,10 @@ export default function OnboardingPage() {
         <div className="bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10">
           {/* Brand + Progress */}
           <div className="mb-7" data-purpose="brand-logo">
-            <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading mb-5">Endod</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading mb-5">{t("common.endod")}</h1>
             <div className="flex items-center justify-between mb-2 text-xs text-brand-muted">
               <span>
-                Step {step + 1} of {STEP_TITLES.length}
+                {t("onboarding.stepOf", { current: step + 1, total: STEP_TITLE_KEYS.length })}
               </span>
               <span>{Math.round(progress)}%</span>
             </div>
@@ -299,11 +250,11 @@ export default function OnboardingPage() {
               {/* Slide 1: Name */}
               <div className="w-full flex-shrink-0 space-y-4" data-purpose="step-name">
                 <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-brand-heading tracking-tight mb-1">
-                  {STEP_TITLES[0]}
+                  {t(STEP_TITLE_KEYS[0])}
                 </h2>
                 <div>
                   <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="first-name">
-                    First name
+                    {t("onboarding.firstName")}
                   </label>
                   <input
                     className="field-input w-full px-4 py-2.5 rounded-xl text-sm border focus:outline-hidden placeholder:text-slate-400"
@@ -319,7 +270,7 @@ export default function OnboardingPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="middle-name">
-                    Middle name
+                    {t("onboarding.middleName")}
                   </label>
                   <input
                     className="field-input w-full px-4 py-2.5 rounded-xl text-sm border focus:outline-hidden placeholder:text-slate-400"
@@ -331,7 +282,7 @@ export default function OnboardingPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="last-name">
-                    Last name
+                    {t("onboarding.lastName")}
                   </label>
                   <input
                     className="field-input w-full px-4 py-2.5 rounded-xl text-sm border focus:outline-hidden placeholder:text-slate-400"
@@ -355,11 +306,11 @@ export default function OnboardingPage() {
               {/* Slide 2: Looking for (multi-select options) */}
               <div className="w-full flex-shrink-0" data-purpose="step-looking-for">
                 <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-[#1E5852] tracking-tight mb-1">
-                  {STEP_TITLES[1]}
+                  {t(STEP_TITLE_KEYS[1])}
                 </h2>
-                <p className="text-xs text-brand-muted mb-5">Select all that apply.</p>
+                <p className="text-xs text-brand-muted mb-5">{t("onboarding.selectAll")}</p>
 
-                <div className="space-y-1" role="group" aria-label="What are you looking for">
+                <div className="space-y-1" role="group" aria-label={t("onboarding.lookingForAria")}>
                   {LOOKING_FOR_OPTIONS.map((option) => {
                     const selected = lookingFor.includes(option.id);
                     return (
@@ -395,10 +346,10 @@ export default function OnboardingPage() {
                         {/* Label + hint */}
                         <span className="min-w-0">
                           <span className="block text-sm font-medium leading-snug text-brand-heading">
-                            {option.label}
+                            {t(option.labelKey)}
                           </span>
                           <span className="block text-[11px] font-normal text-brand-muted mt-0.5 leading-snug">
-                            {option.hint}
+                            {t(option.hintKey)}
                           </span>
                         </span>
                       </button>
@@ -409,11 +360,11 @@ export default function OnboardingPage() {
               {/* Slide 3: Sex */}
               <div className="w-full flex-shrink-0" data-purpose="step-sex">
                 <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-brand-heading tracking-tight mb-4">
-                  {STEP_TITLES[2]}
+                  {t(STEP_TITLE_KEYS[2])}
                 </h2>
                 <div className="grid grid-cols-2 gap-2.5">
                   {SEX_OPTIONS.map((option) => {
-                    const selected = sex === option;
+                    const selected = sex === option.id;
                     return (
                       <button
                         aria-pressed={selected}
@@ -422,25 +373,25 @@ export default function OnboardingPage() {
                             ? "border-[#1E5852] bg-[#F2F8F7] text-brand-heading font-semibold"
                             : "border-[#E2E8F0] bg-[#F8FAFB] text-brand-muted hover:border-[#1E5852]/40 hover:text-brand-heading"
                         }`}
-                        key={option}
+                        key={option.id}
                         onClick={() => {
-                          setSex(option);
+                          setSex(option.id);
                           setFormError("");
                           autoAdvance();
                         }}
                         type="button"
                       >
-                        {option}
+                        {t(option.labelKey)}
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-                            {/* Slide 4: Age (radio-based selection over clinical-style ranges) */}
+              {/* Slide 4: Age (radio-based selection over clinical-style ranges) */}
               <div className="w-full flex-shrink-0" data-purpose="step-age">
                 <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-brand-heading tracking-tight mb-4">
-                  {STEP_TITLES[3]}
+                  {t(STEP_TITLE_KEYS[3])}
                 </h2>
                 <label className="flex items-start gap-2.5 mb-4 text-xs text-brand-muted leading-relaxed cursor-pointer" data-purpose="health-consent">
                   <input
@@ -449,12 +400,9 @@ export default function OnboardingPage() {
                     onChange={(e) => setHealthConsent(e.target.checked)}
                     type="checkbox"
                   />
-                  <span>
-                    Save my sex and age to my Endod health profile, so advice and safety checks fit me.
-                    Without this, they are not stored.
-                  </span>
+                  <span>{t("onboarding.consent")}</span>
                 </label>
-                <div className="flex flex-col gap-2" role="radiogroup" aria-label="Age range">
+                <div className="flex flex-col gap-2" role="radiogroup" aria-label={t("onboarding.ageAria")}>
                   {AGE_RANGES.map((range) => {
                     const selected = ageRange === range.label;
                     return (
@@ -492,7 +440,7 @@ export default function OnboardingPage() {
           </div>
 
           {isSaving && (
-            <p className="mt-4 text-xs text-brand-muted" role="status">Saving your answers...</p>
+            <p className="mt-4 text-xs text-brand-muted" role="status">{t("onboarding.savingAnswers")}</p>
           )}
 
           {/* Form Error Message */}
@@ -513,9 +461,9 @@ export default function OnboardingPage() {
               onClick={goBack}
               type="button"
             >
-              Back
+              {t("common.back")}
             </button>
-            {step === STEP_TITLES.length - 1 && (
+            {step === STEP_TITLE_KEYS.length - 1 && (
               <button
                 className="px-6 py-3 rounded-full text-sm font-semibold bg-[#1E5852] text-white hover:bg-[#174640] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-purpose="finish-onboarding"
@@ -523,14 +471,14 @@ export default function OnboardingPage() {
                 onClick={() => void handleFinish()}
                 type="button"
               >
-                {isSaving ? "Saving..." : "Finish"}
+                {isSaving ? t("onboarding.submitting") : t("onboarding.submit")}
               </button>
             )}
           </div>
         </div>
 
         <p className="text-center text-[11px] text-brand-muted mt-4">
-          Your answers stay private and are only used to tailor your care.
+          {t("onboarding.footer")}
         </p>
        </div>
       </main>

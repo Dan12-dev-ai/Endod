@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { passwordProblem } from "@/app/lib/api";
+import { useI18n } from "@/app/lib/i18n";
 
 export default function SetPasswordPage() {
   // `useSearchParams()` needs a Suspense boundary for prerendering.
@@ -22,6 +23,7 @@ export default function SetPasswordPage() {
 function SetPassword() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useI18n();
   const phone = searchParams.get("phone") ?? "";
   const isReset = searchParams.get("mode") === "reset";
 
@@ -37,16 +39,18 @@ function SetPassword() {
     setFormError("");
 
     if (!phone) {
-      setFormError("Missing phone number. Please go back and try again.");
+      setFormError(t("setPassword.error.missingPhone"));
       return;
     }
     const problem = passwordProblem(password);
     if (problem) {
-      setFormError(problem);
+      // The rule is the same in both languages; the message comes from the
+      // translated key that matches it.
+      setFormError(password.length < 10 ? t("settings.error.passwordMin") : t("settings.error.passwordCase"));
       return;
     }
     if (password !== confirmPassword) {
-      setFormError("Passwords don't match.");
+      setFormError(t("setPassword.error.mismatch"));
       return;
     }
 
@@ -60,14 +64,14 @@ function SetPassword() {
       const data = await response.json();
 
       if (!response.ok || !data.ok) {
-        setFormError(data.error ?? "Something went wrong. Please try again.");
+        setFormError(data.error ?? t("common.somethingWrong"));
         return;
       }
 
       // Signed in (httpOnly cookie). New accounts continue to onboarding.
       router.push(data.created ? "/onboarding" : "/interview");
     } catch {
-      setFormError("Unable to save your password right now. Please check your connection and try again.");
+      setFormError(t("setPassword.error.network"));
     } finally {
       setIsSubmitting(false);
     }
@@ -88,23 +92,23 @@ function SetPassword() {
         <div className="bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10">
           {/* Brand */}
           <div className="mb-6" data-purpose="brand-logo">
-            <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">Endod</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">{t("common.endod")}</h1>
           </div>
 
           <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-brand-heading tracking-tight mb-1">
-            {isReset ? "Reset your password" : "Set your password"}
+            {isReset ? t("setPassword.resetTitle") : t("setPassword.title")}
           </h2>
           <p className="text-sm text-brand-muted mb-6">
-            Create a password for{" "}
-            <span className="font-semibold text-brand-heading">{phone || "your account"}</span>. You&apos;ll use it
-            with your phone number to sign in.
+            {t("setPassword.subtitlePrefix")}{" "}
+            <span className="font-semibold text-brand-heading">{phone || t("setPassword.yourAccount")}</span>
+            {t("setPassword.subtitleSuffix")}
           </p>
 
           <form className="space-y-4" data-purpose="set-password-form" onSubmit={handleSubmit}>
             {/* Password Field */}
             <div data-purpose="form-field-password">
               <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="password">
-                Password
+                {t("setPassword.passwordLabel")}
               </label>
               <div className="relative">
                 <input
@@ -120,7 +124,7 @@ function SetPassword() {
                   value={password}
                 />
                 <button
-                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? t("common.hidePassword") : t("common.showPassword")}
                   className={eyeButtonClass}
                   onClick={() => setShowPassword((visible) => !visible)}
                   type="button"
@@ -134,12 +138,12 @@ function SetPassword() {
                   </svg>
                 </button>
               </div>
-              <p className="mt-1.5 text-[11px] text-brand-muted">At least 10 characters, with upper and lower case letters.</p>
+              <p className="mt-1.5 text-[11px] text-brand-muted">{t("setPassword.passwordHint")}</p>
             </div>
             {/* Confirm Password Field */}
             <div data-purpose="form-field-confirm-password">
               <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="confirm-password">
-                Confirm Password
+                {t("setPassword.confirmLabel")}
               </label>
               <div className="relative">
                 <input
@@ -155,7 +159,7 @@ function SetPassword() {
                   value={confirmPassword}
                 />
                 <button
-                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  aria-label={showConfirmPassword ? t("common.hidePassword") : t("common.showPassword")}
                   className={eyeButtonClass}
                   onClick={() => setShowConfirmPassword((visible) => !visible)}
                   type="button"
@@ -189,14 +193,14 @@ function SetPassword() {
                 disabled={isSubmitting}
                 type="submit"
               >
-                {isSubmitting ? "Saving..." : "Continue"}
+                {isSubmitting ? t("setPassword.submitting") : t("setPassword.submit")}
               </button>
             </div>
 
           </form>
 
           <p className="text-center text-[11px] text-brand-muted mt-5">
-            Your password is encrypted and never shared — it only secures your account.
+            {t("setPassword.footer")}
           </p>
         </div>
       </div>

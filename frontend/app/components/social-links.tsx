@@ -1,11 +1,16 @@
+"use client";
+
+import { useI18n } from "../lib/i18n";
+
 export default function SocialLinks() {
+  const { t } = useI18n();
   return (
     <section className="bg-[#f5f3ef] py-16 lg:py-24" data-purpose="social-links" id="social-links">
       <div className="max-w-6xl mx-auto px-6 sm:px-12 text-center">
         {/* Overline label */}
         <div className="mb-8">
           <span className="inline-block text-[11px] font-bold uppercase tracking-widest text-slate-800 border-b-2 border-slate-900 pb-0.5">
-            FOLLOW US
+            {t("socialLinks.followUs")}
           </span>
         </div>
 

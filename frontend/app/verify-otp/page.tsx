@@ -2,29 +2,18 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useI18n, type TranslationKey } from "@/app/lib/i18n";
 
 type Testimonial = {
-  quote: string;
+  quoteKey: TranslationKey;
+  titleKey: TranslationKey;
   name: string;
-  title: string;
   initials: string;
 };
 
-const testimonials: Testimonial[] = [
-  {
-    quote:
-      "By uncovering data-driven insights, Endod gives clinicians an unprecedented view of each patient's unique needs. This enables truly tailored care while reducing administrative tasks through automation.",
-    name: "Paul Lefever",
-    title: "Psychiatric Nurse Practitioner",
-    initials: "PL",
-  },
-  {
-    quote:
-      "It's really exciting that clinicians will be able to understand their patients' behaviors without all the pressure being on patients to remember and recall everything. That is very useful for improving treatment outcomes.",
-    name: "Katherine Jonas",
-    title: "PhD, Licensed Psychologist",
-    initials: "KJ",
-  },
+const testimonialData: Testimonial[] = [
+  { quoteKey: "testimonial.1.quote", titleKey: "testimonial.1.title", name: "Paul Lefever", initials: "PL" },
+  { quoteKey: "testimonial.2.quote", titleKey: "testimonial.2.title", name: "Katherine Jonas", initials: "KJ" },
 ];
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -48,11 +37,12 @@ export default function VerifyOtpPage() {
 function VerifyOtp() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useI18n();
   const phone = searchParams.get("phone") ?? "";
 
   // ===== Infinite sliding-window carousel =====
-  const slideCount = testimonials.length;
-  const extended = [testimonials[slideCount - 1], ...testimonials, testimonials[0]];
+  const slideCount = testimonialData.length;
+  const extended = [testimonialData[slideCount - 1], ...testimonialData, testimonialData[0]];
   const [currentIndex, setCurrentIndex] = useState(1);
   const [isAnimating, setIsAnimating] = useState(true);
 
@@ -123,7 +113,7 @@ function VerifyOtp() {
 
     const code = digits.join("");
     if (code.length !== 6) {
-      setFormError("Please enter the complete 6-digit code.");
+      setFormError(t("otp.error.incomplete"));
       return;
     }
 
@@ -137,7 +127,7 @@ function VerifyOtp() {
       const data = await response.json();
 
       if (!response.ok || !data.ok) {
-        setFormError(data.error ?? "That code didn't work. Please try again.");
+        setFormError(data.error ?? t("otp.error.wrong"));
         return;
       }
 
@@ -145,7 +135,7 @@ function VerifyOtp() {
       const mode = data.accountExists ? "&mode=reset" : "";
       router.push(`/set-password?phone=${encodeURIComponent(phone)}${mode}`);
     } catch {
-      setFormError("Unable to verify right now. Please check your connection and try again.");
+      setFormError(t("otp.error.network"));
     } finally {
       setIsSubmitting(false);
     }
@@ -162,19 +152,19 @@ function VerifyOtp() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok) {
-        setFormError(data.error ?? "Unable to resend the code right now. Please try again.");
+        setFormError(data.error ?? t("otp.error.resend"));
         return;
       }
       setResendCooldown(Number(data.resendAfter) || RESEND_COOLDOWN_SECONDS);
     } catch {
-      setFormError("Unable to resend the code right now. Please try again.");
+      setFormError(t("otp.error.resend"));
     }
   };
 
   const renderSlide = (item: Testimonial) => (
     <>
       <blockquote className="font-serif text-xl sm:text-2xl lg:text-[24px] xl:text-[26px] text-brand-heading quote-text font-normal mb-6 leading-snug">
-        &ldquo;{item.quote}&rdquo;
+        &ldquo;{t(item.quoteKey)}&rdquo;
       </blockquote>
 
       <div className="flex items-center space-x-3 mb-6">
@@ -183,7 +173,7 @@ function VerifyOtp() {
         </div>
         <div>
           <p className="font-semibold text-brand-heading text-sm sm:text-base leading-tight">{item.name}</p>
-          <p className="text-xs sm:text-sm text-brand-muted font-normal leading-tight mt-0.5">{item.title}</p>
+          <p className="text-xs sm:text-sm text-brand-muted font-normal leading-tight mt-0.5">{t(item.titleKey)}</p>
         </div>
       </div>
     </>
@@ -202,7 +192,7 @@ function VerifyOtp() {
         >
           <div>
             <div className="mb-10 lg:mb-12" data-purpose="brand-logo">
-              <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">Endod</h1>
+              <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">{t("common.endod")}</h1>
             </div>
 
             <div className="mb-10" data-purpose="quote-carousel" id="testimonial-container">
@@ -222,7 +212,7 @@ function VerifyOtp() {
 
               <div className="flex items-center space-x-2.5 pt-1" data-purpose="carousel-controls">
                 <button
-                  aria-label="Previous quote"
+                  aria-label={t("login.prevQuote")}
                   className="w-8 h-8 rounded-full bg-white/70 hover:bg-white text-brand-heading transition-colors flex items-center justify-center shadow-xs focus:outline-hidden"
                   onClick={() => move(-1)}
                   type="button"
@@ -232,7 +222,7 @@ function VerifyOtp() {
                   </svg>
                 </button>
                 <button
-                  aria-label="Next quote"
+                  aria-label={t("login.nextQuote")}
                   className="w-8 h-8 rounded-full bg-white/70 hover:bg-white text-brand-heading transition-colors flex items-center justify-center shadow-xs focus:outline-hidden"
                   onClick={() => move(1)}
                   type="button"
@@ -248,7 +238,7 @@ function VerifyOtp() {
           <footer className="mt-8 pt-6" data-purpose="partner-logos-section">
             <div className="flex items-center space-x-4 mb-5">
               <span className="text-xs italic text-brand-heading/75 font-serif tracking-normal whitespace-nowrap">
-                Trusted by world&apos;s leading organizations
+                {t("common.trustedBy")}
               </span>
               <div className="h-[1px] bg-brand-heading/15 flex-grow" />
             </div>
@@ -289,12 +279,12 @@ function VerifyOtp() {
         <section className="lg:col-span-6 xl:col-span-6 flex justify-end" data-purpose="verify-form-card">
           <div className="w-full max-w-[540px] bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10 lg:p-11">
             <h2 className="font-serif text-4xl sm:text-[42px] font-medium text-brand-heading tracking-tight mb-3">
-              Verify your phone
+              {t("otp.title")}
             </h2>
             <p className="text-sm text-brand-muted mb-7 leading-relaxed">
-              We sent a 6-digit code to{" "}
-              <span className="font-semibold text-brand-heading">{phone || "your phone"}</span>. Enter it below to
-              continue.
+              {t("otp.sentPrefix")}{" "}
+              <span className="font-semibold text-brand-heading">{phone || t("otp.yourPhone")}</span>
+              {t("otp.sentSuffix")}
             </p>
 
             <form className="space-y-5" data-purpose="verify-form" onSubmit={handleVerify}>
@@ -331,30 +321,30 @@ function VerifyOtp() {
                   disabled={isSubmitting}
                   type="submit"
                 >
-                  {isSubmitting ? "Verifying..." : "Verify"}
+                  {isSubmitting ? t("otp.submitting") : t("otp.submit")}
                 </button>
               </div>
 
               <div className="text-center pt-1 space-y-2">
                 <p className="text-xs text-brand-muted">
-                  Didn&apos;t receive the code?{" "}
+                  {t("otp.didntReceive")}{" "}
                   <button
                     className="text-brand-accent font-semibold hover:underline disabled:text-brand-muted disabled:no-underline disabled:cursor-not-allowed"
                     disabled={resendCooldown > 0}
                     onClick={handleResend}
                     type="button"
                   >
-                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+                    {resendCooldown > 0 ? t("otp.resendIn", { seconds: resendCooldown }) : t("otp.resendCode")}
                   </button>
                 </p>
                 <p className="text-xs text-brand-muted">
-                  Wrong number?{" "}
+                  {t("otp.wrongNumber")}{" "}
                   <button
                     className="text-brand-accent font-semibold hover:underline"
                     onClick={() => router.push("/signup")}
                     type="button"
                   >
-                    Go back
+                    {t("otp.goBack")}
                   </button>
                 </p>
               </div>
@@ -369,10 +359,7 @@ function VerifyOtp() {
                   <path d="M12 2v19M8 6c2-1 6-1 8 0M7 11c2.5-1.5 7.5-1.5 10 0M8 16c2-1 6-1 8 0M12 2c-1.5 0-3 1.5-3 3s1.5 3 3 3 3-1.5 3-3-1.5-3-3-3z" />
                 </svg>
               </div>
-              <p>
-                We prioritize data security and patient privacy, exceeding HIPAA compliance standards to provide the
-                highest level of protection.
-              </p>
+              <p>{t("common.secureNotice")}</p>
             </aside>
           </div>
         </section>

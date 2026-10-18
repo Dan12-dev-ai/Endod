@@ -1,5 +1,11 @@
 // Shapes of the backend data the /interview screens use (see docs/api.md),
 // and small display helpers shared between them.
+//
+// Anything the patient reads is produced through the translator, so these
+// helpers take `t` (and, for dates, the active locale) as arguments rather
+// than baking in English.
+
+import type { Translate, TranslationKey } from "../lib/i18n";
 
 export type Facility = {
   id: string;
@@ -43,21 +49,30 @@ export type Appointment = {
   timezone: string;
 };
 
-export const TIME_WINDOWS = [
-  { value: "exact", label: "Exact Arrival Time" },
-  { value: "morning", label: "Morning (08:00 - 12:00)" },
-  { value: "afternoon", label: "Afternoon (12:00 - 17:00)" },
-  { value: "evening", label: "Evening (17:00 - 21:00)" },
+/** The arrival-window choices, with the key their label comes from. */
+export const TIME_WINDOWS: { value: "exact" | "morning" | "afternoon" | "evening"; labelKey: TranslationKey }[] = [
+  { value: "exact", labelKey: "booking.timeWindow.exact" },
+  { value: "morning", labelKey: "booking.timeWindow.morning" },
+  { value: "afternoon", labelKey: "booking.timeWindow.afternoon" },
+  { value: "evening", labelKey: "booking.timeWindow.evening" },
+];
+
+/** The department keys the backend uses, in the order they are shown. */
+export const DEPARTMENT_KEYS = [
+  "general_medicine",
+  "emergency",
+  "maternal_health",
+  "pediatrics",
+  "cardiology",
+  "respiratory",
 ] as const;
 
-export const DEPARTMENT_LABELS: Record<string, string> = {
-  general_medicine: "General Medicine",
-  emergency: "Emergency & Trauma",
-  maternal_health: "Maternal Health",
-  pediatrics: "Pediatrics",
-  cardiology: "Cardiology",
-  respiratory: "Respiratory",
-};
+/** A department's display name. An unknown key is shown as the backend sent it. */
+export function departmentLabel(department: string, t: Translate): string {
+  const key = `department.${department}` as TranslationKey;
+  const label = t(key);
+  return label === key ? department : label;
+}
 
 export const ACTIVE_STATUSES: AppointmentStatus[] = ["SCHEDULED", "CONFIRMED", "RESCHEDULED"];
 
@@ -80,8 +95,8 @@ export function localDateTimeToIso(date: string, time: string): string | null {
  * A date and time in the browser's timezone: the same zone the booking and
  * reschedule forms use, so what is shown is what gets edited.
  */
-export function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+export function formatWhen(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
 }
 
 export function initials(text: string): string {
@@ -95,18 +110,20 @@ export function initials(text: string): string {
 }
 
 /** Who or where the appointment is with, for the card title. */
-export function appointmentTitle(appointment: Appointment): string {
+export function appointmentTitle(appointment: Appointment, t: Translate): string {
   return (
     appointment.provider_name ||
     appointment.facility?.name ||
-    appointment.department ||
-    `${appointment.appointment_type.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())} appointment`
+    (appointment.department ? departmentLabel(appointment.department, t) : "") ||
+    t("appointments.genericTitle", {
+      type: appointment.appointment_type.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()),
+    })
   );
 }
 
-export function appointmentPlace(appointment: Appointment): string {
-  if (appointment.visit_mode === "telehealth") return "Video visit";
+export function appointmentPlace(appointment: Appointment, t: Translate): string {
+  if (appointment.visit_mode === "telehealth") return t("appointments.visitMode.video");
   return appointment.facility?.name && appointment.provider_name
     ? appointment.facility.name
-    : appointment.location || "Place not set";
+    : appointment.location || t("appointments.visitMode.placeNotSet");
 }

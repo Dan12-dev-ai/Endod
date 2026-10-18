@@ -2,15 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-
-const languages = [
-  { code: "en", label: "English" },
-  { code: "am", label: "አማርኛ" },
-];
+import { LANGUAGES, useI18n } from "../lib/i18n";
 
 export default function Header() {
+  const { t, language, setLanguage } = useI18n();
   const [langOpen, setLangOpen] = useState(false);
-  const [language, setLanguage] = useState("en");
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -20,7 +16,7 @@ export default function Header() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const currentLanguage = languages.find((l) => l.code === language) ?? languages[0];
+  const currentLanguage = LANGUAGES.find((l) => l.code === language) ?? LANGUAGES[0];
 
   return (
     <>
@@ -32,9 +28,9 @@ export default function Header() {
         }`}
       >
         {/* ENDOD Health Logo */}
-        <Link aria-label="ENDOD Health Homepage" className="flex items-center gap-3 group cursor-pointer" href="/">
+        <Link aria-label={t("nav.homeAria")} className="flex items-center gap-3 group cursor-pointer" href="/">
           <img
-            alt="ENDOD Health logo"
+            alt={t("nav.logoAlt")}
             className="h-14 w-auto object-contain flex-shrink-0"
             src="/endod_logo.png"
           />
@@ -42,14 +38,14 @@ export default function Header() {
 
         {/* Menu links */}
         <div className="hidden md:flex items-center space-x-8 text-[14px] font-medium text-neutral-200">
-          {/* Build Your Own Lab Dropdown */}
+          {/* How It Works Dropdown */}
           <div className="relative group" id="labDropdownContainer">
             <button
               aria-expanded="false"
               className="flex items-center gap-1.5 hover:text-white py-2 focus:outline-none transition-colors cursor-pointer"
               id="labMenuBtn"
             >
-              <span>How It Works</span>
+              <span>{t("nav.howItWorks")}</span>
               <svg
                 className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white transition-transform group-hover:translate-y-0.5"
                 fill="none"
@@ -59,23 +55,23 @@ export default function Header() {
                 <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
               </svg>
             </button>
-            {/* Dropdown items exact list from Screenshot 2 */}
+            {/* Dropdown items */}
             <div className="absolute left-0 top-full pt-2 w-56 hidden group-hover:block transition-all duration-200 z-50">
               <div className="bg-white text-slate-800 rounded-md shadow-2xl py-2.5 border border-slate-100 flex flex-col font-normal text-[14px]">
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#build-own-lab">Overview</a>
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#build-own-lab">AI Symptom Assistant</a>
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#cloud-lab">Hospital Finder &amp; Booking</a>
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#cloud-lab">Treatment Plans</a>
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#pipette-hero-card">Medical History</a>
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#bottleneck">Privacy &amp; Security</a>
+                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#build-own-lab">{t("nav.overview")}</a>
+                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#build-own-lab">{t("nav.aiSymptomAssistant")}</a>
+                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#cloud-lab">{t("nav.hospitalFinder")}</a>
+                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#cloud-lab">{t("nav.treatmentPlans")}</a>
+                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#pipette-hero-card">{t("nav.medicalHistory")}</a>
+                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#bottleneck">{t("nav.privacySecurity")}</a>
               </div>
             </div>
           </div>
 
-          {/* Cloud Lab Dropdown */}
+          {/* For Hospitals Dropdown */}
           <div className="relative group">
             <button className="flex items-center gap-1.5 hover:text-white py-2 focus:outline-none transition-colors cursor-pointer">
-              <span>For Hospitals</span>
+              <span>{t("nav.forHospitals")}</span>
               <svg
                 className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white transition-transform group-hover:translate-y-0.5"
                 fill="none"
@@ -87,8 +83,8 @@ export default function Header() {
             </button>
             <div className="absolute left-0 top-full pt-2 w-48 hidden group-hover:block transition-all duration-200 z-50">
               <div className="bg-white text-slate-800 rounded-md shadow-2xl py-2 border border-slate-100 flex flex-col font-normal text-[14px]">
-                <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#cloud-lab">Hospital Portal</a>
-                <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#cloud-lab">Live Crowd Status</a>
+                <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#cloud-lab">{t("nav.hospitalPortal")}</a>
+                <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#cloud-lab">{t("nav.liveCrowdStatus")}</a>
               </div>
             </div>
           </div>
@@ -96,7 +92,7 @@ export default function Header() {
           {/* Resources Dropdown */}
           <div className="relative group">
             <button className="flex items-center gap-1.5 hover:text-white py-2 focus:outline-none transition-colors cursor-pointer">
-              <span>Resources</span>
+              <span>{t("nav.resources")}</span>
               <svg
                 className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white transition-transform group-hover:translate-y-0.5"
                 fill="none"
@@ -108,7 +104,7 @@ export default function Header() {
             </button>
             <div className="absolute left-0 top-full pt-2 w-48 hidden group-hover:block transition-all duration-200 z-50">
               <div className="bg-white text-slate-800 rounded-md shadow-2xl py-2 border border-slate-100 flex flex-col font-normal text-[14px]">
-                <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#contact-section">Support</a>
+                <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#contact-section">{t("nav.support")}</a>
               </div>
             </div>
           </div>
@@ -119,8 +115,9 @@ export default function Header() {
           <button
             aria-expanded={langOpen}
             aria-haspopup="listbox"
-            aria-label="Select language"
+            aria-label={t("nav.selectLanguage")}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-neutral-400 text-white hover:bg-white hover:text-black transition-all text-[13px] font-medium tracking-wide focus:outline-none cursor-pointer"
+            data-purpose="language-select"
             onClick={() => setLangOpen((open) => !open)}
             type="button"
           >
@@ -148,13 +145,16 @@ export default function Header() {
           {langOpen && (
             <div
               className="absolute right-0 top-full mt-2 w-40 bg-white text-slate-800 rounded-md shadow-2xl py-1.5 border border-slate-100 flex flex-col text-[14px] z-50"
+              data-purpose="language-menu"
               role="listbox"
             >
-              {languages.map((lang) => (
+              {LANGUAGES.map((lang) => (
                 <button
                   aria-selected={language === lang.code}
                   className={`text-left px-4 py-2 transition-colors cursor-pointer ${language === lang.code ? "bg-slate-100 text-black font-semibold" : "hover:bg-slate-100 hover:text-black"}`}
+                  data-purpose={`language-option-${lang.code}`}
                   key={lang.code}
+                  lang={lang.code}
                   onClick={() => {
                     setLanguage(lang.code);
                     setLangOpen(false);

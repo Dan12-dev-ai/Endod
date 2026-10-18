@@ -89,6 +89,11 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        # The .env ships keys for the notification/reminder subsystems that are
+        # read directly with os.getenv; they are not Settings fields. Without
+        # this, pydantic-settings 2.16+ raises "extra inputs are not permitted"
+        # on every one of them and the app refuses to start.
+        extra = "ignore"
 
     @field_validator("ENVIRONMENT", mode="before")
     @classmethod

@@ -1,6 +1,9 @@
 "use client";
 
+import { useI18n } from "../lib/i18n";
+
 export default function Footer() {
+  const { t } = useI18n();
   return (
     <footer className="bg-[#111111] text-white pt-16 pb-12 border-t border-white/10" data-purpose="site-footer">
       <div className="max-w-7xl mx-auto px-6 sm:px-12">
@@ -9,28 +12,28 @@ export default function Footer() {
           {/* Column 1: Get started / Ready to take control of your health? */}
           <div className="md:col-span-5 pr-4">
             <p className="text-xs uppercase font-medium tracking-wider text-neutral-400 mb-2">
-              Contact Us
+              {t("footer.contactUs")}
             </p>
             <h3 className="text-3xl sm:text-4xl font-serif text-white tracking-tight mb-8">
-              Ready to take control of your health?
+              {t("footer.heading")}
             </h3>
             <form className="space-y-4 max-w-sm" onSubmit={() => {
-              alert('Subscribed successfully!');
+              alert(t("footer.subscribed"));
             }}>
               <div>
                 <label className="block text-[11px] font-bold tracking-wider uppercase text-neutral-300 mb-1" htmlFor="footer-email">
-                  ENTER YOUR EMAIL
+                  {t("footer.enterEmail")}
                 </label>
                 <input
                   className="w-full bg-transparent border-0 border-b border-neutral-600 focus:border-white focus:ring-0 px-0 py-2 text-sm text-white placeholder:text-neutral-500"
                   id="footer-email"
-                  placeholder="email@email.com"
+                  placeholder={t("footer.emailPlaceholder")}
                   required
                   type="email"
                 />
               </div>
               <button className="w-full py-2.5 px-6 border border-neutral-400 text-white hover:bg-white hover:text-black transition-all text-sm font-medium tracking-wide" type="submit">
-                Subscribe
+                {t("footer.subscribe")}
               </button>
             </form>
           </div>
@@ -38,29 +41,29 @@ export default function Footer() {
           {/* Column 2: Platform Links */}
           <div className="md:col-span-4">
             <p className="text-xs uppercase font-medium tracking-wider text-neutral-400 mb-4">
-              Platform
+              {t("footer.platform")}
             </p>
             <ul className="space-y-3 text-sm text-neutral-300">
-              <li><a className="hover:text-white transition-colors" href="#build-own-lab">AI Symptom Assistant</a></li>
-              <li><a className="hover:text-white transition-colors" href="#cloud-lab">Hospital Directory &amp; Booking</a></li>
-              <li><a className="hover:text-white transition-colors" href="#pipette-hero-card">Treatment Plans</a></li>
-              <li><a className="hover:text-white transition-colors" href="#pipette-hero-card">Medical History</a></li>
-              <li><a className="hover:text-white transition-colors" href="#bottleneck">Consent &amp; Privacy</a></li>
-              <li><a className="hover:text-white transition-colors" href="#cloud-lab">For Hospitals</a></li>
+              <li><a className="hover:text-white transition-colors" href="#build-own-lab">{t("footer.aiSymptomAssistant")}</a></li>
+              <li><a className="hover:text-white transition-colors" href="#cloud-lab">{t("footer.hospitalDirectoryBooking")}</a></li>
+              <li><a className="hover:text-white transition-colors" href="#pipette-hero-card">{t("footer.treatmentPlans")}</a></li>
+              <li><a className="hover:text-white transition-colors" href="#pipette-hero-card">{t("footer.medicalHistory")}</a></li>
+              <li><a className="hover:text-white transition-colors" href="#bottleneck">{t("footer.consentPrivacy")}</a></li>
+              <li><a className="hover:text-white transition-colors" href="#cloud-lab">{t("footer.forHospitals")}</a></li>
             </ul>
           </div>
 
           {/* Column 3: Company Links */}
           <div className="md:col-span-3">
             <p className="text-xs uppercase font-medium tracking-wider text-neutral-400 mb-4">
-              Company
+              {t("footer.company")}
             </p>
             <ul className="space-y-3 text-sm text-neutral-300">
-              <li><a className="hover:text-white transition-colors" href="#">About</a></li>
-              <li><a className="hover:text-white transition-colors" href="#contact-section">Contact</a></li>
-              <li><a className="hover:text-white transition-colors" href="#">Careers</a></li>
-              <li><a className="hover:text-white transition-colors" href="#bottleneck">Privacy &amp; Security</a></li>
-              <li><a className="hover:text-white transition-colors" href="#">Support</a></li>
+              <li><a className="hover:text-white transition-colors" href="#">{t("footer.about")}</a></li>
+              <li><a className="hover:text-white transition-colors" href="#contact-section">{t("footer.contact")}</a></li>
+              <li><a className="hover:text-white transition-colors" href="#">{t("footer.careers")}</a></li>
+              <li><a className="hover:text-white transition-colors" href="#bottleneck">{t("footer.privacySecurity")}</a></li>
+              <li><a className="hover:text-white transition-colors" href="#">{t("footer.support")}</a></li>
             </ul>
           </div>
         </div>
@@ -69,13 +72,13 @@ export default function Footer() {
         <div className="py-6 border-t border-neutral-800">
           <div className="flex items-center gap-3">
             <img
-              alt="ENDOD Health logo"
+              alt={t("nav.logoAlt")}
               className="h-9 w-auto object-contain"
               src="/endod_logo.png"
             />
             <div className="leading-none">
               <span className="block text-base font-black tracking-widest uppercase">ENDOD</span>
-              <span className="block text-[11px] font-light tracking-[0.24em] text-neutral-400 uppercase">HEALTH OS</span>
+              <span className="block text-[11px] font-light tracking-[0.24em] text-neutral-400 uppercase">{t("footer.healthOs")}</span>
             </div>
           </div>
         </div>
@@ -83,12 +86,12 @@ export default function Footer() {
         {/* Footer Bottom: Legal & Social Links */}
         <div className="pt-4 border-t border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-400">
           <div className="flex items-center gap-2">
-            <a className="hover:text-white transition-colors" href="#">Terms &amp; Conditions</a>
+            <a className="hover:text-white transition-colors" href="#">{t("footer.terms")}</a>
             <span>|</span>
-            <span>© Copyright Endod Health OS 2025</span>
+            <span>{t("footer.copyright")}</span>
           </div>
           <div className="flex items-center gap-4">
-            <span className="uppercase tracking-wider text-[11px] font-semibold text-neutral-300">FOLLOW US</span>
+            <span className="uppercase tracking-wider text-[11px] font-semibold text-neutral-300">{t("footer.followUs")}</span>
             {/* LinkedIn */}
             <a aria-label="LinkedIn" className="text-white hover:text-neutral-300 transition-colors" href="#">
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">

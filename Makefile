@@ -168,6 +168,12 @@ fmt-check: ## Verify whitespace normalisation (no files modified)
 	@bash scripts/check-format.sh
 
 ## ---------------------------------------------------------------------------
+## Seeding
+## ---------------------------------------------------------------------------
+seed: ## Seed one fully-onboarded test user (email demo@example.com / DemoPass123)
+	@$(PY) scripts/seed-test-user.py
+
+## ---------------------------------------------------------------------------
 ## Operations
 ## ---------------------------------------------------------------------------
 health: ## Check that the running system is healthy
