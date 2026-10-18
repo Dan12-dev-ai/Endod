@@ -3,33 +3,33 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useI18n, type TranslationKey } from "@/app/lib/i18n";
 
 type Testimonial = {
-  quote: string;
+  quoteKey: TranslationKey;
+  titleKey: TranslationKey;
   name: string;
-  title: string;
   photo: string;
 };
 
-const testimonials: Testimonial[] = [
+const testimonialData: Testimonial[] = [
   {
-    quote:
-      "By uncovering data-driven insights, Endod gives clinicians an unprecedented view of each patient's unique needs. This enables truly tailored care while reducing administrative tasks through automation.",
+    quoteKey: "testimonial.1.quote",
+    titleKey: "testimonial.1.title",
     name: "Paul Lefever",
-    title: "Psychiatric Nurse Practitioner",
     photo: "/images/testimonial-1.jpg",
   },
   {
-    quote:
-      "It's really exciting that clinicians will be able to understand their patients' behaviors without all the pressure being on patients to remember and recall everything. That is very useful for improving treatment outcomes.",
+    quoteKey: "testimonial.2.quote",
+    titleKey: "testimonial.2.title",
     name: "Katherine Jonas",
-    title: "PhD, Licensed Psychologist",
     photo: "/images/testimonial-2.jpg",
   },
 ];
 
 export default function SignUp() {
   const router = useRouter();
+  const { t } = useI18n();
   const [phone, setPhone] = useState("");
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -47,13 +47,10 @@ export default function SignUp() {
   // clone of the first slide after them. This lets the window keep moving in
   // one direction forever: when it reaches a boundary clone we jump
   // (transition off) to the matching real slide so the loop is seamless.
-  const slideCount = testimonials.length;
-  const extended = [testimonials[slideCount - 1], ...testimonials, testimonials[0]];
+  const slideCount = testimonialData.length;
+  const extended = [testimonialData[slideCount - 1], ...testimonialData, testimonialData[0]];
   const [currentIndex, setCurrentIndex] = useState(1);
   const [isAnimating, setIsAnimating] = useState(true);
-
-  // Move one step in the given direction (+1 next, -1 prev).
-  // (Used by the auto-advance interval; manual controls were removed.)
 
   // Fires after each slide transition; if we've landed on a boundary clone,
   // snap (without animation) to the equivalent real slide. Guarded so only the
@@ -83,7 +80,7 @@ export default function SignUp() {
   const renderSlide = (item: Testimonial) => (
     <>
       <blockquote className="font-serif text-xl sm:text-2xl lg:text-[24px] xl:text-[26px] text-brand-heading quote-text font-normal mb-6 leading-snug">
-        &ldquo;{item.quote}&rdquo;
+        &ldquo;{t(item.quoteKey)}&rdquo;
       </blockquote>
 
       <div className="flex items-center space-x-3 mb-6">
@@ -94,7 +91,7 @@ export default function SignUp() {
         />
         <div>
           <p className="font-semibold text-brand-heading text-sm sm:text-base leading-tight">{item.name}</p>
-          <p className="text-xs sm:text-sm text-brand-muted font-normal leading-tight mt-0.5">{item.title}</p>
+          <p className="text-xs sm:text-sm text-brand-muted font-normal leading-tight mt-0.5">{t(item.titleKey)}</p>
         </div>
       </div>
     </>
@@ -105,7 +102,7 @@ export default function SignUp() {
     setFormError("");
 
     if (!phone.trim()) {
-      setFormError("Please enter your phone number.");
+      setFormError(t("signup.error.phone"));
       return;
     }
 
@@ -119,13 +116,13 @@ export default function SignUp() {
       const data = await response.json();
 
       if (!response.ok || !data.ok) {
-        setFormError(data.error ?? "Something went wrong. Please try again.");
+        setFormError(data.error ?? t("common.somethingWrong"));
         return;
       }
 
       router.push(`/verify-otp?phone=${encodeURIComponent(phone)}`);
     } catch {
-      setFormError("Unable to send the code right now. Please check your connection and try again.");
+      setFormError(t("signup.error.network"));
     } finally {
       setIsSubmitting(false);
     }
@@ -145,7 +142,7 @@ export default function SignUp() {
           <div>
             {/* Logo */}
             <div className="mb-10 lg:mb-12" data-purpose="brand-logo">
-              <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">Endod</h1>
+              <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">{t("common.endod")}</h1>
             </div>
 
             {/* Testimonial Section */}
@@ -176,11 +173,11 @@ export default function SignUp() {
           <div className="w-full max-w-[540px] bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10 lg:p-11">
             {/* Card Heading */}
             <h2 className="font-serif text-4xl sm:text-[42px] font-medium text-brand-heading tracking-tight mb-7">
-              {isReset ? "Reset password" : "Sign Up"}
+              {isReset ? t("signup.resetTitle") : t("signup.title")}
             </h2>
             {isReset && (
               <p className="text-sm text-brand-muted -mt-5 mb-6">
-                Enter your phone number and we&apos;ll text you a code to set a new password.
+                {t("signup.resetHint")}
               </p>
             )}
 
@@ -189,7 +186,7 @@ export default function SignUp() {
               {/* Phone Number Input Field */}
               <div data-purpose="form-field-phone">
                 <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="phone">
-                  Phone Number
+                  {t("signup.phoneLabel")}
                 </label>
                 <input
                   className="field-input w-full px-4 py-2.5 rounded-xl text-sm border focus:outline-hidden placeholder:text-slate-400"
@@ -202,7 +199,7 @@ export default function SignUp() {
                   value={phone}
                 />
                 <p className="mt-1.5 text-[11px] text-brand-muted">
-                  We&apos;ll text you a verification code to confirm your number.
+                  {t("signup.phoneHint")}
                 </p>
               </div>
 
@@ -217,13 +214,13 @@ export default function SignUp() {
                   type="checkbox"
                 />
                 <label className="ml-2.5 block text-xs text-brand-muted leading-relaxed" htmlFor="agree">
-                  I agree to Endod Health&apos;s{" "}
+                  {t("signup.agreePrefix")}{" "}
                   <a className="text-brand-accent hover:underline font-medium" href="#">
-                    Terms &amp; Conditions
+                    {t("signup.terms")}
                   </a>{" "}
-                  and{" "}
+                  {t("signup.and")}{" "}
                   <a className="text-brand-accent hover:underline font-medium" href="#">
-                    Privacy Policy
+                    {t("signup.privacy")}
                   </a>
                   .
                 </label>
@@ -247,16 +244,16 @@ export default function SignUp() {
                   disabled={isSubmitting}
                   type="submit"
                 >
-                  {isSubmitting ? "Sending code..." : "Sign Up"}
+                  {isSubmitting ? t("signup.submitting") : t("signup.submit")}
                 </button>
               </div>
 
               {/* Sign In Navigation Prompt */}
               <div className="text-center pt-1">
                 <p className="text-xs text-brand-muted">
-                  Already have an account?{" "}
+                  {t("signup.alreadyHave")}{" "}
                   <Link className="text-brand-accent font-semibold hover:underline" href="/login">
-                    Sign In
+                    {t("signup.signIn")}
                   </Link>
                 </p>
               </div>
@@ -273,10 +270,7 @@ export default function SignUp() {
                   <path d="M12 2v19M8 6c2-1 6-1 8 0M7 11c2.5-1.5 7.5-1.5 10 0M8 16c2-1 6-1 8 0M12 2c-1.5 0-3 1.5-3 3s1.5 3 3 3 3-1.5 3-3-1.5-3-3-3z" />
                 </svg>
               </div>
-              <p>
-                We prioritize data security and patient privacy, exceeding HIPAA compliance standards to provide the highest
-                level of protection.
-              </p>
+              <p>{t("common.secureNotice")}</p>
             </aside>
           </div>
         </section>
@@ -285,4 +279,3 @@ export default function SignUp() {
     </main>
   );
 }
-

@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
-import { buildHealthCardHtml, HealthCardData } from "./card-svg";
+import { buildHealthCardHtml, type HealthCardData, type HealthCardLabels } from "./card-svg";
 import { ApiError } from "../lib/api";
 import { loadHealthCard, type HealthCardInfo } from "./health-card-data";
+import { useI18n } from "../lib/i18n";
 
 
 // ---------------------------------------------------------------------------
@@ -14,6 +15,7 @@ import { loadHealthCard, type HealthCardInfo } from "./health-card-data";
 
 export default function HealthCardPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const cardRef = useRef<HTMLDivElement>(null);
 
   // The card comes from the signed-in patient's profile.
@@ -28,11 +30,12 @@ export default function HealthCardPage() {
         if (!cancelled) setCard(info);
       })
       .catch((error) => {
-        if (!cancelled) setLoadError(error instanceof ApiError ? error.message : "Unable to load your health card.");
+        if (!cancelled) setLoadError(error instanceof ApiError ? error.message : t("healthCard.loadError"));
       });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once on mount
   }, []);
   const mounted = card !== null;
 
@@ -57,6 +60,18 @@ export default function HealthCardPage() {
   const { fullName, userId, issuedDate, expiryDate, qrData, qrSvg } = card;
   const phoneDisplay = card.phone;
 
+  // The printed labels travel with the generated card, so a download in
+  // Amharic prints Amharic.
+  const labels: HealthCardLabels = {
+    brand: t("common.endod"),
+    digitalId: t("healthCard.digitalId"),
+    phone: t("healthCard.phone"),
+    patientId: t("healthCard.patientId"),
+    issued: t("healthCard.issued"),
+    expires: t("healthCard.expires"),
+    scanToVerify: t("healthCard.scanToVerify"),
+  };
+
   const cardData: HealthCardData = {
     fullName,
     userId,
@@ -64,6 +79,7 @@ export default function HealthCardPage() {
     issuedDate,
     expiryDate,
     qrSvg,
+    labels,
   };
 
   const cardHtml = buildHealthCardHtml(cardData);
@@ -75,11 +91,11 @@ export default function HealthCardPage() {
       if (!printWindow) return;
       printWindow.document.write(`
         <!DOCTYPE html>
-        <html>
+        <html lang="${document.documentElement.lang || "en"}">
         <head>
           <meta charset="utf-8" />
           <style>
-            @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Newsreader:wght@400;500;600;700&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Newsreader:wght@400;500;600;700&family=Noto+Sans+Ethiopic:wght@400;500;600;700&display=swap');
             body { margin: 0; padding: 0; background: #dde9e6; font-family: 'Plus Jakarta Sans', Arial, sans-serif; }
             .page { width: 720px; height: 480px; margin: 0 auto; padding: 40px; box-sizing: border-box; }
           </style>
@@ -97,7 +113,7 @@ export default function HealthCardPage() {
       `);
       printWindow.document.close();
     } catch {
-      alert("Unable to open print dialog. Please check your browser settings.");
+      alert(t("healthCard.printError"));
     } finally {
       setIsDownloading(false);
     }
@@ -158,11 +174,11 @@ export default function HealthCardPage() {
       // Brand
       ctx.fillStyle = "#94e0c0";
       ctx.font = "bold 11px Arial";
-      ctx.fillText("DIGITAL HEALTH ID", 80, 152);
+      ctx.fillText(labels.digitalId.toUpperCase(), 80, 152);
 
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 26px Arial";
-      ctx.fillText("Endod", 80, 120);
+      ctx.fillText(labels.brand, 80, 120);
 
       ctx.fillStyle = "#6ee7b7";
       ctx.font = "bold 16px Arial";
@@ -175,10 +191,10 @@ export default function HealthCardPage() {
       // Info grid labels
       ctx.fillStyle = "#94a3a8";
       ctx.font = "bold 10px Arial";
-      ctx.fillText("PHONE", 244, 300);
-      ctx.fillText("PATIENT ID", 494, 300);
-      ctx.fillText("ISSUED", 244, 366);
-      ctx.fillText("EXPIRES", 494, 366);
+      ctx.fillText(labels.phone.toUpperCase(), 244, 300);
+      ctx.fillText(labels.patientId.toUpperCase(), 494, 300);
+      ctx.fillText(labels.issued.toUpperCase(), 244, 366);
+      ctx.fillText(labels.expires.toUpperCase(), 494, 366);
 
       // Field values
       ctx.fillStyle = "#ffffff";
@@ -198,7 +214,7 @@ export default function HealthCardPage() {
       ctx.stroke();
       ctx.fillStyle = "#94a3a8";
       ctx.font = "11px Arial";
-      ctx.fillText(`Issued ${issuedDate}`, 80, 416);
+      ctx.fillText(`${labels.issued} ${issuedDate}`, 80, 416);
 
       // Trigger download
       const link = document.createElement("a");
@@ -207,7 +223,7 @@ export default function HealthCardPage() {
       link.click();
     } catch (e) {
       console.error("Image download error:", e);
-      alert("Unable to generate image. Please try the PDF option.");
+      alert(t("healthCard.imageError"));
     } finally {
       setIsDownloading(false);
     }
@@ -254,13 +270,13 @@ export default function HealthCardPage() {
                     className="block font-extrabold tracking-tight leading-none"
                     style={{ fontSize: "clamp(16px, 5cqi, 30px)" }}
                   >
-                    Endod
+                    {t("common.endod")}
                   </span>
                   <span
                     className="block font-semibold text-[#94e0c0] uppercase tracking-[0.18em] mt-1 truncate"
                     style={{ fontSize: "clamp(7px, 1.8cqi, 11px)" }}
                   >
-                    Digital Health ID
+                    {t("healthCard.digitalId")}
                   </span>
                 </div>
                 {/* Contactless tap icon */}
@@ -318,19 +334,19 @@ export default function HealthCardPage() {
                   style={{ fontSize: "clamp(7px, 1.9cqi, 11px)" }}
                 >
                   <div className="min-w-0">
-                    <span className="block font-semibold text-[#94a3a8] uppercase tracking-wider">Phone</span>
+                    <span className="block font-semibold text-[#94a3a8] uppercase tracking-wider">{t("healthCard.phone")}</span>
                     <p className="font-semibold text-white truncate" data-purpose="phone-value">{phoneDisplay}</p>
                   </div>
                   <div className="min-w-0">
-                    <span className="block font-semibold text-[#94a3a8] uppercase tracking-wider">Patient ID</span>
+                    <span className="block font-semibold text-[#94a3a8] uppercase tracking-wider">{t("healthCard.patientId")}</span>
                     <p className="font-semibold text-white truncate" data-purpose="id-value">{userId}</p>
                   </div>
                   <div className="min-w-0">
-                    <span className="block font-semibold text-[#94a3a8] uppercase tracking-wider">Issued</span>
+                    <span className="block font-semibold text-[#94a3a8] uppercase tracking-wider">{t("healthCard.issued")}</span>
                     <p className="font-medium text-white/85 truncate" data-purpose="issue-date">{issuedDate}</p>
                   </div>
                   <div className="min-w-0">
-                    <span className="block font-semibold text-[#94a3a8] uppercase tracking-wider">Expires</span>
+                    <span className="block font-semibold text-[#94a3a8] uppercase tracking-wider">{t("healthCard.expires")}</span>
                     <p className="font-semibold text-[#6ee7b7] truncate" data-purpose="expiry-date">{expiryDate}</p>
                   </div>
                 </div>
@@ -365,10 +381,10 @@ export default function HealthCardPage() {
           {/* ===== Download Options ===== */}
           <div data-purpose="download-options">
             <h3 className="font-serif text-xl font-medium text-brand-heading mb-4 text-center">
-              Download your card
+              {t("healthCard.downloadTitle")}
             </h3>
             <p className="text-sm text-brand-muted text-center mb-6">
-              Save your Digital Health ID as a PDF or image file.
+              {t("healthCard.downloadBody")}
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <button
@@ -391,7 +407,7 @@ export default function HealthCardPage() {
                     strokeLinejoin="round"
                   />
                 </svg>
-                {isDownloading ? "Preparing..." : "Download as PDF"}
+                {isDownloading ? t("healthCard.preparing") : t("healthCard.downloadPdf")}
               </button>
               <button
                 className="flex-1 flex items-center justify-center gap-2 bg-[#E5ECEB] hover:bg-[#D5E3E0] text-brand-heading font-medium py-3 px-4 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed"
@@ -413,7 +429,7 @@ export default function HealthCardPage() {
                     strokeLinejoin="round"
                   />
                 </svg>
-                {isDownloading ? "Preparing..." : "Download as Image"}
+                {isDownloading ? t("healthCard.preparing") : t("healthCard.downloadImage")}
               </button>
             </div>
           </div>
@@ -426,14 +442,13 @@ export default function HealthCardPage() {
               onClick={() => router.push("/interview")}
               type="button"
             >
-              Continue to Endod Health →
+              {t("healthCard.continue")}
             </button>
           </div>
         </div>
 
         <p className="text-center text-[11px] text-brand-muted">
-          Your Digital Health ID is unique to your account and secure.
-          Store it safely — you can download it again at any time.
+          {t("healthCard.footer")}
         </p>
       </div>
     </main>

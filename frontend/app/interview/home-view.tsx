@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { useI18n, type TranslationKey } from "../lib/i18n";
 import { type Appointment, appointmentTitle, formatWhen } from "./data";
 
 type Props = {
@@ -9,15 +10,16 @@ type Props = {
   onNavigate: (nav: string) => void;
 };
 
-const SHORTCUTS = [
-  { nav: "booking", title: "Book a visit", hint: "Find a hospital or clinic and reserve a time." },
-  { nav: "appointment", title: "My appointments", hint: "Reschedule or cancel upcoming visits." },
-  { nav: "followup", title: "Medical records", hint: "Past visits, diagnoses and medicines." },
-  { nav: "message", title: "Notifications", hint: "Appointment updates and account security." },
+const SHORTCUTS: { nav: string; titleKey: TranslationKey; hintKey: TranslationKey }[] = [
+  { nav: "booking", titleKey: "home.shortcut.booking.title", hintKey: "home.shortcut.booking.hint" },
+  { nav: "appointment", titleKey: "home.shortcut.appointment.title", hintKey: "home.shortcut.appointment.hint" },
+  { nav: "followup", titleKey: "home.shortcut.followup.title", hintKey: "home.shortcut.followup.hint" },
+  { nav: "message", titleKey: "home.shortcut.message.title", hintKey: "home.shortcut.message.hint" },
 ];
 
 /** The landing screen: what is next, and where to go. */
 export default function HomeView({ firstName, onNavigate }: Props) {
+  const { t, locale } = useI18n();
   const [next, setNext] = useState<Appointment | null | undefined>(undefined);
   const [unread, setUnread] = useState<number | null>(null);
 
@@ -39,23 +41,23 @@ export default function HomeView({ firstName, onNavigate }: Props) {
       <div className="max-w-5xl mx-auto space-y-6 py-6">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            {firstName ? `Welcome, ${firstName}` : "Welcome"}
+            {firstName ? t("home.welcomeNamed", { name: firstName }) : t("home.welcome")}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Your visits, records and updates in one place.</p>
+          <p className="text-sm text-slate-500 mt-1">{t("home.subtitle")}</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <button type="button" data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
-            <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Next Appointment</p>
+            <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("home.nextAppointment")}</p>
             <h2 className="text-base font-bold text-slate-900 mt-1">
-              {next === undefined ? "Loading..." : next ? formatWhen(next.scheduled_at) : "None scheduled"}
+              {next === undefined ? t("common.loading") : next ? formatWhen(next.scheduled_at, locale) : t("home.noneScheduled")}
             </h2>
-            {next && <p className="text-xs text-emerald-600 font-medium mt-0.5">{appointmentTitle(next)}</p>}
+            {next && <p className="text-xs text-emerald-600 font-medium mt-0.5">{appointmentTitle(next, t)}</p>}
           </button>
           <button type="button" data-purpose="home-unread" onClick={() => onNavigate("message")} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
-            <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Notifications</p>
+            <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("home.notifications")}</p>
             <h2 className="text-base font-bold text-slate-900 mt-1">
-              {unread === null ? "—" : unread === 0 ? "You're up to date" : `${unread} unread`}
+              {unread === null ? "—" : unread === 0 ? t("home.upToDate") : t("home.unread", { count: unread })}
             </h2>
           </button>
         </div>
@@ -63,8 +65,8 @@ export default function HomeView({ firstName, onNavigate }: Props) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {SHORTCUTS.map((s) => (
             <button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
-              <h3 className="text-sm font-bold text-slate-900">{s.title}</h3>
-              <p className="text-xs text-slate-500 mt-1">{s.hint}</p>
+              <h3 className="text-sm font-bold text-slate-900">{t(s.titleKey)}</h3>
+              <p className="text-xs text-slate-500 mt-1">{t(s.hintKey)}</p>
             </button>
           ))}
         </div>

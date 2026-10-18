@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { api, ApiError } from "../lib/api";
+import { useI18n } from "../lib/i18n";
 import {
   type Appointment,
   browserTimezone,
-  DEPARTMENT_LABELS,
+  departmentLabel,
+  DEPARTMENT_KEYS,
   type Facility,
   type FacilityList,
   formatWhen,
@@ -30,6 +32,7 @@ function todayLocal(offsetDays = 0): string {
 
 /** Hospital directory and in-person booking (GET /users/me/care/facilities, POST /users/me/appointments). */
 export default function BookingView({ patientId, onToast }: Props) {
+  const { t, locale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [department, setDepartment] = useState("");
   const [sort, setSort] = useState<"name" | "distance">("name");
@@ -68,13 +71,14 @@ export default function BookingView({ patientId, onToast }: Props) {
           setLoadError("");
         })
         .catch((error) => {
-          if (!cancelled) setLoadError(error instanceof ApiError ? error.message : "Unable to load hospitals.");
+          if (!cancelled) setLoadError(error instanceof ApiError ? error.message : t("booking.error.load"));
         });
     }, 250);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable per language
   }, [searchQuery, department, sort, coords]);
 
   const chooseSort = (value: string) => {
@@ -87,7 +91,7 @@ export default function BookingView({ patientId, onToast }: Props) {
       return;
     }
     if (!navigator.geolocation) {
-      onToast("Location unavailable", "This browser cannot share your location.");
+      onToast(t("booking.toast.locationUnavailable"), t("booking.toast.locationUnavailableBody"));
       return;
     }
     // Location is used only after the patient allows it, and only for sorting.
@@ -96,7 +100,7 @@ export default function BookingView({ patientId, onToast }: Props) {
         setCoords({ latitude: position.coords.latitude, longitude: position.coords.longitude });
         setSort("distance");
       },
-      () => onToast("Location not shared", "Allow location access to sort hospitals by distance."),
+      () => onToast(t("booking.toast.locationNotShared"), t("booking.toast.locationNotSharedBody")),
       { timeout: 10_000, maximumAge: 300_000 },
     );
   };
@@ -105,7 +109,7 @@ export default function BookingView({ patientId, onToast }: Props) {
     setSelected(facility);
     setBooked(null);
     setFormError("");
-    setBookingDepartment(facility.departments[0] ? DEPARTMENT_LABELS[facility.departments[0]] ?? "" : "");
+    setBookingDepartment(facility.departments[0] ? departmentLabel(facility.departments[0], t) : "");
   };
 
   const closeBooking = () => {
@@ -118,11 +122,11 @@ export default function BookingView({ patientId, onToast }: Props) {
     if (!selected) return;
     const scheduledAt = localDateTimeToIso(bookingDate, bookingTime);
     if (!scheduledAt) {
-      setFormError("Please choose a valid date and time.");
+      setFormError(t("booking.error.invalidDate"));
       return;
     }
     if (new Date(scheduledAt) <= new Date()) {
-      setFormError("Please choose a time in the future.");
+      setFormError(t("booking.error.futureTime"));
       return;
     }
     setIsSubmitting(true);
@@ -143,7 +147,7 @@ export default function BookingView({ patientId, onToast }: Props) {
       setBooked(result.appointment);
       setBookingNote("");
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : "Unable to book right now. Please try again.");
+      setFormError(error instanceof ApiError ? error.message : t("booking.error.generic"));
     } finally {
       setIsSubmitting(false);
     }
@@ -158,17 +162,19 @@ export default function BookingView({ patientId, onToast }: Props) {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
             <div className="flex items-center space-x-2 text-xs text-slate-400 mb-1">
-              <span>ENDOD Care</span>
+              <span>{t("booking.breadcrumb")}</span>
               <span>/</span>
-              <span className="text-emerald-700 font-medium">Hospital Booking</span>
+              <span className="text-emerald-700 font-medium">{t("booking.breadcrumbCurrent")}</span>
             </div>
-            <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">Hospital &amp; Clinic Reservation</h1>
-            <p className="text-xs md:text-sm text-slate-500 mt-0.5">Find a facility and book your visit.</p>
+            <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">{t("booking.title")}</h1>
+            <p className="text-xs md:text-sm text-slate-500 mt-0.5">{t("booking.subtitle")}</p>
           </div>
           {directory && (
             <div className="flex items-center space-x-2 text-xs text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs self-start sm:self-auto">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>Care directory ({directory.total} {directory.total === 1 ? "facility" : "facilities"})</span>
+              <span>
+                {t("booking.directory")} ({t(directory.total === 1 ? "booking.directoryCountOne" : "booking.directoryCountOther", { total: directory.total })})
+              </span>
             </div>
           )}
         </div>
@@ -186,32 +192,32 @@ export default function BookingView({ patientId, onToast }: Props) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search hospitals by name or location..."
+                placeholder={t("booking.searchPlaceholder")}
                 className="w-full pl-9 pr-4 py-2 text-xs md:text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-slate-800 placeholder-slate-400"
               />
             </div>
             <div className="flex items-center space-x-2">
               <select
-                aria-label="Department"
+                aria-label={t("booking.department")}
                 data-purpose="department-filter"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="">All Specialties</option>
-                {(directory?.departments ?? Object.keys(DEPARTMENT_LABELS)).map((d) => (
-                  <option key={d} value={d}>{DEPARTMENT_LABELS[d] ?? d}</option>
+                <option value="">{t("booking.allSpecialties")}</option>
+                {(directory?.departments ?? [...DEPARTMENT_KEYS]).map((d) => (
+                  <option key={d} value={d}>{departmentLabel(d, t)}</option>
                 ))}
               </select>
               <select
-                aria-label="Sort"
+                aria-label={t("booking.sort")}
                 data-purpose="sort-filter"
                 value={sort}
                 onChange={(e) => chooseSort(e.target.value)}
                 className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="name">Name (A–Z)</option>
-                <option value="distance">Distance: Nearest</option>
+                <option value="name">{t("booking.sortName")}</option>
+                <option value="distance">{t("booking.sortDistance")}</option>
               </select>
             </div>
           </div>
@@ -219,8 +225,8 @@ export default function BookingView({ patientId, onToast }: Props) {
           {/* Directory Subhead */}
           <div className="flex items-center justify-between px-1">
             <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-              <span>Hospitals &amp; Centers</span>
-              <span className="text-xs font-normal text-slate-400">({facilities.length} shown)</span>
+              <span>{t("booking.hospitalsCenters")}</span>
+              <span className="text-xs font-normal text-slate-400">({t("booking.shown", { count: facilities.length })})</span>
             </h3>
           </div>
 
@@ -228,7 +234,7 @@ export default function BookingView({ patientId, onToast }: Props) {
             <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" role="alert">{loadError}</p>
           )}
           {directory && facilities.length === 0 && !loadError && (
-            <p data-purpose="hospital-empty" className="text-xs text-slate-500 px-1">No facilities match your search.</p>
+            <p data-purpose="hospital-empty" className="text-xs text-slate-500 px-1">{t("booking.noMatch")}</p>
           )}
 
           {/* Hospital Grid */}
@@ -249,8 +255,8 @@ export default function BookingView({ patientId, onToast }: Props) {
                       <span>{facility.city}</span>
                       {facility.distance_km !== null && <span>{facility.distance_km} km</span>}
                       {facility.open_hours && <span className="text-emerald-600 font-medium">{facility.open_hours}</span>}
-                      {facility.emergency && <span className="text-rose-600 font-medium">Emergency care</span>}
-                      {!facility.verified && <span className="text-amber-600">Details unconfirmed</span>}
+                      {facility.emergency && <span className="text-rose-600 font-medium">{t("booking.emergencyCare")}</span>}
+                      {!facility.verified && <span className="text-amber-600">{t("booking.unconfirmed")}</span>}
                     </div>
                   </div>
                 </div>
@@ -259,7 +265,7 @@ export default function BookingView({ patientId, onToast }: Props) {
                   onClick={() => openBooking(facility)}
                   className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition shadow-sm flex-shrink-0"
                 >
-                  <span>Book Now</span>
+                  <span>{t("booking.bookNow")}</span>
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
@@ -276,14 +282,14 @@ export default function BookingView({ patientId, onToast }: Props) {
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
             <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div>
-                <span className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">Hospital Booking</span>
+                <span className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">{t("booking.modalBadge")}</span>
                 <h3 className="text-lg font-bold text-slate-900 mt-0.5">{selected.name}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {[selected.address, selected.city].filter(Boolean).join(", ")}
                   {selected.phone ? ` • ${selected.phone}` : ""}
                 </p>
               </div>
-              <button type="button" aria-label="Close" onClick={closeBooking} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition">
+              <button type="button" aria-label={t("common.close")} onClick={closeBooking} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -294,41 +300,41 @@ export default function BookingView({ patientId, onToast }: Props) {
               <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 flex items-center justify-between text-xs">
                 <div className="flex items-center space-x-2">
                   <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[10px]">P</div>
-                  <span className="font-medium text-slate-700">Patient: {patientId || "—"}</span>
+                  <span className="font-medium text-slate-700">{t("booking.patient", { id: patientId || "—" })}</span>
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-date">Select Visit Date</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-date">{t("booking.selectDate")}</label>
                 <input type="date" id="booking-date" required min={todayLocal()} value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-time">Visit Time *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-time">{t("booking.visitTime")}</label>
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   <input type="time" id="booking-time" required value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                  <select aria-label="Arrival window" data-purpose="time-window" value={timeWindow} onChange={(e) => setTimeWindow(e.target.value)} className="text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  <select aria-label={t("booking.arrivalWindow")} data-purpose="time-window" value={timeWindow} onChange={(e) => setTimeWindow(e.target.value)} className="text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     {TIME_WINDOWS.map((w) => (
-                      <option key={w.value} value={w.value}>{w.label}</option>
+                      <option key={w.value} value={w.value}>{t(w.labelKey)}</option>
                     ))}
                   </select>
                 </div>
-                <p className="text-[11px] text-slate-400">With an arrival window, the visit time must fall inside it.</p>
+                <p className="text-[11px] text-slate-400">{t("booking.arrivalWindowHint")}</p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-department">Department / Clinic</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-department">{t("booking.departmentClinic")}</label>
                 <select id="booking-department" value={bookingDepartment} onChange={(e) => setBookingDepartment(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
                   {selected.departments.map((d) => (
-                    <option key={d} value={DEPARTMENT_LABELS[d] ?? d}>{DEPARTMENT_LABELS[d] ?? d}</option>
+                    <option key={d} value={departmentLabel(d, t)}>{departmentLabel(d, t)}</option>
                   ))}
-                  <option value="">Not sure</option>
+                  <option value="">{t("booking.notSure")}</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-note">Reason for Visit / Note (Optional)</label>
-                <textarea id="booking-note" rows={2} maxLength={1000} value={bookingNote} onChange={(e) => setBookingNote(e.target.value)} placeholder="e.g. Follow-up for chest pain" className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-note">{t("booking.reasonLabel")}</label>
+                <textarea id="booking-note" rows={2} maxLength={1000} value={bookingNote} onChange={(e) => setBookingNote(e.target.value)} placeholder={t("booking.reasonPlaceholder")} className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
 
               {formError && (
@@ -337,10 +343,10 @@ export default function BookingView({ patientId, onToast }: Props) {
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-3">
                 <button type="button" onClick={closeBooking} className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button type="submit" disabled={isSubmitting} className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
-                  <span>{isSubmitting ? "Booking..." : "Submit Booking"}</span>
+                  <span>{isSubmitting ? t("booking.submitting") : t("booking.submit")}</span>
                 </button>
               </div>
             </form>
@@ -357,29 +363,31 @@ export default function BookingView({ patientId, onToast }: Props) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-lg font-bold text-slate-900">Visit Booked</h3>
+            <h3 className="text-lg font-bold text-slate-900">{t("booking.visitBooked")}</h3>
             <p className="text-xs text-slate-500 mt-1">
-              Saved to your appointments, with reminders. {selected.name} does not receive bookings from Endod yet
-              {selected.phone ? `, so please call ${selected.phone} to confirm.` : ", so please contact them to confirm."}
+              {t("booking.savedPrefix", { facility: selected.name })}
+              {selected.phone
+                ? t("booking.savedCallSuffix", { phone: selected.phone })
+                : t("booking.savedContactSuffix")}
             </p>
 
             <div className="bg-slate-50 rounded-xl p-4 my-4 text-left border border-slate-100 space-y-2 text-xs">
               <div className="flex justify-between gap-3">
-                <span className="text-slate-400">Hospital:</span>
+                <span className="text-slate-400">{t("booking.hospitalLabel")}</span>
                 <span className="font-bold text-slate-800 text-right">{selected.name}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-slate-400">Visit Time:</span>
-                <span className="font-bold text-emerald-600 text-right">{formatWhen(booked.scheduled_at)}</span>
+                <span className="text-slate-400">{t("booking.visitTimeLabel")}</span>
+                <span className="font-bold text-emerald-600 text-right">{formatWhen(booked.scheduled_at, locale)}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-slate-400">Booking Reference:</span>
+                <span className="text-slate-400">{t("booking.reference")}</span>
                 <span className="font-mono font-bold text-slate-800">{booked.appointment_id.slice(0, 8).toUpperCase()}</span>
               </div>
             </div>
 
             <button type="button" onClick={closeBooking} className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition">
-              Done
+              {t("common.done")}
             </button>
           </div>
         </div>

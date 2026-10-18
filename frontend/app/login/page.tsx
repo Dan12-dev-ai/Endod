@@ -4,37 +4,38 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { safeNext } from "@/app/lib/api";
+import { useI18n, type TranslationKey } from "@/app/lib/i18n";
 
 type Testimonial = {
-  quote: string;
+  quoteKey: TranslationKey;
+  titleKey: TranslationKey;
   name: string;
-  title: string;
   initials: string;
 };
 
-const testimonials: Testimonial[] = [
+// Names are proper nouns and stay as written; the quote and role translate.
+const testimonialData: Testimonial[] = [
   {
-    quote:
-      "By uncovering data-driven insights, Endod gives clinicians an unprecedented view of each patient's unique needs. This enables truly tailored care while reducing administrative tasks through automation.",
+    quoteKey: "testimonial.1.quote",
+    titleKey: "testimonial.1.title",
     name: "Paul Lefever",
-    title: "Psychiatric Nurse Practitioner",
     initials: "PL",
   },
   {
-    quote:
-      "It's really exciting that clinicians will be able to understand their patients' behaviors without all the pressure being on patients to remember and recall everything. That is very useful for improving treatment outcomes.",
+    quoteKey: "testimonial.2.quote",
+    titleKey: "testimonial.2.title",
     name: "Katherine Jonas",
-    title: "PhD, Licensed Psychologist",
     initials: "KJ",
   },
 ];
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useI18n();
 
   // ===== Infinite sliding-window carousel =====
-  const slideCount = testimonials.length;
-  const extended = [testimonials[slideCount - 1], ...testimonials, testimonials[0]];
+  const slideCount = testimonialData.length;
+  const extended = [testimonialData[slideCount - 1], ...testimonialData, testimonialData[0]];
   const [currentIndex, setCurrentIndex] = useState(1);
   const [isAnimating, setIsAnimating] = useState(true);
 
@@ -73,11 +74,11 @@ export default function LoginPage() {
     setFormError("");
 
     if (!phone.trim()) {
-      setFormError("Please enter your phone number.");
+      setFormError(t("login.error.phone"));
       return;
     }
     if (!password) {
-      setFormError("Please enter your password.");
+      setFormError(t("login.error.password"));
       return;
     }
 
@@ -91,14 +92,14 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok || !data.ok) {
-        setFormError(data.error ?? "Something went wrong. Please try again.");
+        setFormError(data.error ?? t("common.somethingWrong"));
         return;
       }
 
       // The session is an httpOnly cookie set by the route handler.
       router.push(safeNext(new URLSearchParams(window.location.search).get("next"), "/interview"));
     } catch {
-      setFormError("Unable to sign in right now. Please check your connection and try again.");
+      setFormError(t("login.error.generic"));
     } finally {
       setIsSubmitting(false);
     }
@@ -107,7 +108,7 @@ export default function LoginPage() {
   const renderSlide = (item: Testimonial) => (
     <>
       <blockquote className="font-serif text-xl sm:text-2xl lg:text-[24px] xl:text-[26px] text-brand-heading quote-text font-normal mb-6 leading-snug">
-        &ldquo;{item.quote}&rdquo;
+        &ldquo;{t(item.quoteKey)}&rdquo;
       </blockquote>
 
       <div className="flex items-center space-x-3 mb-6">
@@ -116,7 +117,7 @@ export default function LoginPage() {
         </div>
         <div>
           <p className="font-semibold text-brand-heading text-sm sm:text-base leading-tight">{item.name}</p>
-          <p className="text-xs sm:text-sm text-brand-muted font-normal leading-tight mt-0.5">{item.title}</p>
+          <p className="text-xs sm:text-sm text-brand-muted font-normal leading-tight mt-0.5">{t(item.titleKey)}</p>
         </div>
       </div>
     </>
@@ -135,7 +136,7 @@ export default function LoginPage() {
         >
           <div>
             <div className="mb-10 lg:mb-12" data-purpose="brand-logo">
-              <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">Endod</h1>
+              <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">{t("common.endod")}</h1>
             </div>
 
             <div className="mb-10" data-purpose="quote-carousel" id="testimonial-container">
@@ -155,7 +156,7 @@ export default function LoginPage() {
 
               <div className="flex items-center space-x-2.5 pt-1" data-purpose="carousel-controls">
                 <button
-                  aria-label="Previous quote"
+                  aria-label={t("login.prevQuote")}
                   className="w-8 h-8 rounded-full bg-white/70 hover:bg-white text-brand-heading transition-colors flex items-center justify-center shadow-xs focus:outline-hidden"
                   onClick={() => move(-1)}
                   type="button"
@@ -165,7 +166,7 @@ export default function LoginPage() {
                   </svg>
                 </button>
                 <button
-                  aria-label="Next quote"
+                  aria-label={t("login.nextQuote")}
                   className="w-8 h-8 rounded-full bg-white/70 hover:bg-white text-brand-heading transition-colors flex items-center justify-center shadow-xs focus:outline-hidden"
                   onClick={() => move(1)}
                   type="button"
@@ -181,7 +182,7 @@ export default function LoginPage() {
           <footer className="mt-8 pt-6" data-purpose="partner-logos-section">
             <div className="flex items-center space-x-4 mb-5">
               <span className="text-xs italic text-brand-heading/75 font-serif tracking-normal whitespace-nowrap">
-                Trusted by world&apos;s leading organizations
+                {t("common.trustedBy")}
               </span>
               <div className="h-[1px] bg-brand-heading/15 flex-grow" />
             </div>
@@ -222,17 +223,17 @@ export default function LoginPage() {
           <div className="w-full max-w-[540px] bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10 lg:p-11">
             {/* Card Heading */}
             <h2 className="font-serif text-4xl sm:text-[42px] font-medium text-brand-heading tracking-tight mb-2">
-              Sign In
+              {t("login.title")}
             </h2>
             <p className="text-sm text-brand-muted mb-7">
-              Sign in with your phone number and password to access your account.
+              {t("login.subtitle")}
             </p>
 
             <form className="space-y-4" data-purpose="login-form" onSubmit={handleSubmit}>
               {/* Phone Number Input Field */}
               <div data-purpose="form-field-phone">
                 <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="phone">
-                  Phone Number
+                  {t("login.phoneLabel")}
                 </label>
                 <input
                   className="field-input w-full px-4 py-2.5 rounded-xl text-sm border focus:outline-hidden placeholder:text-slate-400"
@@ -247,14 +248,14 @@ export default function LoginPage() {
                   value={phone}
                 />
                 <p className="mt-1.5 text-[11px] text-brand-muted">
-                  Use the phone number you registered with (or your email or DEDAN ID).
+                  {t("login.phoneHint")}
                 </p>
               </div>
 
               {/* Password Input Field */}
               <div data-purpose="form-field-password">
                 <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="password">
-                  Password
+                  {t("login.passwordLabel")}
                 </label>
                 <div className="relative">
                   <input
@@ -269,7 +270,7 @@ export default function LoginPage() {
                     value={password}
                   />
                   <button
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? t("common.hidePassword") : t("common.showPassword")}
                     className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-brand-heading focus:outline-hidden"
                     onClick={() => setShowPassword((visible) => !visible)}
                     type="button"
@@ -287,7 +288,7 @@ export default function LoginPage() {
 
               <div className="text-right -mt-1">
                 <Link className="text-[11px] text-brand-accent font-semibold hover:underline" href="/signup?reset=1">
-                  Forgot password?
+                  {t("login.forgotPassword")}
                 </Link>
               </div>
 
@@ -309,16 +310,16 @@ export default function LoginPage() {
                   disabled={isSubmitting}
                   type="submit"
                 >
-                  {isSubmitting ? "Signing in..." : "Sign in"}
+                  {isSubmitting ? t("login.submitting") : t("login.submit")}
                 </button>
               </div>
 
               {/* Sign Up Navigation Prompt */}
               <div className="text-center pt-1">
                 <p className="text-xs text-brand-muted">
-                  New to Endod Health?{" "}
+                  {t("login.newTo")}{" "}
                   <Link className="text-brand-accent font-semibold hover:underline" href="/signup">
-                    Sign Up
+                    {t("login.signUp")}
                   </Link>
                 </p>
               </div>
@@ -334,10 +335,7 @@ export default function LoginPage() {
                   <path d="M12 2v19M8 6c2-1 6-1 8 0M7 11c2.5-1.5 7.5-1.5 10 0M8 16c2-1 6-1 8 0M12 2c-1.5 0-3 1.5-3 3s1.5 3 3 3 3-1.5 3-3-1.5-3-3-3z" />
                 </svg>
               </div>
-              <p>
-                We prioritize data security and patient privacy, exceeding HIPAA compliance standards to provide the
-                highest level of protection.
-              </p>
+              <p>{t("common.secureNotice")}</p>
             </aside>
           </div>
         </section>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, passwordProblem } from "../lib/api";
 import { formatPhoneDisplay, type ProfileForCard } from "../health-card/health-card-data";
+import { useI18n, type TranslationKey } from "../lib/i18n";
 
 type Profile = ProfileForCard & {
   email: string | null;
@@ -36,16 +37,16 @@ type Props = {
   onProfileChange: (profile: ProfileForCard) => void;
 };
 
-const COUNTRIES = [
-  { value: "ET", label: "Ethiopia" },
-  { value: "KE", label: "Kenya" },
-  { value: "DJ", label: "Djibouti" },
-  { value: "ER", label: "Eritrea" },
-  { value: "SO", label: "Somalia" },
-  { value: "SD", label: "Sudan" },
-  { value: "SS", label: "South Sudan" },
-  { value: "UG", label: "Uganda" },
-  { value: "TZ", label: "Tanzania" },
+const COUNTRIES: { value: string; labelKey: TranslationKey }[] = [
+  { value: "ET", labelKey: "settings.country.ET" },
+  { value: "KE", labelKey: "settings.country.KE" },
+  { value: "DJ", labelKey: "settings.country.DJ" },
+  { value: "ER", labelKey: "settings.country.ER" },
+  { value: "SO", labelKey: "settings.country.SO" },
+  { value: "SD", labelKey: "settings.country.SD" },
+  { value: "SS", labelKey: "settings.country.SS" },
+  { value: "UG", labelKey: "settings.country.UG" },
+  { value: "TZ", labelKey: "settings.country.TZ" },
 ];
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 const DEFAULT_RADIUS_KM = 15;
@@ -70,12 +71,20 @@ function strength(password: string): number {
   return score;
 }
 
-const STRENGTH_LABELS = ["None", "Weak", "Fair", "Good", "Strong"];
+/** Strength labels, weakest first; the index is the score. */
+const STRENGTH_LABEL_KEYS: TranslationKey[] = [
+  "settings.password.strength.none",
+  "settings.password.strength.weak",
+  "settings.password.strength.fair",
+  "settings.password.strength.good",
+  "settings.password.strength.strong",
+];
 const STRENGTH_COLORS = ["text-slate-400", "text-rose-500", "text-amber-500", "text-teal-600", "text-emerald-600"];
 const STRENGTH_BARS = ["bg-slate-200", "bg-rose-500", "bg-amber-500", "bg-teal-500", "bg-emerald-500"];
 
 /** Account settings (GET/PATCH /users/me, preferences, consent, health profile; password change). */
 export default function SettingsView({ onToast, onProfileChange }: Props) {
+  const { t } = useI18n();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -146,8 +155,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     } catch (error) {
       setHealth(null);
       // 403 means no consent (the section says so); anything else is a failure.
-      setHealthError(error instanceof ApiError && error.status === 403 ? "" : message(error, "Unable to load your health details."));
+      setHealthError(error instanceof ApiError && error.status === 403 ? "" : message(error, t("settings.card.loadError")));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable per language
   }, [applyHealth]);
 
   useEffect(() => {
@@ -159,11 +169,12 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         if (p.consent.treatment_processing) void loadHealth();
       })
       .catch((error) => {
-        if (!cancelled) setLoadError(message(error, "Unable to load your settings."));
+        if (!cancelled) setLoadError(message(error, t("settings.error.load")));
       });
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable per language
   }, [applyProfile, loadHealth]);
 
   const saveProfile = async (e: React.FormEvent) => {
@@ -177,9 +188,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       setProfile(updated);
       applyPersonal(updated);
       onProfileChange(updated);
-      onToast("Profile Saved", "Your personal details were saved.");
+      onToast(t("settings.toast.profileSavedTitle"), t("settings.toast.profileSaved"));
     } catch (error) {
-      onToast("Could not save", message(error, "Please check the details and try again."));
+      onToast(t("common.couldNotSave"), message(error, t("settings.toast.checkDetails")));
     } finally {
       setBusy(null);
     }
@@ -207,11 +218,11 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         }
       }
       onToast(
-        radiusSaved ? "Location Updated" : "Partly saved",
-        radiusSaved ? "Your location details were saved." : "Your address was saved, but the care radius was not. Please try again.",
+        radiusSaved ? t("settings.toast.locationUpdatedTitle") : t("settings.toast.partlySavedTitle"),
+        radiusSaved ? t("settings.toast.locationUpdated") : t("settings.toast.partlySaved"),
       );
     } catch (error) {
-      onToast("Could not save", message(error, "Please check the details and try again."));
+      onToast(t("common.couldNotSave"), message(error, t("settings.toast.checkDetails")));
     } finally {
       setBusy(null);
     }
@@ -225,7 +236,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       body: JSON.stringify(body),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data.ok) throw new ApiError(data.error ?? "Something went wrong. Please try again.", response.status);
+    if (!response.ok || !data.ok) throw new ApiError(data.error ?? t("common.somethingWrong"), response.status);
     return data;
   };
 
@@ -237,7 +248,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       setPhoneCode("");
       setPhoneStep("code");
     } catch (error) {
-      setPhoneError(message(error, "Unable to send the code."));
+      setPhoneError(message(error, t("settings.toast.sendCodeFailed")));
     } finally {
       setBusy(null);
     }
@@ -253,9 +264,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       setProfile(updated);
       onProfileChange(updated);
       setPhoneStep("idle");
-      onToast("Phone Verified", "You can now sign in and get reminders with this number.");
+      onToast(t("settings.toast.phoneVerifiedTitle"), t("settings.toast.phoneVerified"));
     } catch (error) {
-      setPhoneError(message(error, "Unable to confirm the number."));
+      setPhoneError(message(error, t("settings.toast.confirmFailed")));
     } finally {
       setBusy(null);
     }
@@ -265,11 +276,11 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     e.preventDefault();
     const problem = passwordProblem(newPassword);
     if (problem) {
-      onToast("Password Error", problem);
+      onToast(t("settings.toast.passwordErrorTitle"), problem);
       return;
     }
     if (newPassword !== confirmPassword) {
-      onToast("Mismatch", "Passwords do not match. Please re-enter.");
+      onToast(t("settings.toast.mismatchTitle"), t("settings.toast.mismatch"));
       return;
     }
     setBusy("password");
@@ -282,13 +293,13 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         body: JSON.stringify({ currentPassword, newPassword, newPasswordConfirmation: confirmPassword }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.ok) throw new ApiError(data.error ?? "Unable to change your password.", response.status);
+      if (!response.ok || !data.ok) throw new ApiError(data.error ?? t("settings.toast.changePasswordFailed"), response.status);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      onToast("Password Updated", "Your password was changed. Other devices were signed out.");
+      onToast(t("settings.toast.passwordUpdatedTitle"), t("settings.toast.passwordUpdated"));
     } catch (error) {
-      onToast("Password Error", message(error, "Unable to change your password."));
+      onToast(t("settings.toast.passwordErrorTitle"), message(error, t("settings.toast.changePasswordFailed")));
     } finally {
       setBusy(null);
     }
@@ -310,14 +321,14 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
           applyHealth({ blood_type: null, allergies: [], emergency_contact_name: null, emergency_contact_phone: null });
           setHealth(null);
           onToast(
-            "Consent Withdrawn",
-            "Endod won't store new health information. What you already saved is kept; contact support to have it deleted.",
+            t("settings.toast.consentWithdrawnTitle"),
+            t("settings.toast.consentWithdrawn"),
           );
         }
       }
     } catch (error) {
       setProfile(previous);
-      onToast("Could not update", message(error, "Please try again."));
+      onToast(t("common.couldNotUpdate"), message(error, t("common.pleaseTryAgain")));
     } finally {
       setBusy(null);
     }
@@ -333,7 +344,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       setProfile((p) => (p ? { ...p, preferences: { ...p.preferences, ...preferences } } : p));
     } catch (error) {
       setProfile(previous);
-      onToast("Could not update", message(error, "Please try again."));
+      onToast(t("common.couldNotUpdate"), message(error, t("common.pleaseTryAgain")));
     } finally {
       setBusy(null);
     }
@@ -353,9 +364,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         },
       });
       applyHealth(updated);
-      onToast("Card Updated", "Your health card details were saved.");
+      onToast(t("settings.toast.cardUpdatedTitle"), t("settings.toast.cardUpdated"));
     } catch (error) {
-      onToast("Could not save", message(error, "Please check the details and try again."));
+      onToast(t("common.couldNotSave"), message(error, t("settings.toast.checkDetails")));
     } finally {
       setBusy(null);
     }
@@ -365,7 +376,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     return (
       <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-5xl mx-auto py-6">
-          {loadError ? <p className="text-sm text-red-600" role="alert">{loadError}</p> : <p className="text-sm text-slate-500">Loading your settings...</p>}
+          {loadError ? <p className="text-sm text-red-600" role="alert">{loadError}</p> : <p className="text-sm text-slate-500">{t("settings.loading")}</p>}
         </div>
       </div>
     );
@@ -373,9 +384,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
 
   const score = strength(newPassword);
   const requirements = [
-    { id: "req-length", label: "10+ Characters", met: newPassword.length >= 10 },
-    { id: "req-upper", label: "Uppercase Letter", met: /[A-Z]/.test(newPassword) },
-    { id: "req-lower", label: "Lowercase Letter", met: /[a-z]/.test(newPassword) },
+    { id: "req-length", label: t("settings.password.req.length"), met: newPassword.length >= 10 },
+    { id: "req-upper", label: t("settings.password.req.upper"), met: /[A-Z]/.test(newPassword) },
+    { id: "req-lower", label: t("settings.password.req.lower"), met: /[a-z]/.test(newPassword) },
   ];
   const phoneVerified = profile.phone_verified;
   const hasConsent = profile.consent.treatment_processing;
@@ -402,8 +413,8 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       <div className="max-w-5xl mx-auto space-y-6 py-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Account Settings</h1>
-            <p className="text-sm text-slate-500 mt-1">Update your personal details, location, privacy choices and password.</p>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{t("settings.title")}</h1>
+            <p className="text-sm text-slate-500 mt-1">{t("settings.subtitle")}</p>
           </div>
         </div>
 
@@ -411,8 +422,8 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         <section data-purpose="user-profile-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Personal Information</h2>
-              <p className="text-xs sm:text-sm text-slate-500">Your name, DEDAN ID and contact details.</p>
+              <h2 className="text-lg font-bold text-slate-900">{t("settings.personal.title")}</h2>
+              <p className="text-xs sm:text-sm text-slate-500">{t("settings.personal.subtitle")}</p>
             </div>
             <span className="self-start sm:self-auto px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-200">
               {profile.dedan_user_id}
@@ -421,34 +432,34 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
           <form onSubmit={saveProfile} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className={labelClass} htmlFor="first-name">First Name</label>
+                <label className={labelClass} htmlFor="first-name">{t("settings.personal.firstName")}</label>
                 <input id="first-name" required maxLength={60} type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass} htmlFor="last-name">Last Name</label>
+                <label className={labelClass} htmlFor="last-name">{t("settings.personal.lastName")}</label>
                 <input id="last-name" required maxLength={60} type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass} htmlFor="patient-id-field">DEDAN ID</label>
+                <label className={labelClass} htmlFor="patient-id-field">{t("settings.personal.dedanId")}</label>
                 <input id="patient-id-field" readOnly type="text" value={profile.dedan_user_id} className="w-full text-sm rounded-xl bg-slate-50 border-slate-200 text-slate-500 py-2.5 px-3.5 cursor-not-allowed border" />
               </div>
               <div>
-                <label className={labelClass} htmlFor="email-address">Email Address</label>
+                <label className={labelClass} htmlFor="email-address">{t("settings.personal.email")}</label>
                 <input id="email-address" type="email" maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass} htmlFor="phone-number">Phone Number</label>
+                <label className={labelClass} htmlFor="phone-number">{t("settings.personal.phone")}</label>
                 <div className="relative">
-                  <input id="phone-number" readOnly type="tel" value={profile.phone ? formatPhoneDisplay(profile.phone) : ""} placeholder="No phone yet" className="w-full text-sm rounded-xl bg-slate-50 border-slate-200 text-slate-600 py-2.5 px-3.5 pr-24 border" />
+                  <input id="phone-number" readOnly type="tel" value={profile.phone ? formatPhoneDisplay(profile.phone) : ""} placeholder={t("settings.personal.noPhone")} className="w-full text-sm rounded-xl bg-slate-50 border-slate-200 text-slate-600 py-2.5 px-3.5 pr-24 border" />
                   {profile.phone && (
                     <span data-purpose="phone-status" className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold px-2 py-0.5 rounded-md ${phoneVerified ? "text-emerald-600 bg-emerald-50" : "text-amber-700 bg-amber-50"}`}>
-                      {phoneVerified ? "Verified" : "Not verified"}
+                      {phoneVerified ? t("settings.personal.verified") : t("settings.personal.notVerified")}
                     </span>
                   )}
                 </div>
                 {phoneStep === "idle" && (
                   <button type="button" data-purpose="change-phone" onClick={() => { setPhoneStep("number"); setNewPhone(""); setPhoneError(""); }} className="mt-1.5 text-[11px] font-semibold text-emerald-700 hover:underline">
-                    {profile.phone ? (phoneVerified ? "Change number" : "Verify a number") : "Add a phone number"}
+                    {profile.phone ? (phoneVerified ? t("settings.personal.changeNumber") : t("settings.personal.verifyNumber")) : t("settings.personal.addPhone")}
                   </button>
                 )}
               </div>
@@ -456,25 +467,25 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
             {phoneStep !== "idle" && (
               <div data-purpose="phone-change" className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
                 <p className="text-xs text-slate-600">
-                  We&apos;ll text a code to the new number. Once confirmed, it replaces your current one for sign-in and reminders.
+                  {t("settings.personal.phoneHint")}
                 </p>
                 {phoneStep === "number" ? (
                   <div className="flex gap-2">
                     <input id="new-phone" type="tel" maxLength={32} value={newPhone} onChange={(e) => setNewPhone(e.target.value)} placeholder="09XXXXXXXX" className={inputClass} />
-                    <button type="button" disabled={busy !== null || !newPhone.trim()} onClick={() => void sendPhoneCode()} className={saveClass}>Send code</button>
+                    <button type="button" disabled={busy !== null || !newPhone.trim()} onClick={() => void sendPhoneCode()} className={saveClass}>{t("settings.personal.sendCode")}</button>
                   </div>
                 ) : (
                   <div className="flex gap-2">
-                    <input id="phone-code" inputMode="numeric" maxLength={6} value={phoneCode} onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, ""))} placeholder="6-digit code" className={inputClass} />
-                    <button type="button" disabled={busy !== null || phoneCode.length !== 6} onClick={() => void confirmPhone()} className={saveClass}>Confirm</button>
+                    <input id="phone-code" inputMode="numeric" maxLength={6} value={phoneCode} onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, ""))} placeholder={t("settings.personal.codePlaceholder")} className={inputClass} />
+                    <button type="button" disabled={busy !== null || phoneCode.length !== 6} onClick={() => void confirmPhone()} className={saveClass}>{t("common.confirm")}</button>
                   </div>
                 )}
                 {phoneError && <p data-purpose="phone-error" className="text-xs text-red-600" role="alert">{phoneError}</p>}
-                <button type="button" onClick={() => setPhoneStep("idle")} className="text-[11px] text-slate-500 hover:underline">Cancel</button>
+                <button type="button" onClick={() => setPhoneStep("idle")} className="text-[11px] text-slate-500 hover:underline">{t("common.cancel")}</button>
               </div>
             )}
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-              <button type="submit" disabled={busy !== null} className={saveClass}>Save Changes</button>
+              <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.personal.saveChanges")}</button>
             </div>
           </form>
         </section>
@@ -482,47 +493,49 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         {/* Location */}
         <section data-purpose="location-settings-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-900">Location &amp; Region</h2>
-            <p className="text-xs sm:text-sm text-slate-500">Used to suggest nearby facilities and the right emergency numbers.</p>
+            <h2 className="text-lg font-bold text-slate-900">{t("settings.location.title")}</h2>
+            <p className="text-xs sm:text-sm text-slate-500">{t("settings.location.subtitle")}</p>
           </div>
           <form onSubmit={saveLocation} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
-                <label className={labelClass} htmlFor="address-line">Street Address</label>
+                <label className={labelClass} htmlFor="address-line">{t("settings.location.address")}</label>
                 <input id="address-line" maxLength={200} type="text" value={address} onChange={(e) => setAddress(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass} htmlFor="city">City</label>
+                <label className={labelClass} htmlFor="city">{t("settings.location.city")}</label>
                 <input id="city" maxLength={100} type="text" value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass} htmlFor="state">Region</label>
+                <label className={labelClass} htmlFor="state">{t("settings.location.region")}</label>
                 <input id="state" maxLength={100} type="text" value={region} onChange={(e) => setRegion(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass} htmlFor="zipcode">Postal Code</label>
+                <label className={labelClass} htmlFor="zipcode">{t("settings.location.postalCode")}</label>
                 <input id="zipcode" maxLength={20} type="text" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} className={inputClass} />
               </div>
               <div>
-                <label className={labelClass} htmlFor="country">Country</label>
+                <label className={labelClass} htmlFor="country">{t("settings.location.country")}</label>
                 <select id="country" value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass}>
-                  {COUNTRIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+                  {COUNTRIES.map((c) => <option key={c.value} value={c.value}>{t(c.labelKey)}</option>)}
                   {!COUNTRIES.some((c) => c.value === country) && <option value={country}>{country}</option>}
                 </select>
               </div>
             </div>
             <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700" htmlFor="radius-slider">Preferred Healthcare Radius</label>
-                <span className="text-xs font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-0.5 rounded-full">Within {radius} km</span>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700" htmlFor="radius-slider">{t("settings.location.radius")}</label>
+                <span className="text-xs font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-0.5 rounded-full">{t("settings.location.within", { km: radius })}</span>
               </div>
               <input id="radius-slider" max={RADIUS_MAX_KM} min={RADIUS_MIN_KM} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-emerald-600 h-2 bg-slate-200 rounded-lg cursor-pointer" />
               <div className="flex justify-between text-[11px] text-slate-400 mt-1">
-                <span>{RADIUS_MIN_KM} km</span><span>100 km</span><span>{RADIUS_MAX_KM} km</span>
+                <span>{t("settings.location.within", { km: RADIUS_MIN_KM })}</span>
+                <span>{t("settings.location.within", { km: 100 })}</span>
+                <span>{t("settings.location.within", { km: RADIUS_MAX_KM })}</span>
               </div>
             </div>
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-              <button type="submit" disabled={busy !== null} className={saveClass}>Update Location</button>
+              <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.location.update")}</button>
             </div>
           </form>
         </section>
@@ -530,36 +543,36 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         {/* Privacy & notifications */}
         <section data-purpose="privacy-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
           <div className="border-b border-slate-100 pb-4 mb-2">
-            <h2 className="text-lg font-bold text-slate-900">Privacy &amp; Notifications</h2>
-            <p className="text-xs sm:text-sm text-slate-500">You decide what Endod stores and how it contacts you. You can change these at any time.</p>
+            <h2 className="text-lg font-bold text-slate-900">{t("settings.privacy.title")}</h2>
+            <p className="text-xs sm:text-sm text-slate-500">{t("settings.privacy.subtitle")}</p>
           </div>
           {toggle("consent-health", profile.consent.treatment_processing, (v) => void setConsent("treatment_processing", v),
-            "Store my health information", "Needed for your health profile, medical records, AI consultations and the health card details.")}
+            t("settings.privacy.consentHealth.label"), t("settings.privacy.consentHealth.hint"))}
           {toggle("consent-sharing", profile.consent.data_sharing_with_clinicians, (v) => void setConsent("data_sharing_with_clinicians", v),
-            "Share visit summaries with clinicians", "Only summaries you review and approve are ever shared.")}
+            t("settings.privacy.consentSharing.label"), t("settings.privacy.consentSharing.hint"))}
           {toggle("pref-sms", profile.preferences.sms_notifications, (v) => void setNotification("sms_notifications", v),
-            "SMS reminders", "Appointment reminders by text message to your verified phone.")}
+            t("settings.privacy.sms.label"), t("settings.privacy.sms.hint"))}
         </section>
 
         {/* Password */}
         <section data-purpose="security-settings-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-900">Password &amp; Security</h2>
-            <p className="text-xs sm:text-sm text-slate-500">Changing your password signs out your other devices.</p>
+            <h2 className="text-lg font-bold text-slate-900">{t("settings.password.title")}</h2>
+            <p className="text-xs sm:text-sm text-slate-500">{t("settings.password.subtitle")}</p>
           </div>
           <form onSubmit={changePassword} className="space-y-5">
             <div>
-              <label className={labelClass} htmlFor="current-password">Current Password</label>
+              <label className={labelClass} htmlFor="current-password">{t("settings.password.current")}</label>
               <input id="current-password" autoComplete="current-password" required type={showPasswords ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className={inputClass} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
-                <label className={labelClass} htmlFor="new-password">New Password</label>
+                <label className={labelClass} htmlFor="new-password">{t("settings.password.new")}</label>
                 <input id="new-password" autoComplete="new-password" required type={showPasswords ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={inputClass} />
                 <div className="mt-2.5">
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-slate-500">Strength:</span>
-                    <span id="strength-label" className={`font-semibold ${STRENGTH_COLORS[score]}`}>{STRENGTH_LABELS[score]}</span>
+                    <span className="text-slate-500">{t("settings.password.strength")}</span>
+                    <span id="strength-label" className={`font-semibold ${STRENGTH_COLORS[score]}`}>{t(STRENGTH_LABEL_KEYS[score])}</span>
                   </div>
                   <div className="grid grid-cols-4 gap-1.5 h-1.5">
                     {[0, 1, 2, 3].map((i) => <div key={i} className={`rounded-full ${i < score ? STRENGTH_BARS[score] : "bg-slate-200"}`} />)}
@@ -567,11 +580,11 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                 </div>
               </div>
               <div>
-                <label className={labelClass} htmlFor="confirm-password">Confirm New Password</label>
+                <label className={labelClass} htmlFor="confirm-password">{t("settings.password.confirm")}</label>
                 <input id="confirm-password" autoComplete="new-password" required type={showPasswords ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={inputClass} />
                 {confirmPassword && (
                   <div id="match-indicator" className={`text-[11px] mt-1.5 font-semibold ${newPassword === confirmPassword ? "text-emerald-600" : "text-rose-500"}`}>
-                    {newPassword === confirmPassword ? "✓ Passwords match" : "✕ Passwords do not match"}
+                    {newPassword === confirmPassword ? t("settings.password.match") : t("settings.password.noMatch")}
                   </div>
                 )}
               </div>
@@ -586,9 +599,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
             <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
               <label className="flex items-center gap-2 text-xs text-slate-600">
                 <input type="checkbox" checked={showPasswords} onChange={(e) => setShowPasswords(e.target.checked)} className="accent-emerald-600" />
-                Show passwords
+                {t("settings.password.show")}
               </label>
-              <button type="submit" disabled={busy !== null} className={saveClass}>Update Password</button>
+              <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.password.update")}</button>
             </div>
           </form>
         </section>
@@ -597,26 +610,26 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         <section data-purpose="digital-card-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Digital Health Card</h2>
-              <p className="text-xs sm:text-sm text-slate-500">Details shown on your Endod digital health card.</p>
+              <h2 className="text-lg font-bold text-slate-900">{t("settings.card.title")}</h2>
+              <p className="text-xs sm:text-sm text-slate-500">{t("settings.card.subtitle")}</p>
             </div>
             <button type="button" onClick={() => setCardVisible(!cardVisible)} className="self-start sm:self-auto px-3.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold border border-emerald-200">
-              {cardVisible ? "Hide Card Preview" : "Show Card Preview"}
+              {cardVisible ? t("settings.card.hidePreview") : t("settings.card.showPreview")}
             </button>
           </div>
 
           {cardVisible && (
             <div data-purpose="card-preview" className="relative bg-gradient-to-br from-[#1e3a2e] to-[#1e5852] rounded-2xl p-6 text-white overflow-hidden">
-              <div className="relative mb-6"><span className="text-2xl font-extrabold tracking-tight">Endod</span></div>
-              <div className="relative mb-4"><span className="text-xs font-semibold text-[#94e0c0] uppercase tracking-wider">Digital Health ID</span></div>
+              <div className="relative mb-6"><span className="text-2xl font-extrabold tracking-tight">{t("common.endod")}</span></div>
+              <div className="relative mb-4"><span className="text-xs font-semibold text-[#94e0c0] uppercase tracking-wider">{t("healthCard.digitalId")}</span></div>
               <h3 className="relative text-2xl font-bold font-serif text-white mb-1">{[firstName, lastName].filter(Boolean).join(" ") || "—"}</h3>
               <div className="relative mb-6"><span className="text-base font-semibold text-[#94e0c0]">{profile.dedan_user_id}</span></div>
               <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
-                  ["Phone", profile.phone ? formatPhoneDisplay(profile.phone) : "—"],
-                  ["Blood Group", bloodType || "—"],
-                  ["Allergies", allergies || "None"],
-                  ["Emergency", emergencyName || "—"],
+                  [t("settings.card.phone"), profile.phone ? formatPhoneDisplay(profile.phone) : "—"],
+                  [t("settings.card.bloodGroup"), bloodType || "—"],
+                  [t("settings.card.allergies"), allergies || t("settings.card.none")],
+                  [t("settings.card.emergency"), emergencyName || "—"],
                 ].map(([label, value]) => (
                   <div key={label}>
                     <span className="text-[10px] font-semibold text-[#94a3a8] uppercase tracking-wider">{label}</span>
@@ -631,34 +644,33 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
             <p data-purpose="card-load-error" className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl p-3" role="alert">{healthError}</p>
           ) : !hasConsent || !health ? (
             <p data-purpose="card-needs-consent" className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">
-              Blood group, allergies and emergency contact are health information. Turn on
-              &quot;Store my health information&quot; above to add them.
+              {t("settings.card.needsConsent")}
             </p>
           ) : (
             <form onSubmit={saveCard} className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className={labelClass} htmlFor="blood-group">Blood Group</label>
+                  <label className={labelClass} htmlFor="blood-group">{t("settings.card.bloodGroupLabel")}</label>
                   <select id="blood-group" value={bloodType} onChange={(e) => setBloodType(e.target.value)} className={inputClass}>
-                    <option value="">Not specified</option>
+                    <option value="">{t("settings.card.notSpecified")}</option>
                     {BLOOD_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className={labelClass} htmlFor="allergies">Known Allergies</label>
-                  <input id="allergies" type="text" value={allergies} onChange={(e) => setAllergies(e.target.value)} placeholder="e.g. Penicillin, Latex" className={inputClass} />
+                  <label className={labelClass} htmlFor="allergies">{t("settings.card.allergiesLabel")}</label>
+                  <input id="allergies" type="text" value={allergies} onChange={(e) => setAllergies(e.target.value)} placeholder={t("settings.card.allergiesPlaceholder")} className={inputClass} />
                 </div>
                 <div>
-                  <label className={labelClass} htmlFor="emergency-contact">Emergency Contact Name</label>
+                  <label className={labelClass} htmlFor="emergency-contact">{t("settings.card.emergencyName")}</label>
                   <input id="emergency-contact" maxLength={120} type="text" value={emergencyName} onChange={(e) => setEmergencyName(e.target.value)} className={inputClass} />
                 </div>
                 <div>
-                  <label className={labelClass} htmlFor="emergency-phone">Emergency Contact Phone</label>
+                  <label className={labelClass} htmlFor="emergency-phone">{t("settings.card.emergencyPhone")}</label>
                   <input id="emergency-phone" maxLength={32} type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder="09XXXXXXXX" className={inputClass} />
                 </div>
               </div>
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button type="submit" disabled={busy !== null} className={saveClass}>Save Card Details</button>
+                <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.card.save")}</button>
               </div>
             </form>
           )}
