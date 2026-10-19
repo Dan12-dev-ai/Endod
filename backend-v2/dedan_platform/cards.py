@@ -19,6 +19,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
+import re
 from typing import Any, Dict, Optional
 
 from dedan_platform import identity
@@ -29,6 +31,7 @@ from realtime.auth import signing_secret
 CARD_VERSION = "v1"
 #: 16 bytes = 128 bits: far beyond guessing, short enough for a small QR code.
 _SIGNATURE_BYTES = 16
+_SIGNATURE_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class CardError(Exception):
@@ -36,7 +39,10 @@ class CardError(Exception):
 
 
 def _secret() -> bytes:
-    secret = signing_secret()
+    # A secret of its own, so rotating the session-signing secret (to end
+    # every session) does not also void every printed card. Until it is set,
+    # the session-signing secret is used.
+    secret = os.getenv("CARD_SIGNING_SECRET") or signing_secret()
     if not secret:
         raise CardError("No signing secret configured.")
     return secret.encode("utf-8")
@@ -70,7 +76,9 @@ def verify_card(dedan_user_id: str, signature: str) -> Optional[Dict[str, Any]]:
         dedan_user_id = identity.validate_dedan_user_id(dedan_user_id)
     except identity.InvalidDedanId:
         return None
-    if not signature or not hmac.compare_digest(card_signature(dedan_user_id), signature):
+    if not signature or not _SIGNATURE_RE.match(signature):
+        return None
+    if not hmac.compare_digest(card_signature(dedan_user_id).encode("ascii"), signature.encode("ascii")):
         return None
     user = identity.get_user_by_dedan_id(dedan_user_id)
     if user is None or not user.is_active:

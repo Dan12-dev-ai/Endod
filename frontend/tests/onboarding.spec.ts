@@ -25,8 +25,8 @@ async function newPatientSignedIn(page: Page) {
   expect(login.ok()).toBeTruthy();
 }
 
-async function answerUpToAge(page: Page) {
-  await page.goto('/onboarding');
+async function answerUpToAge(page: Page, { open = true } = {}) {
+  if (open) await page.goto('/onboarding');
   await page.locator('#first-name').fill('Almaz');
   await page.locator('#last-name').fill('Bekele');
   await page.locator('#last-name').press('Enter');
@@ -77,7 +77,7 @@ test.describe('Onboarding redirects', () => {
     await page.goto('/interview');
     await expect(page).toHaveURL(/\/onboarding$/);
     await page.goto('/health-card');
-    await expect(page).toHaveURL(/\/onboarding$/);
+    await expect(page).toHaveURL(/\/onboarding\?next=%2Fhealth-card$/);
 
     await answerUpToAge(page);
     await page.getByLabel('41–60').check({ force: true });
@@ -86,5 +86,17 @@ test.describe('Onboarding redirects', () => {
 
     await page.goto('/onboarding');
     await expect(page).toHaveURL(/\/interview$/);
+  });
+});
+
+test.describe('Onboarding keeps the destination', () => {
+  test('a page asked for before onboarding opens after it', async ({ page }) => {
+    await newPatientSignedIn(page);
+    await page.goto('/health-card');
+    await expect(page).toHaveURL(/\/onboarding\?next=%2Fhealth-card$/);
+    await answerUpToAge(page, { open: false });
+    await page.getByLabel('41–60').check({ force: true });
+    await page.locator('[data-purpose="finish-onboarding"]').click();
+    await expect(page).toHaveURL(/\/health-card$/);
   });
 });

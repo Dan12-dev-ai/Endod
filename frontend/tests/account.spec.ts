@@ -22,6 +22,22 @@ test.describe('Signed in', () => {
     await expect(page).toHaveURL(/\/interview$/);
   });
 
+  test('/login?next= takes a signed-in patient straight to that page', async ({ page }) => {
+    await page.goto('/login?next=%2Fhealth-card');
+    await expect(page).toHaveURL(/\/health-card$/);
+  });
+
+  test('forgot password stays reachable while signed in', async ({ page }) => {
+    await page.goto('/signup?reset=1');
+    await expect(page).toHaveURL(/\/signup\?reset=1$/);
+  });
+
+  test('the dashboard still shows the name when the card signature cannot be fetched', async ({ page }) => {
+    await page.route('**/api/backend/users/me/card', (route) => route.fulfill({ status: 503, body: '{}' }));
+    await page.goto('/interview', { waitUntil: 'networkidle' });
+    await expect(page.getByText('Test Patient').first()).toBeVisible();
+  });
+
   for (const path of ['/login', '/signup']) {
     test(`${path} sends a signed-in patient to the dashboard`, async ({ page }) => {
       await page.goto(path);

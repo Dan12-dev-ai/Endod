@@ -19,22 +19,30 @@ export type SessionState =
   | { status: "signed-out" }
   | { status: "signed-in"; profile: SessionProfile };
 
+// One request per page load, however many components ask (the header and
+// the hero both do). Signing in or out reloads the page, which starts afresh.
+let pending: Promise<SessionState> | null = null;
+
+function fetchSession(): Promise<SessionState> {
+  pending ??= fetch("/api/auth/session", { cache: "no-store" })
+    .then(async (response): Promise<SessionState> => {
+      const data = await response.json().catch(() => ({}));
+      return response.ok && data?.profile
+        ? { status: "signed-in", profile: data.profile as SessionProfile }
+        : { status: "signed-out" };
+    })
+    .catch((): SessionState => ({ status: "signed-out" }));
+  return pending;
+}
+
 export function useSession(): SessionState {
   const [state, setState] = useState<SessionState>({ status: "loading" });
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/session", { cache: "no-store" })
-      .then(async (response) => {
-        const data = await response.json().catch(() => ({}));
-        if (cancelled) return;
-        setState(response.ok && data?.profile
-          ? { status: "signed-in", profile: data.profile as SessionProfile }
-          : { status: "signed-out" });
-      })
-      .catch(() => {
-        if (!cancelled) setState({ status: "signed-out" });
-      });
+    fetchSession().then((session) => {
+      if (!cancelled) setState(session);
+    });
     return () => {
       cancelled = true;
     };

@@ -7,16 +7,22 @@ export async function GET(request: NextRequest) {
   const id = str(request.nextUrl.searchParams.get("id")).trim();
   const signature = str(request.nextUrl.searchParams.get("s")).trim();
   if (!/^[A-Za-z]{2}\d{6}$/.test(id) || !/^[A-Za-z0-9_-]{10,64}$/.test(signature)) {
-    return NextResponse.json({ ok: false, error: "This card could not be verified." }, { status: 404 });
+    return noStore(NextResponse.json({ ok: false, error: "This card could not be verified." }, { status: 404 }));
   }
   const result = await callBackend(request, `/cards/${encodeURIComponent(id)}/verify`, {
     search: `?s=${encodeURIComponent(signature)}`,
   });
-  if (result.status >= 400) return failure(result, "This card could not be verified.");
-  return NextResponse.json({
+  if (result.status >= 400) return noStore(failure(result, "This card could not be verified."));
+  return noStore(NextResponse.json({
     ok: true,
     dedan_user_id: str(result.data.dedan_user_id),
     full_name: str(result.data.full_name),
     issued_at: str(result.data.issued_at),
-  });
+  }));
+}
+
+/** A card check is about one person: never kept by a browser or CDN cache. */
+function noStore(response: NextResponse): NextResponse {
+  response.headers.set("Cache-Control", "no-store");
+  return response;
 }

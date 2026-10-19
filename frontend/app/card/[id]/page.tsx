@@ -5,7 +5,6 @@
 // (name, ID, issue date), so a hospital desk can match it to the person.
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import { useI18n } from "@/app/lib/i18n";
 
 type Holder = { dedan_user_id: string; full_name: string; issued_at: string };
@@ -13,13 +12,15 @@ type Result = { state: "checking" } | { state: "valid"; holder: Holder } | { sta
 
 export default function CardCheckPage() {
   const { t } = useI18n();
-  const params = useParams<{ id: string }>();
   const [result, setResult] = useState<Result>({ state: "checking" });
 
   useEffect(() => {
     let cancelled = false;
+    // Both read from the address here, after the page has rendered: the
+    // page itself stays static, so it can be prerendered.
+    const id = decodeURIComponent(window.location.pathname.split("/")[2] ?? "");
     const signature = new URLSearchParams(window.location.search).get("s") ?? "";
-    const query = new URLSearchParams({ id: params.id ?? "", s: signature });
+    const query = new URLSearchParams({ id, s: signature });
     fetch(`/api/cards/verify?${query}`, { cache: "no-store" })
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
@@ -33,7 +34,7 @@ export default function CardCheckPage() {
     return () => {
       cancelled = true;
     };
-  }, [params.id]);
+  }, []);
 
   return (
     <main className="w-full min-h-screen flex items-center justify-center py-8 px-4 bg-[#DDE9E6] text-brand-primary font-sans antialiased">

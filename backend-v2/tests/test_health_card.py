@@ -87,3 +87,22 @@ def test_onboarding_complete_follows_the_name(client):
     assert client.get("/users/me", headers=headers).json()["onboarding_complete"] is True
     client.patch("/users/me", headers=headers, json={"first_name": None})
     assert client.get("/users/me", headers=headers).json()["onboarding_complete"] is False
+
+
+@pytest.mark.parametrize("signature", ["é" * 22, "x" * 65, "a b", "%00"])
+def test_odd_signatures_are_refused_not_errors(client, signature):
+    card = client.get("/users/me/card", headers=register(client, "a@example.com")).json()
+    # Refused (404, or 422 past the length limit), never a server error.
+    assert client.get(f"/cards/{card['dedan_user_id']}/verify", params={"s": signature}).status_code in (404, 422)
+
+
+def test_cards_have_their_own_secret(client, monkeypatch):
+    from dedan_platform.cards import card_signature
+
+    with_session_secret = card_signature("DE123456")
+    monkeypatch.setenv("CARD_SIGNING_SECRET", "card-only-secret")
+    with_card_secret = card_signature("DE123456")
+    assert with_card_secret != with_session_secret
+    # Rotating the session secret no longer touches the cards.
+    monkeypatch.setenv("REALTIME_TOKEN_SECRET", "rotated")
+    assert card_signature("DE123456") == with_card_secret

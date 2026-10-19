@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, ApiError } from "@/app/lib/api";
+import { api, ApiError, safeNext } from "@/app/lib/api";
 import { useI18n, type TranslationKey } from "@/app/lib/i18n";
 
 const LOOKING_FOR_OPTIONS: { id: string; labelKey: TranslationKey; hintKey: TranslationKey }[] = [
@@ -174,14 +174,6 @@ export default function OnboardingPage() {
     setIsSaving(true);
     setFormError("");
     try {
-      await api("users/me", {
-        method: "PATCH",
-        body: {
-          first_name: current.firstName.trim(),
-          middle_name: current.middleName.trim() || null,
-          last_name: current.lastName.trim(),
-        },
-      });
       if (current.lookingFor.length) {
         await api("users/me/preferences", { method: "PATCH", body: { onboarding_goals: current.lookingFor } });
       }
@@ -193,9 +185,20 @@ export default function OnboardingPage() {
           body: { sex: current.sex, age_range: current.age },
         });
       }
-      // Done: straight to the dashboard. The health card is in the account
-      // menu and under Settings.
-      router.push("/interview");
+      // The name goes last: a saved name is what marks onboarding finished
+      // (see proxy.ts), so if an earlier save fails the patient comes back
+      // here rather than being let in with half their answers lost.
+      await api("users/me", {
+        method: "PATCH",
+        body: {
+          first_name: current.firstName.trim(),
+          middle_name: current.middleName.trim() || null,
+          last_name: current.lastName.trim(),
+        },
+      });
+      // Done: to the dashboard, or the page they were heading for. The
+      // health card is in the account menu and under Settings.
+      router.push(safeNext(new URLSearchParams(window.location.search).get("next"), "/interview"));
     } catch (error) {
       setFormError(error instanceof ApiError ? error.message : t("onboarding.error.save"));
     } finally {

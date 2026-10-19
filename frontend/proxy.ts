@@ -32,6 +32,18 @@ async function checkSession(request: NextRequest, token: string): Promise<{ sess
   return { session: "valid", onboarded: Boolean(profile?.onboarding_complete) };
 }
 
+/** A same-site path from ?next=, or null (never another site: no open redirect). */
+function safeNext(request: NextRequest): string | null {
+  const next = request.nextUrl.searchParams.get("next");
+  if (!next || !next.startsWith("/")) return null;
+  try {
+    const url = new URL(next, request.url);
+    return url.origin === request.nextUrl.origin ? url.pathname + url.search : null;
+  } catch {
+    return null;
+  }
+}
+
 function redirect(request: NextRequest, pathname: string, next?: string): NextResponse {
   const url = new URL(pathname, request.url);
   if (next) url.searchParams.set("next", next);
@@ -40,6 +52,11 @@ function redirect(request: NextRequest, pathname: string, next?: string): NextRe
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  // Link prefetches are not visits: the real navigation is checked when it
+  // happens, so a prefetch costs no backend call.
+  if (request.headers.get("next-router-prefetch")) return NextResponse.next();
+  // "Forgot password" works whether or not the patient is signed in.
+  if (pathname === "/signup" && request.nextUrl.searchParams.get("reset") === "1") return NextResponse.next();
   const isAuthPage = under(pathname, AUTH_PAGES);
   const token = request.cookies.get(SESSION_COOKIE)?.value;
 
@@ -62,9 +79,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!onboarded) {
-    return under(pathname, [ONBOARDING]) ? NextResponse.next() : redirect(request, ONBOARDING);
+    if (under(pathname, [ONBOARDING])) return NextResponse.next();
+    // Where they were heading, so onboarding can take them there after.
+    // The dashboard is where onboarding ends anyway, so it needs no next=.
+    const destination = isAuthPage ? safeNext(request) : pathname + search;
+    return redirect(request, ONBOARDING, destination && destination !== DASHBOARD ? destination : undefined);
   }
-  if (isAuthPage || under(pathname, [ONBOARDING])) return redirect(request, DASHBOARD);
+  if (isAuthPage) return redirect(request, safeNext(request) ?? DASHBOARD);
+  if (under(pathname, [ONBOARDING])) return redirect(request, safeNext(request) ?? DASHBOARD);
   return NextResponse.next();
 }
 

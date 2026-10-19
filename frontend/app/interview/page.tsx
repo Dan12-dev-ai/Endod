@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { healthCardFromProfile, loadHealthCard, type HealthCardInfo } from "../health-card/health-card-data";
+import { healthCardFromProfile, loadCardHolder, type HealthCardInfo } from "../health-card/health-card-data";
 import AppointmentsView from "./appointments-view";
 import BookingView from "./booking-view";
 import HomeView from "./home-view";
@@ -52,7 +52,7 @@ export default function Interview() {
   const [healthCard, setHealthCard] = useState<HealthCardInfo | null>(null);
   useEffect(() => {
     let cancelled = false;
-    loadHealthCard()
+    loadCardHolder()
       .then((hc) => {
         if (!cancelled) setHealthCard(hc);
       })

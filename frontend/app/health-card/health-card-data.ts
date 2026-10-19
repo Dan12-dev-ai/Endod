@@ -112,11 +112,20 @@ export function healthCardFromProfile(profile: ProfileForCard, qrLink = ""): Hea
   };
 }
 
-/** The signed-in patient's card, with its signed QR code (redirects to login when signed out). */
+/** Name and ID for the dashboard: the profile alone, no QR code. */
+export async function loadCardHolder(): Promise<HealthCardInfo> {
+  return healthCardFromProfile(await api<ProfileForCard>("users/me"));
+}
+
+/**
+ * The full card, with its signed QR code (redirects to login when signed out).
+ * If only the signature cannot be fetched, the card still shows, without a QR
+ * code, rather than not at all.
+ */
 export async function loadHealthCard(): Promise<HealthCardInfo> {
   const [profile, card] = await Promise.all([
     api<ProfileForCard>("users/me"),
-    api<CardSignature>("users/me/card"),
+    api<CardSignature>("users/me/card").catch(() => null),
   ]);
-  return healthCardFromProfile(profile, cardVerifyUrl(window.location.origin, card));
+  return healthCardFromProfile(profile, card ? cardVerifyUrl(window.location.origin, card) : "");
 }
