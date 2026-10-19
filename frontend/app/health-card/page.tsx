@@ -7,6 +7,7 @@ import { buildHealthCardHtml, type HealthCardData, type HealthCardLabels } from 
 import { ApiError } from "../lib/api";
 import { loadHealthCard, type HealthCardInfo } from "./health-card-data";
 import { useI18n } from "../lib/i18n";
+import { Bone, HealthCardBones, Skeleton } from "../components/skeleton";
 
 
 // ---------------------------------------------------------------------------
@@ -47,10 +48,17 @@ export default function HealthCardPage() {
           {loadError ? (
             <p className="text-sm text-red-600" role="alert">{loadError}</p>
           ) : (
-          <div className="animate-pulse">
-            <div className="h-4 bg-slate-200 rounded w-32 mx-auto mb-4"></div>
-            <div className="h-3 bg-slate-200 rounded w-48 mx-auto"></div>
-          </div>
+          <Skeleton className="bg-white rounded-[32px] border border-slate-100 p-6 sm:p-10 space-y-8" label={t("common.loading")}>
+            <HealthCardBones />
+            <div className="space-y-3 flex flex-col items-center">
+              <Bone className="h-5 w-44 rounded" />
+              <Bone className="h-3 w-64 rounded" />
+            </div>
+            <div className="flex gap-3">
+              <Bone className="h-11 flex-1 rounded-full" />
+              <Bone className="h-11 flex-1 rounded-full" />
+            </div>
+          </Skeleton>
           )}
         </div>
       </main>

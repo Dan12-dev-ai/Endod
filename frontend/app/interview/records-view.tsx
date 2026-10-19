@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { departmentLabel } from "./data";
+import { Bone } from "../components/skeleton";
 
 type MedicalRecord = {
   record_id: string;
@@ -170,6 +171,15 @@ export default function RecordsView({ highlightTarget, onToast, onOpenSettings }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {!data && !loadError && [0, 1, 2, 3].map((row) => (
+                  <tr data-purpose="skeleton" key={`skeleton-${row}`} aria-hidden>
+                    {[28, 40, 36, 32, 24].map((width, cell) => (
+                      <td className="px-5 py-4" key={cell}>
+                        <Bone className="h-3 rounded" style={{ width: `${width + ((row * 7 + cell * 5) % 20)}%` }} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
                 {data && records.length === 0 && (
                   <tr>
                     <td data-purpose="records-empty" colSpan={5} className="px-5 py-6 text-xs text-slate-500 text-center">

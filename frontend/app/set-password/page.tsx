@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import { AuthPageSkeleton } from "@/app/components/skeleton";
 import { useRouter, useSearchParams } from "next/navigation";
 import { passwordProblem } from "@/app/lib/api";
 import { useI18n } from "@/app/lib/i18n";
@@ -11,11 +12,7 @@ export default function SetPasswordPage() {
   // `useSearchParams()` needs a Suspense boundary for prerendering.
   return (
     <Suspense
-      fallback={
-        <main className="w-full min-h-screen flex items-center justify-center bg-[#DDE9E6] text-brand-primary font-sans antialiased">
-          <p className="text-sm text-brand-muted">Loading…</p>
-        </main>
-      }
+      fallback={<LoadingShell />}
     >
       <SetPassword />
     </Suspense>
@@ -210,4 +207,9 @@ function SetPassword() {
       </div>
     </main>
   );
+}
+
+function LoadingShell() {
+  const { t } = useI18n();
+  return <AuthPageSkeleton label={t("common.loading")} />;
 }

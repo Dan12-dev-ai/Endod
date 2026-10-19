@@ -15,6 +15,7 @@ import {
   localDateTimeToIso,
   TIME_WINDOWS,
 } from "./data";
+import { RowBones, Skeleton } from "../components/skeleton";
 
 type Props = {
   patientId: string;
@@ -226,7 +227,7 @@ export default function BookingView({ patientId, onToast }: Props) {
           <div className="flex items-center justify-between px-1">
             <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
               <span>{t("booking.hospitalsCenters")}</span>
-              <span className="text-xs font-normal text-slate-400">({t("booking.shown", { count: facilities.length })})</span>
+              {directory && <span className="text-xs font-normal text-slate-400">({t("booking.shown", { count: facilities.length })})</span>}
             </h3>
           </div>
 
@@ -235,6 +236,12 @@ export default function BookingView({ patientId, onToast }: Props) {
           )}
           {directory && facilities.length === 0 && !loadError && (
             <p data-purpose="hospital-empty" className="text-xs text-slate-500 px-1">{t("booking.noMatch")}</p>
+          )}
+
+          {!directory && !loadError && (
+            <Skeleton className="grid grid-cols-1 lg:grid-cols-2 gap-4" label={t("common.loading")}>
+              {[0, 1, 2, 3].map((i) => <RowBones key={i} />)}
+            </Skeleton>
           )}
 
           {/* Hospital Grid */}

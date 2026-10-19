@@ -16,6 +16,7 @@ import {
   localDateTimeToIso,
   TIME_WINDOWS,
 } from "./data";
+import { RowBones, Skeleton } from "../components/skeleton";
 
 type Props = {
   /** data-purpose of a card to highlight (from a notification link). */
@@ -409,6 +410,13 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                 <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" role="alert">{loadError}</p>
               )}
               <div data-purpose={`appointment-${tab}-list`} className="space-y-3">
+                {!appointments && !loadError && (
+                  <Skeleton className="space-y-3" label={t("common.loading")}>
+                    <RowBones />
+                    <RowBones />
+                    <RowBones />
+                  </Skeleton>
+                )}
                 {appointments && visible.length === 0 && (
                   <p data-purpose="appointment-empty" className="text-xs text-slate-500 bg-white border border-slate-200 rounded-2xl p-4">
                     {tab === "upcoming" ? t("appointments.emptyUpcoming")

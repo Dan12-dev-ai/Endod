@@ -6,6 +6,7 @@ import { logout } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { accountName, homeFor, useSession } from "../lib/session";
 import LanguageSwitcher from "./language-switcher";
+import { Bone } from "./skeleton";
 
 export default function Header() {
   const { t } = useI18n();
@@ -143,7 +144,7 @@ function AccountArea() {
   }, [open]);
 
   // Same width as the buttons, so the bar does not jump when the check finishes.
-  if (session.status === "loading") return <div aria-hidden className="w-28 h-9" />;
+  if (session.status === "loading") return <Bone className="w-28 h-9 rounded-full bg-white/15" />;
 
   if (session.status === "signed-out") {
     return (
