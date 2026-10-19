@@ -82,6 +82,11 @@ test.describe('Dashboard language', () => {
     await page.keyboard.press('End');
     await page.keyboard.press('Enter');
     await expect(page.locator('html')).toHaveAttribute('lang', 'am');
+    // The account save runs in the background: let it land before afterEach
+    // resets the account, or it could land after and leak into the next test.
+    await expect
+      .poll(async () => (await (await page.request.get('/api/backend/users/me/preferences')).json()).language)
+      .toBe('am');
   });
 });
 
@@ -89,6 +94,7 @@ test.describe('Phone tab bar', () => {
   test.use({ viewport: { width: 360, height: 740 } });
 
   test('every tab opens its section, and there is no Live tab', async ({ page }) => {
+    await page.request.patch('/api/backend/users/me/preferences', { data: { language: 'en' } });
     await page.goto('/interview', { waitUntil: 'networkidle' });
     const bar = page.locator('[data-purpose="mobile-nav"]');
     await expect(bar.getByText('Live', { exact: true })).toHaveCount(0);
