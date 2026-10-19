@@ -20,10 +20,15 @@ export type SessionState =
   | { status: "signed-in"; profile: SessionProfile };
 
 // One request per page load, however many components ask (the header and
-// the hero both do). Signing in or out reloads the page, which starts afresh.
+// the hero both do). Signing out reloads the page; signing in navigates
+// within the app, so it calls forgetSession() to have the next page ask again.
 let pending: Promise<SessionState> | null = null;
 
-function fetchSession(): Promise<SessionState> {
+export function forgetSession(): void {
+  pending = null;
+}
+
+export function fetchSession(): Promise<SessionState> {
   pending ??= fetch("/api/auth/session", { cache: "no-store" })
     .then(async (response): Promise<SessionState> => {
       const data = await response.json().catch(() => ({}));
