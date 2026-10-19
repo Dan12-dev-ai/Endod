@@ -112,11 +112,6 @@ export function healthCardFromProfile(profile: ProfileForCard, qrLink = ""): Hea
   };
 }
 
-/** Name and ID for the dashboard: the profile alone, no QR code. */
-export async function loadCardHolder(): Promise<HealthCardInfo> {
-  return healthCardFromProfile(await api<ProfileForCard>("users/me"));
-}
-
 /**
  * The full card, with its signed QR code (redirects to login when signed out).
  * If only the signature cannot be fetched, the card still shows, without a QR

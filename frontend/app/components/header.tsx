@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { logout } from "../lib/api";
-import { LANGUAGES, useI18n } from "../lib/i18n";
+import { useI18n } from "../lib/i18n";
 import { accountName, homeFor, useSession } from "../lib/session";
+import LanguageSwitcher, { saveAccountLanguage } from "./language-switcher";
 
 export default function Header() {
-  const { t, language, setLanguage } = useI18n();
-  const [langOpen, setLangOpen] = useState(false);
+  const { t } = useI18n();
+  const session = useSession();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -17,8 +18,6 @@ export default function Header() {
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-
-  const currentLanguage = LANGUAGES.find((l) => l.code === language) ?? LANGUAGES[0];
 
   return (
     <>
@@ -113,64 +112,10 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-3">
-        {/* Language Selection */}
-        <div className="relative">
-          <button
-            aria-expanded={langOpen}
-            aria-haspopup="listbox"
-            aria-label={t("nav.selectLanguage")}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-neutral-400 text-white hover:bg-white hover:text-black transition-all text-[13px] font-medium tracking-wide focus:outline-none cursor-pointer"
-            data-purpose="language-select"
-            onClick={() => setLangOpen((open) => !open)}
-            type="button"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.8}
-              viewBox="0 0 24 24"
-            >
-              <path d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10m-1.314-3H9.314" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span>{currentLanguage.label}</span>
-            <svg
-              className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${langOpen ? "rotate-180" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-            >
-              <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-
-          {langOpen && (
-            <div
-              className="absolute right-0 top-full mt-2 w-40 bg-white text-slate-800 rounded-md shadow-2xl py-1.5 border border-slate-100 flex flex-col text-[14px] z-50"
-              data-purpose="language-menu"
-              role="listbox"
-            >
-              {LANGUAGES.map((lang) => (
-                <button
-                  aria-selected={language === lang.code}
-                  className={`text-left px-4 py-2 transition-colors cursor-pointer ${language === lang.code ? "bg-slate-100 text-black font-semibold" : "hover:bg-slate-100 hover:text-black"}`}
-                  data-purpose={`language-option-${lang.code}`}
-                  key={lang.code}
-                  lang={lang.code}
-                  onClick={() => {
-                    setLanguage(lang.code);
-                    setLangOpen(false);
-                  }}
-                  role="option"
-                  type="button"
-                >
-                  {lang.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <LanguageSwitcher
+          onChange={session.status === "signed-in" ? saveAccountLanguage : undefined}
+          tone="dark"
+        />
 
         <AccountArea />
         </div>

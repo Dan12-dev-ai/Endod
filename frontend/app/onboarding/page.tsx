@@ -40,7 +40,7 @@ const AGE_RANGES = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
 
   const [step, setStep] = useState(0);
   const [formError, setFormError] = useState("");
@@ -174,9 +174,12 @@ export default function OnboardingPage() {
     setIsSaving(true);
     setFormError("");
     try {
-      if (current.lookingFor.length) {
-        await api("users/me/preferences", { method: "PATCH", body: { onboarding_goals: current.lookingFor } });
-      }
+      // The language picked so far becomes the account's, so it follows the
+      // patient to other devices (and SMS can use it).
+      await api("users/me/preferences", {
+        method: "PATCH",
+        body: { language, ...(current.lookingFor.length ? { onboarding_goals: current.lookingFor } : {}) },
+      });
       // Sex and age are health information: stored only with consent.
       if (current.healthConsent) {
         await api("users/me/consent", { method: "PATCH", body: { treatment_processing: true } });

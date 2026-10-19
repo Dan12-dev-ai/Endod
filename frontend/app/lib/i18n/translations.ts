@@ -282,7 +282,6 @@ export const en = {
 
   // ===== Interview shell =====
   "interview.nav.home": "Home",
-  "interview.nav.live": "Live",
   "interview.nav.booking": "Booking",
   "interview.nav.appointment": "Appointment",
   "interview.nav.medicalRecord": "Medical Record",
@@ -911,7 +910,6 @@ export const am: Dictionary = {
 
   // ===== Interview shell =====
   "interview.nav.home": "መነሻ",
-  "interview.nav.live": "ቀጥታ",
   "interview.nav.booking": "ቀጠሮ ማስያዝ",
   "interview.nav.appointment": "ቀጠሮ",
   "interview.nav.medicalRecord": "የሕክምና መዝገብ",
