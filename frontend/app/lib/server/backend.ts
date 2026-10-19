@@ -45,7 +45,9 @@ export function clientAddress(request: NextRequest): string | null {
 export async function callBackend(
   request: NextRequest,
   path: string,
-  options: { method?: string; body?: unknown; rawBody?: string; token?: string | null; search?: string } = {},
+  options: {
+    method?: string; body?: unknown; rawBody?: string; token?: string | null; search?: string; timeoutMs?: number;
+  } = {},
 ): Promise<BackendResult> {
   const headers: Record<string, string> = { Accept: "application/json" };
   const body = options.rawBody ?? (options.body === undefined ? undefined : JSON.stringify(options.body));
@@ -63,7 +65,7 @@ export async function callBackend(
       headers,
       body,
       cache: "no-store",
-      signal: AbortSignal.timeout(BACKEND_TIMEOUT_MS),
+      signal: AbortSignal.timeout(options.timeoutMs ?? BACKEND_TIMEOUT_MS),
     });
   } catch (error) {
     console.error("[backend] request failed", path, error);

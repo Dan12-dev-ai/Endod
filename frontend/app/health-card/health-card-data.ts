@@ -70,8 +70,24 @@ export function getIssuedDate(createdAt: string): string {
   return new Date(createdAt).toLocaleDateString("en-ET", { year: "numeric", month: "short", day: "numeric" });
 }
 
-/** Card data from a profile. The patient ID is the DEDAN ID. */
-export function healthCardFromProfile(profile: ProfileForCard): HealthCardInfo {
+/** GET /users/me/card: the DEDAN ID and the server's signature over it. */
+export type CardSignature = { dedan_user_id: string; signature: string };
+
+/**
+ * The link in the QR code. Scanning it opens /card/<ID>, which asks the
+ * backend whether the signature is genuine; a card with an altered or
+ * made-up ID does not verify. The link holds no health data.
+ */
+export function cardVerifyUrl(origin: string, card: CardSignature): string {
+  return `${origin}/card/${encodeURIComponent(card.dedan_user_id)}?s=${encodeURIComponent(card.signature)}`;
+}
+
+/**
+ * Card data from a profile. The patient ID is the DEDAN ID. The QR code is
+ * drawn only with a signed verification link (`qrLink`); without one (e.g.
+ * the name-only uses on the dashboard) it is left empty.
+ */
+export function healthCardFromProfile(profile: ProfileForCard, qrLink = ""): HealthCardInfo {
   const firstName = profile.first_name ?? "";
   const middleName = profile.middle_name ?? "";
   const lastName = profile.last_name ?? "";
@@ -80,8 +96,7 @@ export function healthCardFromProfile(profile: ProfileForCard): HealthCardInfo {
     : getFullName(firstName, middleName, lastName);
   const createdAt = profile.created_at ?? "";
   const userId = profile.dedan_user_id;
-  // Only the ID: the QR code is printable and scannable, so no health data.
-  const qrData = `endod:${userId}`;
+  const qrData = qrLink;
 
   return {
     firstName,
@@ -93,11 +108,24 @@ export function healthCardFromProfile(profile: ProfileForCard): HealthCardInfo {
     issuedDate: getIssuedDate(createdAt),
     expiryDate: getExpiryDate(createdAt),
     qrData,
-    qrSvg: qrMatrixToSvg(generateQrMatrix(qrData), 152),
+    qrSvg: qrData ? qrMatrixToSvg(generateQrMatrix(qrData), 152) : "",
   };
 }
 
-/** The signed-in patient's card (redirects to login when signed out). */
-export async function loadHealthCard(): Promise<HealthCardInfo> {
+/** Name and ID for the dashboard: the profile alone, no QR code. */
+export async function loadCardHolder(): Promise<HealthCardInfo> {
   return healthCardFromProfile(await api<ProfileForCard>("users/me"));
+}
+
+/**
+ * The full card, with its signed QR code (redirects to login when signed out).
+ * If only the signature cannot be fetched, the card still shows, without a QR
+ * code, rather than not at all.
+ */
+export async function loadHealthCard(): Promise<HealthCardInfo> {
+  const [profile, card] = await Promise.all([
+    api<ProfileForCard>("users/me"),
+    api<CardSignature>("users/me/card").catch(() => null),
+  ]);
+  return healthCardFromProfile(profile, card ? cardVerifyUrl(window.location.origin, card) : "");
 }

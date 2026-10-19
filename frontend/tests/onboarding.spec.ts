@@ -13,13 +13,20 @@ async function newPatientSignedIn(page: Page) {
     data: { first_name: 'New', last_name: 'Person', email, password: PASSWORD, password_confirmation: PASSWORD },
   });
   expect(registered.status()).toBe(201);
+  // Registering by email takes a name; a phone sign-up does not. Clear it so
+  // this account is where a new phone sign-up is: onboarding not finished.
+  const token = (await registered.json()).access_token as string;
+  const cleared = await backend.patch('/users/me', {
+    headers: { Authorization: token }, data: { first_name: null, last_name: null },
+  });
+  expect(cleared.ok()).toBeTruthy();
   await backend.dispose();
   const login = await page.request.post('/api/auth/login', { data: { identifier: email, password: PASSWORD } });
   expect(login.ok()).toBeTruthy();
 }
 
-async function answerUpToAge(page: Page) {
-  await page.goto('/onboarding');
+async function answerUpToAge(page: Page, { open = true } = {}) {
+  if (open) await page.goto('/onboarding');
   await page.locator('#first-name').fill('Almaz');
   await page.locator('#last-name').fill('Bekele');
   await page.locator('#last-name').press('Enter');
@@ -42,8 +49,7 @@ test.describe('Onboarding', () => {
     await page.waitForTimeout(800);
     await expect(page).toHaveURL(/\/onboarding$/);
     await page.locator('[data-purpose="finish-onboarding"]').click();
-    await expect(page).toHaveURL(/\/health-card$/);
-    await expect(page.getByText('Almaz Bekele').first()).toBeVisible();
+    await expect(page).toHaveURL(/\/interview$/);
 
     const health = await (await page.request.get('/api/backend/users/me/health-profile')).json();
     expect(health.sex).toBe('female');
@@ -56,11 +62,41 @@ test.describe('Onboarding', () => {
 
     await page.getByLabel('41–60').check({ force: true });
     await page.locator('[data-purpose="finish-onboarding"]').click();
-    await expect(page).toHaveURL(/\/health-card$/);
+    await expect(page).toHaveURL(/\/interview$/);
 
     const consent = await (await page.request.get('/api/backend/users/me/consent')).json();
     expect(consent.treatment_processing).toBe(false);
     const profile = await (await page.request.get('/api/backend/users/me')).json();
     expect(profile.first_name).toBe('Almaz');
+  });
+});
+
+test.describe('Onboarding redirects', () => {
+  test('an unfinished onboarding comes first, and a finished one is not shown again', async ({ page }) => {
+    await newPatientSignedIn(page);
+    await page.goto('/interview');
+    await expect(page).toHaveURL(/\/onboarding$/);
+    await page.goto('/health-card');
+    await expect(page).toHaveURL(/\/onboarding\?next=%2Fhealth-card$/);
+
+    await answerUpToAge(page);
+    await page.getByLabel('41–60').check({ force: true });
+    await page.locator('[data-purpose="finish-onboarding"]').click();
+    await expect(page).toHaveURL(/\/interview$/);
+
+    await page.goto('/onboarding');
+    await expect(page).toHaveURL(/\/interview$/);
+  });
+});
+
+test.describe('Onboarding keeps the destination', () => {
+  test('a page asked for before onboarding opens after it', async ({ page }) => {
+    await newPatientSignedIn(page);
+    await page.goto('/health-card');
+    await expect(page).toHaveURL(/\/onboarding\?next=%2Fhealth-card$/);
+    await answerUpToAge(page, { open: false });
+    await page.getByLabel('41–60').check({ force: true });
+    await page.locator('[data-purpose="finish-onboarding"]').click();
+    await expect(page).toHaveURL(/\/health-card$/);
   });
 });

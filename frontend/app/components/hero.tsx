@@ -2,9 +2,14 @@
 
 import Link from "next/link";
 import { useI18n } from "../lib/i18n";
+import { homeFor, useSession } from "../lib/session";
 
 export default function Hero() {
   const { t } = useI18n();
+  const session = useSession();
+  // A signed-in patient goes straight to their dashboard (proxy.ts would
+  // redirect /signup there anyway; this also says so on the button).
+  const signedIn = session.status === "signed-in";
   return (
     <section className="relative w-full min-h-screen bg-slate-900 text-white overflow-hidden flex items-center" data-purpose="hero-banner">
       {/* Hero Background Image with Overlay */}
@@ -29,8 +34,8 @@ export default function Hero() {
           </p>
           {/* CTA Pill Button */}
           <div>
-            <Link data-purpose="hero-cta" className="inline-flex items-center gap-3.5 px-6 py-2.5 rounded-full border border-white/80 bg-black/40 hover:bg-white hover:text-black text-white transition-all duration-200 text-[15px] font-medium group" href="/signup">
-              <span>{t("hero.cta")}</span>
+            <Link data-purpose="hero-cta" className="inline-flex items-center gap-3.5 px-6 py-2.5 rounded-full border border-white/80 bg-black/40 hover:bg-white hover:text-black text-white transition-all duration-200 text-[15px] font-medium group" href={signedIn ? homeFor(session.profile) : "/signup"}>
+              <span>{signedIn ? t("hero.ctaSignedIn") : t("hero.cta")}</span>
               <span className="w-6 h-6 rounded-full bg-white text-black flex items-center justify-center group-hover:bg-black group-hover:text-white transition-colors">
                 <svg className="w-3.5 h-3.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" />
