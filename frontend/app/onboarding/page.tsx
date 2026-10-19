@@ -193,7 +193,9 @@ export default function OnboardingPage() {
           body: { sex: current.sex, age_range: current.age },
         });
       }
-      router.push("/health-card");
+      // Done: straight to the dashboard. The health card is in the account
+      // menu and under Settings.
+      router.push("/interview");
     } catch (error) {
       setFormError(error instanceof ApiError ? error.message : t("onboarding.error.save"));
     } finally {

@@ -316,6 +316,10 @@ def _profile_payload(user: User, include_health: bool = False) -> Dict[str, Any]
         "first_name": getattr(profile, "first_name", None),
         "middle_name": getattr(profile, "middle_name", None),
         "last_name": getattr(profile, "last_name", None),
+        # Onboarding asks for the name first and saves it at the end, so a
+        # first and last name mean it was finished. The portal sends a patient
+        # without them back to onboarding, and one with them to the dashboard.
+        "onboarding_complete": bool(getattr(profile, "first_name", None) and getattr(profile, "last_name", None)),
         "address_line": getattr(profile, "address_line", None),
         "city": getattr(profile, "city", None),
         "region": getattr(profile, "region", None),

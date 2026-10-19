@@ -36,6 +36,10 @@ services:
       ALLOWED_HOSTS: backend,localhost,127.0.0.1
       # The web app forwards the patient's address; per-patient rate limits.
       TRUST_PROXY_HEADERS: "true"
+      # General API limit per address. Opening the dashboard alone makes about
+      # eight calls, and mobile carriers put many people behind one address;
+      # sign-in and SMS codes keep their own, much stricter limits.
+      RATE_LIMIT_REQUESTS: "240"
       DEBUG: "false"
     depends_on:
       postgres:

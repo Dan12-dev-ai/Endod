@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, passwordProblem } from "../lib/api";
 import { formatPhoneDisplay, type ProfileForCard } from "../health-card/health-card-data";
@@ -613,9 +614,14 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
               <h2 className="text-lg font-bold text-slate-900">{t("settings.card.title")}</h2>
               <p className="text-xs sm:text-sm text-slate-500">{t("settings.card.subtitle")}</p>
             </div>
-            <button type="button" onClick={() => setCardVisible(!cardVisible)} className="self-start sm:self-auto px-3.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold border border-emerald-200">
-              {cardVisible ? t("settings.card.hidePreview") : t("settings.card.showPreview")}
-            </button>
+            <div className="flex gap-2 self-start sm:self-auto">
+              <button type="button" onClick={() => setCardVisible(!cardVisible)} className="px-3.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold border border-emerald-200">
+                {cardVisible ? t("settings.card.hidePreview") : t("settings.card.showPreview")}
+              </button>
+              <Link data-purpose="open-health-card" href="/health-card" className="px-3.5 py-1.5 rounded-lg bg-[#1e5852] hover:bg-[#174640] text-white text-xs font-semibold">
+                {t("settings.card.open")}
+              </Link>
+            </div>
           </div>
 
           {cardVisible && (
