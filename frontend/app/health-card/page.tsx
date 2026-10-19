@@ -179,14 +179,15 @@ export default function HealthCardPage() {
       // Render QR code via qrcode library
       // A white margin of 4 modules (the QR "quiet zone") is part of the
       // code: without it, scanners cannot find the code on the dark card.
-      // Drawn 1:1 at a whole number of pixels per module: scaling a QR code
-      // by a fraction makes some modules wider than others, which scanners
-      // misread. Centred in the 132 px box.
-      const modules = QRCode.create(qrData, { errorCorrectionLevel: "M" }).modules.size + 8;
-      const scale = Math.max(1, Math.floor(132 / modules));
+      // Drawn 1:1 at a whole number of pixels per module (scaling a QR code by
+      // a fraction makes some modules wider than others, which scanners
+      // misread), as large as fits the 132 px white box while leaving at
+      // least 3 modules of white around it: the box is the quiet zone.
+      const modules = QRCode.create(qrData, { errorCorrectionLevel: "M" }).modules.size;
+      const scale = Math.max(1, Math.floor(132 / (modules + 6)));
       const qrCanvas = await QRCode.toCanvas(qrData, {
         scale,
-        margin: 4,
+        margin: 0,
         color: { dark: "#000000", light: "#ffffff" },
         errorCorrectionLevel: "M",
       });
