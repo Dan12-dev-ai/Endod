@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, passwordProblem } from "../lib/api";
-import { BLOOD_TYPES, formatPhoneDisplay, type ProfileForCard } from "../health-card/health-card-data";
+import {
+  BLOOD_TYPES, formatPhoneDisplay, invalidateHealthCard, splitAllergies, type ProfileForCard,
+} from "../health-card/health-card-data";
 import { useI18n, type TranslationKey } from "../lib/i18n";
 import { Bone, FieldBones, Skeleton } from "../components/skeleton";
 
@@ -189,6 +191,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       setProfile(updated);
       applyPersonal(updated);
       onProfileChange(updated);
+      invalidateHealthCard();
       onToast(t("settings.toast.profileSavedTitle"), t("settings.toast.profileSaved"));
     } catch (error) {
       onToast(t("common.couldNotSave"), message(error, t("settings.toast.checkDetails")));
@@ -264,6 +267,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       const updated = linked.profile as Profile;
       setProfile(updated);
       onProfileChange(updated);
+      invalidateHealthCard();
       setPhoneStep("idle");
       onToast(t("settings.toast.phoneVerifiedTitle"), t("settings.toast.phoneVerified"));
     } catch (error) {
@@ -314,6 +318,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     setBusy(field);
     try {
       const consent = await api<Profile["consent"]>("users/me/consent", { method: "PATCH", body: { [field]: value } });
+      invalidateHealthCard();
       setProfile((p) => (p ? { ...p, consent: { ...p.consent, ...consent } } : p));
       if (field === "treatment_processing") {
         if (value) {
@@ -359,12 +364,13 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         method: "PATCH",
         body: {
           blood_type: bloodType || null,
-          allergies: allergies.split(",").map((a) => a.trim()).filter(Boolean),
+          allergies: splitAllergies(allergies),
           emergency_contact_name: emergencyName.trim() || null,
           emergency_contact_phone: emergencyPhone.trim() || null,
         },
       });
       applyHealth(updated);
+      invalidateHealthCard();
       onToast(t("settings.toast.cardUpdatedTitle"), t("settings.toast.cardUpdated"));
     } catch (error) {
       onToast(t("common.couldNotSave"), message(error, t("settings.toast.checkDetails")));
@@ -675,7 +681,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                 </div>
                 <div>
                   <label className={labelClass} htmlFor="allergies">{t("settings.card.allergiesLabel")}</label>
-                  <input id="allergies" type="text" value={allergies} onChange={(e) => setAllergies(e.target.value)} placeholder={t("settings.card.allergiesPlaceholder")} className={inputClass} />
+                  <input id="allergies" type="text" maxLength={300} value={allergies} onChange={(e) => setAllergies(e.target.value)} placeholder={t("settings.card.allergiesPlaceholder")} className={inputClass} />
                 </div>
                 <div>
                   <label className={labelClass} htmlFor="emergency-contact">{t("settings.card.emergencyName")}</label>

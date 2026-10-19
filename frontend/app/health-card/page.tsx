@@ -6,7 +6,7 @@ import QRCode from "qrcode";
 import { buildHealthCardHtml, type HealthCardData, type HealthCardLabels } from "./card-svg";
 import { ApiError } from "../lib/api";
 import HealthCardView from "./card-view";
-import { loadHealthCard, medicalLines, type HealthCardInfo } from "./health-card-data";
+import { fitAllergies, loadHealthCard, medicalLines, type HealthCardInfo } from "./health-card-data";
 import { useI18n } from "../lib/i18n";
 import { Bone, HealthCardBones, Skeleton } from "../components/skeleton";
 
@@ -90,7 +90,8 @@ export default function HealthCardPage() {
     phone: phoneDisplay,
     blood: lines.blood,
     allergies: lines.allergies,
-    emergency: lines.emergencyPhone ? `${lines.emergency} · ${lines.emergencyPhone}` : lines.emergency,
+    emergency: lines.emergency,
+    emergencyPhone: lines.emergencyPhone,
     issuedDate,
     expiryDate,
     qrSvg,
@@ -178,14 +179,21 @@ export default function HealthCardPage() {
       // Render QR code via qrcode library
       // A white margin of 4 modules (the QR "quiet zone") is part of the
       // code: without it, scanners cannot find the code on the dark card.
+      // Drawn 1:1 at a whole number of pixels per module: scaling a QR code
+      // by a fraction makes some modules wider than others, which scanners
+      // misread. Centred in the 132 px box.
+      const modules = QRCode.create(qrData, { errorCorrectionLevel: "M" }).modules.size + 8;
+      const scale = Math.max(1, Math.floor(132 / modules));
       const qrCanvas = await QRCode.toCanvas(qrData, {
-        width: 264,
+        scale,
         margin: 4,
         color: { dark: "#000000", light: "#ffffff" },
         errorCorrectionLevel: "M",
       });
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(qrCanvas, 80, 268, 132, 132);
+      const qrSide = modules * scale;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(80, 268, 132, 132);
+      ctx.drawImage(qrCanvas, 80 + Math.floor((132 - qrSide) / 2), 268 + Math.floor((132 - qrSide) / 2));
 
       // Brand
       ctx.fillStyle = "#94e0c0";
@@ -211,31 +219,50 @@ export default function HealthCardPage() {
       ctx.fillText(labels.scanToVerify.toUpperCase(), 146, 420);
       ctx.textAlign = "left";
 
-      // Details: two columns, three rows, beside the QR code
+      // Details beside the QR code: phone | blood group; allergies across the
+      // width; emergency contact (name, then phone) | expiry.
       const fitText = (text: string, maxWidth: number) => {
         if (ctx.measureText(text).width <= maxWidth) return text;
         let cut = text;
         while (cut.length > 1 && ctx.measureText(`${cut}…`).width > maxWidth) cut = cut.slice(0, -1);
         return `${cut}…`;
       };
-      const grid: [string, string, string][] = [
-        [labels.phone, phoneDisplay, "#ffffff"],
-        [labels.bloodGroup, lines.blood, card.medical?.bloodType ? "#fca5a5" : "#ffffff"],
-        [labels.allergies, lines.allergies, "#ffffff"],
-        [labels.emergency, cardData.emergency, "#ffffff"],
-        [labels.issued, issuedDate, "#ffffff"],
-        [labels.expires, expiryDate, "#6ee7b7"],
-      ];
-      grid.forEach(([label, value, colour], i) => {
-        const x = i % 2 === 0 ? 244 : 470;
-        const y = 282 + Math.floor(i / 2) * 52;
+      const label = (text: string, x: number, y: number) => {
         ctx.fillStyle = "#94a3a8";
         ctx.font = "bold 10px Arial";
-        ctx.fillText(fitText(label.toUpperCase(), 200), x, y);
+        ctx.fillText(fitText(text.toUpperCase(), 200), x, y);
+      };
+      const value = (text: string, x: number, y: number, colour = "#ffffff", width = 200) => {
         ctx.fillStyle = colour;
         ctx.font = "bold 15px Arial";
-        ctx.fillText(fitText(value, 200), x, y + 22);
-      });
+        ctx.fillText(fitText(text, width), x, y);
+      };
+      label(labels.phone, 244, 276);
+      value(phoneDisplay, 244, 296);
+      label(labels.bloodGroup, 470, 276);
+      value(lines.blood, 470, 296, card.medical?.bloodType ? "#fca5a5" : "#ffffff");
+
+      label(labels.allergies, 244, 324);
+      ctx.fillStyle = "#ffffff";
+      let allergySize = 15;
+      const allergyWidth = 426;
+      const allergyFits = (text: string) => ctx.measureText(text).width <= allergyWidth;
+      ctx.font = `bold ${allergySize}px Arial`;
+      while (allergySize > 11 && !allergyFits(lines.allergies)) {
+        allergySize -= 1;
+        ctx.font = `bold ${allergySize}px Arial`;
+      }
+      ctx.fillText(fitAllergies(card.medical?.allergies ?? [], allergyFits), 244, 344);
+
+      label(labels.emergency, 244, 372);
+      value(lines.emergency, 244, 392);
+      if (lines.emergencyPhone) {
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.font = "bold 13px Arial";
+        ctx.fillText(lines.emergencyPhone, 244, 410);
+      }
+      label(labels.expires, 470, 372);
+      value(expiryDate, 470, 392, "#6ee7b7");
 
       // Trigger download
       const link = document.createElement("a");

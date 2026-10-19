@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { useI18n, type TranslationKey } from "../lib/i18n";
 import { type Appointment, appointmentTitle, formatWhen } from "./data";
 import { Bone, HealthCardBones, InlineSkeleton, Skeleton } from "../components/skeleton";
 import HealthCardView from "../health-card/card-view";
-import { loadHealthCard, type HealthCardInfo } from "../health-card/health-card-data";
+import { invalidateHealthCard, loadHealthCard, type HealthCardInfo } from "../health-card/health-card-data";
 
 type Props = {
   firstName: string;
@@ -29,15 +30,14 @@ export default function HomeView({ firstName, onNavigate }: Props) {
   const [unread, setUnread] = useState<number | null | undefined>(undefined);
   const [card, setCard] = useState<HealthCardInfo | null | undefined>(undefined);
   const [qrOpen, setQrOpen] = useState(false);
+  const closeQr = useCallback(() => setQrOpen(false), []);
+  const [cardAttempt, setCardAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     api<Appointment[]>("users/me/appointments", { query: { upcoming_only: true, limit: 1 } })
       .then((list) => !cancelled && setNext(list[0] ?? null))
       .catch(() => !cancelled && setNext(null));
-    loadHealthCard()
-      .then((info) => !cancelled && setCard(info))
-      .catch(() => !cancelled && setCard(null));
     api<{ unread_count: number }>("users/me/inbox", { query: { limit: 1 } })
       .then((page) => !cancelled && setUnread(page.unread_count))
       .catch(() => !cancelled && setUnread(null));
@@ -45,6 +45,17 @@ export default function HomeView({ firstName, onNavigate }: Props) {
       cancelled = true;
     };
   }, []);
+
+  // The card loads on its own, so "Try again" can repeat just this part.
+  useEffect(() => {
+    let cancelled = false;
+    loadHealthCard()
+      .then((info) => !cancelled && setCard(info))
+      .catch(() => !cancelled && setCard(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [cardAttempt]);
 
   return (
     <div data-purpose="home-view" className="flex-1 min-h-0 overflow-y-auto">
@@ -66,7 +77,22 @@ export default function HomeView({ firstName, onNavigate }: Props) {
                 </Skeleton>
               ) : card ? (
                 <HealthCardView card={card} />
-              ) : null}
+              ) : (
+                <div className="aspect-[1.586] w-full rounded-2xl border border-dashed border-slate-300 flex flex-col items-center justify-center gap-3 p-6 text-center" data-purpose="home-card-error" role="alert">
+                  <p className="text-sm text-slate-600">{t("home.cardLoadError")}</p>
+                  <button
+                    className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      invalidateHealthCard();
+                      setCard(undefined);
+                      setCardAttempt((n) => n + 1);
+                    }}
+                    type="button"
+                  >
+                    {t("common.tryAgain")}
+                  </button>
+                </div>
+              )}
             </div>
             <div className="space-y-4">
               <div>
@@ -94,7 +120,12 @@ export default function HomeView({ firstName, onNavigate }: Props) {
                   {t("home.openCard")}
                 </Link>
               </div>
-              {card && !hasMedical(card) && (
+              {card?.medicalUnavailable && (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5" data-purpose="home-health-unavailable">
+                  {t("home.healthDetailsUnavailable")}
+                </p>
+              )}
+              {card && !card.medicalUnavailable && !hasMedical(card) && (
                 <button
                   className="w-full text-left text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 hover:bg-emerald-100 transition"
                   data-purpose="home-add-health-details"
@@ -148,7 +179,7 @@ export default function HomeView({ firstName, onNavigate }: Props) {
           ))}
         </div>
       </div>
-      {qrOpen && card?.qrSvg && <QrScreen card={card} onClose={() => setQrOpen(false)} />}
+      {qrOpen && card?.qrSvg && <QrScreen card={card} onClose={closeQr} />}
     </div>
   );
 }
@@ -156,7 +187,7 @@ export default function HomeView({ firstName, onNavigate }: Props) {
 /** True when the card has any of the emergency details. */
 function hasMedical(card: HealthCardInfo): boolean {
   const m = card.medical;
-  return Boolean(m && (m.bloodType || m.allergies.length || m.emergencyName));
+  return Boolean(m && (m.bloodType || m.allergies.length || m.emergencyName || m.emergencyPhone));
 }
 
 /**
@@ -171,21 +202,31 @@ function QrScreen({ card, onClose }: { card: HealthCardInfo; onClose: () => void
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     closeRef.current?.focus();
+    // Escape closes; Tab stays on the dialog's only control (focus never
+    // wanders to the page hidden behind it).
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
+      if (event.key === "Tab") {
+        event.preventDefault();
+        closeRef.current?.focus();
+      }
     };
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflow;
       previous?.focus();
     };
   }, [onClose]);
 
-  return (
+  // Rendered at the end of <body>, above everything (toasts included).
+  return createPortal((
     <div
       aria-labelledby="qr-screen-title"
       aria-modal="true"
-      className="fixed inset-0 z-50 bg-white flex flex-col items-center justify-center p-6"
+      className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6"
       data-purpose="qr-screen"
       onClick={onClose}
       role="dialog"
@@ -211,5 +252,5 @@ function QrScreen({ card, onClose }: { card: HealthCardInfo; onClose: () => void
         </button>
       </div>
     </div>
-  );
+  ), document.body);
 }

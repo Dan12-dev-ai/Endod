@@ -23,6 +23,7 @@ export type HealthCardData = {
   blood: string;
   allergies: string;
   emergency: string;
+  emergencyPhone: string;
   issuedDate: string;
   expiryDate: string;
   qrSvg: string; // raw svg string from qrMatrixToSvg
@@ -75,9 +76,8 @@ export function buildHealthCardHtml(d: HealthCardData): string {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;flex:1;min-width:0">
         ${field(d.labels.phone, d.phone)}
         ${field(d.labels.bloodGroup, d.blood, d.blood !== "—" ? "#fca5a5" : undefined)}
-        ${field(d.labels.allergies, d.allergies)}
-        ${field(d.labels.emergency, d.emergency)}
-        ${field(d.labels.issued, d.issuedDate)}
+        <div style="grid-column:1 / span 2;min-width:0"><span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#94a3a8">${escapeXml(d.labels.allergies)}</span><div style="font-size:14px;font-weight:600;margin-top:4px;line-height:1.35;overflow-wrap:anywhere">${escapeXml(d.allergies)}</div></div>
+        <div style="min-width:0"><span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#94a3a8">${escapeXml(d.labels.emergency)}</span><div style="font-size:14px;font-weight:600;margin-top:4px;overflow-wrap:anywhere">${escapeXml(d.emergency)}</div>${d.emergencyPhone ? `<div style="font-size:13px;font-weight:600;margin-top:2px;opacity:0.85;white-space:nowrap">${escapeXml(d.emergencyPhone)}</div>` : ""}</div>
         ${field(d.labels.expires, d.expiryDate, "#6ee7b7")}
       </div>
     </div>

@@ -119,3 +119,55 @@ test.describe('The card on the Overview', () => {
     expect(qr!.width).toBeGreaterThanOrEqual(64);
   });
 });
+
+test.describe('The Overview card, edge cases', () => {
+  test.afterEach(async ({ page }) => {
+    await page.request.patch('/api/backend/users/me/consent', { data: { treatment_processing: false } });
+  });
+
+  test('every allergy is on the card; none is silently cut', async ({ page }) => {
+    const allergies = ['Penicillin', 'Sulfonamides', 'Latex', 'Peanuts', 'Shellfish', 'Ibuprofen'];
+    await page.request.patch('/api/backend/users/me/consent', { data: { treatment_processing: true } });
+    await page.request.patch('/api/backend/users/me/health-profile', { data: { allergies } });
+    await page.goto('/interview', { waitUntil: 'networkidle' });
+    const value = page.locator('[data-purpose="home-card"] [data-purpose="allergies-value"]');
+    await expect(value).toHaveText(allergies.join(', '));
+    await expect(value).toHaveAttribute('title', allergies.join(', '));
+  });
+
+  test('health details that fail to load are reported, not shown as missing', async ({ page }) => {
+    await page.request.patch('/api/backend/users/me/consent', { data: { treatment_processing: true } });
+    await page.route('**/api/backend/users/me/health-profile', (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"down"}' }));
+    await page.goto('/interview', { waitUntil: 'networkidle' });
+    await expect(page.locator('[data-purpose="home-health-unavailable"]')).toBeVisible();
+    await expect(page.locator('[data-purpose="home-add-health-details"]')).toHaveCount(0);
+  });
+
+  test('a card that fails to load offers to try again', async ({ page }) => {
+    let fail = true;
+    await page.route('**/api/backend/users/me', (route) =>
+      fail ? route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"down"}' }) : route.continue());
+    await page.goto('/interview', { waitUntil: 'networkidle' });
+    await expect(page.locator('[data-purpose="home-card-error"]')).toBeVisible();
+    fail = false;
+    await page.locator('[data-purpose="home-card-error"]').getByRole('button').click();
+    await expect(page.locator('[data-purpose="home-card"] [data-purpose="user-id"]')).toHaveText(/^DE\d{6}$/);
+  });
+
+  test('the QR screen keeps focus on itself and returns it on close', async ({ page }) => {
+    await page.goto('/interview', { waitUntil: 'networkidle' });
+    const open = page.locator('[data-purpose="home-show-qr"]');
+    await open.click();
+    const close = page.locator('[data-purpose="qr-screen-close"]');
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(close).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(close).toBeFocused();
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('hidden');
+    await close.click();
+    await expect(open).toBeFocused();
+    expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+  });
+});

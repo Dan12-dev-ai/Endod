@@ -81,7 +81,7 @@ test.describe('Onboarding', () => {
     await card.locator('[data-purpose="health-consent"] input').check();
     await card.locator('#emergency-phone').fill('12345');
     await page.locator('[data-purpose="finish-onboarding"]').click();
-    await expect(page.locator('main').getByRole('alert')).toContainText('Ethiopian mobile number');
+    await expect(page.locator('main').getByRole('alert')).toContainText("emergency contact's mobile number");
     await expect(page).toHaveURL(/\/onboarding/);
   });
 
@@ -128,5 +128,49 @@ test.describe('Onboarding keeps the destination', () => {
     await answerUpToCard(page, { open: false });
     await page.locator('[data-purpose="finish-onboarding"]').click();
     await expect(page).toHaveURL(/\/health-card$/);
+  });
+});
+
+test.describe('Onboarding: the card step, edge cases', () => {
+  test('unticking consent after a failed save withdraws it', async ({ page }) => {
+    await newPatientSignedIn(page);
+    await answerUpToCard(page);
+    const card = page.locator('[data-purpose="step-card"]');
+    await card.locator('[data-purpose="health-consent"] input').check();
+    await card.locator('#allergies').fill('Penicillin');
+    // The health details fail to save after consent was recorded.
+    await page.route('**/api/backend/users/me/health-profile', (route) =>
+      route.request().method() === 'PATCH'
+        ? route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Try again later."}' })
+        : route.continue());
+    await page.locator('[data-purpose="finish-onboarding"]').click();
+    await expect(page.locator('main').getByRole('alert')).toContainText('Try again later.');
+    expect((await (await page.request.get('/api/backend/users/me/consent')).json()).treatment_processing).toBe(true);
+
+    // The patient changes their mind.
+    await page.unroute('**/api/backend/users/me/health-profile');
+    await card.locator('[data-purpose="health-consent"] input').uncheck();
+    await page.locator('[data-purpose="finish-onboarding"]').click();
+    await expect(page).toHaveURL(/\/interview$/);
+    expect((await (await page.request.get('/api/backend/users/me/consent')).json()).treatment_processing).toBe(false);
+  });
+
+  test('07 numbers, numbers abroad and Amharic commas are accepted', async ({ page }) => {
+    await newPatientSignedIn(page);
+    await answerUpToCard(page);
+    const card = page.locator('[data-purpose="step-card"]');
+    await card.locator('[data-purpose="health-consent"] input').check();
+    await card.locator('#allergies').fill('ፔኒሲሊን፣ ላቴክስ');
+    await card.locator('#emergency-phone').fill('0712 345 678');
+    await page.locator('[data-purpose="finish-onboarding"]').click();
+    await expect(page).toHaveURL(/\/interview$/);
+    let health = await (await page.request.get('/api/backend/users/me/health-profile')).json();
+    expect(health.allergies).toEqual(['ፔኒሲሊን', 'ላቴክስ']);
+    expect(health.emergency_contact_phone).toBe('+251712345678');
+
+    // Settings takes a number abroad too, and the Overview card shows the change.
+    await page.request.patch('/api/backend/users/me/health-profile', { data: { emergency_contact_phone: '+14155550123' } });
+    health = await (await page.request.get('/api/backend/users/me/health-profile')).json();
+    expect(health.emergency_contact_phone).toBe('+14155550123');
   });
 });

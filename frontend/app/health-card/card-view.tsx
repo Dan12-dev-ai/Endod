@@ -10,12 +10,13 @@ import { medicalLines, type HealthCardInfo } from "./health-card-data";
 export default function HealthCardView({ card }: { card: HealthCardInfo }) {
   const { t } = useI18n();
   const lines = medicalLines(card.medical);
-  const fields: { label: string; value: string; sub?: string; purpose: string; accent?: boolean }[] = [
+  // Allergies get the full width and up to two lines: an allergy cut off
+  // the card could read as absent.
+  const fields: { label: string; value: string; sub?: string; purpose: string; accent?: boolean; wide?: boolean }[] = [
     { label: t("healthCard.phone"), value: card.phone, purpose: "phone-value" },
     { label: t("healthCard.bloodGroup"), value: lines.blood, purpose: "blood-value", accent: Boolean(card.medical?.bloodType) },
-    { label: t("healthCard.allergies"), value: lines.allergies, purpose: "allergies-value" },
+    { label: t("healthCard.allergies"), value: lines.allergies, purpose: "allergies-value", wide: true },
     { label: t("healthCard.emergency"), value: lines.emergency, sub: lines.emergencyPhone, purpose: "emergency-value" },
-    { label: t("healthCard.issued"), value: card.issuedDate, purpose: "issue-date" },
     { label: t("healthCard.expires"), value: card.expiryDate, purpose: "expiry-date" },
   ];
 
@@ -79,9 +80,13 @@ export default function HealthCardView({ card }: { card: HealthCardInfo }) {
         <div className="flex items-end justify-between gap-3">
           <dl className="grid grid-cols-2 flex-1 min-w-0" style={{ fontSize: "clamp(7px, 1.9cqi, 12px)", columnGap: "clamp(8px, 3cqi, 20px)", rowGap: "clamp(3px, 1.2cqi, 8px)" }}>
             {fields.map((field) => (
-              <div className="min-w-0" key={field.purpose}>
+              <div className={`min-w-0 ${field.wide ? "col-span-2" : ""}`} key={field.purpose}>
                 <dt className="font-semibold text-[#94a3a8] uppercase tracking-wider truncate">{field.label}</dt>
-                <dd className={`font-semibold truncate ${field.accent ? "text-[#fca5a5]" : "text-white"}`} data-purpose={field.purpose}>
+                <dd
+                  className={`font-semibold ${field.wide ? "line-clamp-2 break-words" : "truncate"} ${field.accent ? "text-[#fca5a5]" : "text-white"}`}
+                  data-purpose={field.purpose}
+                  title={field.wide ? field.value : undefined}
+                >
                   {field.value}
                   {field.sub && <span className="block font-medium text-white/75 truncate">{field.sub}</span>}
                 </dd>

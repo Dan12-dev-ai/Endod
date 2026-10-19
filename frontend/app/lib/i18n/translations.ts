@@ -13,6 +13,7 @@
 export const en = {
   // ===== Shared =====
   "common.loading": "Loading...",
+  "common.tryAgain": "Try again",
   "common.saving": "Saving...",
   "common.save": "Save",
   "common.cancel": "Cancel",
@@ -221,8 +222,8 @@ export const en = {
   "onboarding.title.age": "What's your age?",
   "onboarding.title.card": "Your health card",
   "onboarding.card.hint": "Shown on your card so a hospital can help you fast in an emergency. All optional.",
-  "onboarding.card.consentFirst": "Tick the box above to add these to your card.",
-  "onboarding.card.emergencyPhoneInvalid": "Enter the emergency contact's Ethiopian mobile number, e.g. 0911 234 567.",
+  "onboarding.card.consentFirst": "Not saved unless the box above is ticked.",
+  "onboarding.card.emergencyPhoneInvalid": "Enter the emergency contact's mobile number, e.g. 0911 234 567 (or +… for a number abroad).",
   "onboarding.consentAll":
     "Save my health details (sex, age, blood group, allergies, emergency contact) to my Endod health profile and card. Without this, none are stored.",
   "onboarding.firstName": "First name",
@@ -258,7 +259,6 @@ export const en = {
   // ===== Health card =====
   "healthCard.digitalId": "Digital Health ID",
   "healthCard.phone": "Phone",
-  "healthCard.patientId": "Patient ID",
   "healthCard.issued": "Issued",
   "healthCard.expires": "Expires",
   "healthCard.bloodGroup": "Blood group",
@@ -311,6 +311,8 @@ export const en = {
   "home.showQr": "Show QR to scan",
   "home.openCard": "Open & download",
   "home.closeQr": "Close",
+  "home.cardLoadError": "Your card could not be loaded.",
+  "home.healthDetailsUnavailable": "Your blood group, allergies and emergency contact could not be loaded just now; they are not shown on the card above.",
   "home.qrTitle": "Scan to identify",
   "home.addHealthDetails": "Add blood group, allergies and an emergency contact to your card",
   "home.subtitle": "Your visits, records and updates in one place.",
@@ -653,6 +655,7 @@ export type Dictionary = Record<TranslationKey, string>;
 export const am: Dictionary = {
   // ===== Shared =====
   "common.loading": "በመጫን ላይ...",
+  "common.tryAgain": "እንደገና ይሞክሩ",
   "common.saving": "በማስቀመጥ ላይ...",
   "common.save": "አስቀምጥ",
   "common.cancel": "ሰርዝ",
@@ -862,8 +865,8 @@ export const am: Dictionary = {
   "onboarding.title.age": "ዕድሜዎ ስንት ነው?",
   "onboarding.title.card": "የጤና ካርድዎ",
   "onboarding.card.hint": "በአስቸኳይ ጊዜ ሆስፒታል በፍጥነት እንዲረዳዎ በካርድዎ ላይ ይታያሉ። ሁሉም አማራጭ ናቸው።",
-  "onboarding.card.consentFirst": "እነዚህን በካርድዎ ላይ ለማከል ከላይ ያለውን ሳጥን ምልክት ያድርጉ።",
-  "onboarding.card.emergencyPhoneInvalid": "የአስቸኳይ ጊዜ ተጠሪውን የኢትዮጵያ ሞባይል ቁጥር ያስገቡ፤ ምሳሌ 0911 234 567።",
+  "onboarding.card.consentFirst": "ከላይ ያለው ሳጥን ምልክት ካልተደረገበት አይቀመጡም።",
+  "onboarding.card.emergencyPhoneInvalid": "የአስቸኳይ ጊዜ ተጠሪውን ሞባይል ቁጥር ያስገቡ፤ ምሳሌ 0911 234 567 (ከአገር ውጭ ከሆነ +…)።",
   "onboarding.consentAll":
     "የጤና ዝርዝሮቼን (ጾታ፣ ዕድሜ፣ የደም ዓይነት፣ አለርጂዎች፣ የአስቸኳይ ጊዜ ተጠሪ) በእንዶድ የጤና መገለጫዬና ካርዴ ላይ ያስቀምጡ። ይህ ከሌለ አንዳቸውም አይቀመጡም።",
   "onboarding.firstName": "የመጀመሪያ ስም",
@@ -899,7 +902,6 @@ export const am: Dictionary = {
   // ===== Health card =====
   "healthCard.digitalId": "ዲጂታል የጤና መታወቂያ",
   "healthCard.phone": "ስልክ",
-  "healthCard.patientId": "የታካሚ መለያ",
   "healthCard.issued": "የተሰጠበት",
   "healthCard.expires": "የሚያበቃበት",
   "healthCard.bloodGroup": "የደም ዓይነት",
@@ -952,6 +954,8 @@ export const am: Dictionary = {
   "home.showQr": "ለስካን QR አሳይ",
   "home.openCard": "ክፈትና አውርድ",
   "home.closeQr": "ዝጋ",
+  "home.cardLoadError": "ካርድዎ ሊጫን አልቻለም።",
+  "home.healthDetailsUnavailable": "የደም ዓይነትዎ፣ አለርጂዎችዎና የአስቸኳይ ጊዜ ተጠሪዎ አሁን ሊጫኑ አልቻሉም፤ ከላይ ባለው ካርድ ላይ አልታዩም።",
   "home.qrTitle": "ለመለየት ስካን ያድርጉ",
   "home.addHealthDetails": "የደም ዓይነት፣ አለርጂዎችና የአስቸኳይ ጊዜ ተጠሪ ወደ ካርድዎ ያክሉ",
   "home.subtitle": "ጉብኝቶችዎ፣ መዝገቦችዎና ማሳወቂያዎችዎ በአንድ ቦታ።",

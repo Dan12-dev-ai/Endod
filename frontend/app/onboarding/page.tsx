@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, safeNext } from "@/app/lib/api";
-import { BLOOD_TYPES } from "@/app/health-card/health-card-data";
-import { normalizeEthiopianPhone } from "@/app/lib/phone";
+import { BLOOD_TYPES, normalizeEmergencyPhone, splitAllergies } from "@/app/health-card/health-card-data";
 import { useI18n, type TranslationKey } from "@/app/lib/i18n";
 
 const LOOKING_FOR_OPTIONS: { id: string; labelKey: TranslationKey; hintKey: TranslationKey }[] = [
@@ -70,6 +69,10 @@ export default function OnboardingPage() {
   const [healthConsent, setHealthConsent] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
+  // Consent granted by an earlier Finish that then failed part-way: if the
+  // box is unticked before trying again, it is withdrawn (which also clears
+  // anything saved under it).
+  const consentGrantedRef = useRef(false);
 
   const toggleLookingFor = (id: string) => {
     setFormError("");
@@ -183,7 +186,7 @@ export default function OnboardingPage() {
     if (!current.sex || !current.age) return; // final step not complete yet
     if (savingRef.current) return;
     const phone = current.emergencyPhone.trim();
-    const normalizedPhone = phone ? normalizeEthiopianPhone(phone) : null;
+    const normalizedPhone = phone ? normalizeEmergencyPhone(phone) : null;
     if (current.healthConsent && phone && !normalizedPhone) {
       setFormError(t("onboarding.card.emergencyPhoneInvalid"));
       return;
@@ -198,8 +201,13 @@ export default function OnboardingPage() {
         await api("users/me/preferences", { method: "PATCH", body: { onboarding_goals: current.lookingFor } });
       }
       // Sex and age are health information: stored only with consent.
+      if (!current.healthConsent && consentGrantedRef.current) {
+        await api("users/me/consent", { method: "PATCH", body: { treatment_processing: false } });
+        consentGrantedRef.current = false;
+      }
       if (current.healthConsent) {
         await api("users/me/consent", { method: "PATCH", body: { treatment_processing: true } });
+        consentGrantedRef.current = true;
         await api("users/me/health-profile", {
           method: "PATCH",
           body: {
@@ -207,11 +215,9 @@ export default function OnboardingPage() {
             age_range: current.age,
             // The card's emergency details; empty ones are simply not set.
             ...(current.bloodType ? { blood_type: current.bloodType } : {}),
-            ...(current.allergies.trim()
-              ? { allergies: current.allergies.split(",").map((a) => a.trim()).filter(Boolean) }
-              : {}),
+            ...(current.allergies.trim() ? { allergies: splitAllergies(current.allergies) } : {}),
             ...(current.emergencyName.trim() ? { emergency_contact_name: current.emergencyName.trim() } : {}),
-            ...(normalizedPhone ? { emergency_contact_phone: `+${normalizedPhone}` } : {}),
+            ...(normalizedPhone ? { emergency_contact_phone: normalizedPhone } : {}),
           },
         });
       }
@@ -483,7 +489,12 @@ export default function OnboardingPage() {
                 </label>
                 <fieldset className="space-y-3" disabled={!healthConsent}>
                   {!healthConsent && (
-                    <p className="text-[11px] text-brand-muted" data-purpose="card-consent-first">{t("onboarding.card.consentFirst")}</p>
+                    <p
+                      className={`text-[11px] ${bloodType || allergies.trim() || emergencyName.trim() || emergencyPhone.trim() ? "text-amber-700 font-medium" : "text-brand-muted"}`}
+                      data-purpose="card-consent-first"
+                    >
+                      {t("onboarding.card.consentFirst")}
+                    </p>
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
