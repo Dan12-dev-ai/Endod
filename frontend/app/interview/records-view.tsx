@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { departmentLabel } from "./data";
+import { Bone } from "../components/skeleton";
 
 type MedicalRecord = {
   record_id: string;
@@ -150,7 +151,13 @@ export default function RecordsView({ highlightTarget, onToast, onOpenSettings }
           ].map((stat) => (
             <div key={stat.id} data-purpose={stat.id} className="bg-white rounded-2xl border border-slate-200 card-shadow p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{stat.label}</p>
-              <p className="text-xl font-bold text-slate-900 leading-tight tabular-nums">{stat.value}</p>
+              {data ? (
+                <p className="text-xl font-bold text-slate-900 leading-tight tabular-nums">{stat.value}</p>
+              ) : loadError ? (
+                <p className="text-xl font-bold text-slate-300 leading-tight">—</p>
+              ) : (
+                <Bone className="h-6 w-12 rounded mt-0.5" />
+              )}
             </div>
           ))}
         </div>
@@ -159,6 +166,9 @@ export default function RecordsView({ highlightTarget, onToast, onOpenSettings }
           <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" role="alert">{loadError}</p>
         )}
 
+        {!data && !loadError && (
+          <p className="sr-only" data-purpose="skeleton" role="status">{t("common.loading")}</p>
+        )}
         <div data-purpose="medical-records-table" className="bg-white rounded-2xl border border-slate-200 card-shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
@@ -170,6 +180,15 @@ export default function RecordsView({ highlightTarget, onToast, onOpenSettings }
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {!data && !loadError && [0, 1, 2, 3].map((row) => (
+                  <tr data-purpose="skeleton" key={`skeleton-${row}`} aria-hidden>
+                    {[28, 40, 36, 32, 24].map((width, cell) => (
+                      <td className="px-5 py-4" key={cell}>
+                        <Bone className="h-3 rounded" style={{ width: `${width + ((row * 7 + cell * 5) % 20)}%` }} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
                 {data && records.length === 0 && (
                   <tr>
                     <td data-purpose="records-empty" colSpan={5} className="px-5 py-6 text-xs text-slate-500 text-center">

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useI18n, type TranslationKey } from "../lib/i18n";
 import { type Appointment, appointmentTitle, formatWhen } from "./data";
+import { Bone, InlineSkeleton } from "../components/skeleton";
 
 type Props = {
   firstName: string;
@@ -21,7 +22,8 @@ const SHORTCUTS: { nav: string; titleKey: TranslationKey; hintKey: TranslationKe
 export default function HomeView({ firstName, onNavigate }: Props) {
   const { t, locale } = useI18n();
   const [next, setNext] = useState<Appointment | null | undefined>(undefined);
-  const [unread, setUnread] = useState<number | null>(null);
+  // undefined while loading; null if it could not be loaded.
+  const [unread, setUnread] = useState<number | null | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +32,7 @@ export default function HomeView({ firstName, onNavigate }: Props) {
       .catch(() => !cancelled && setNext(null));
     api<{ unread_count: number }>("users/me/inbox", { query: { limit: 1 } })
       .then((page) => !cancelled && setUnread(page.unread_count))
-      .catch(() => undefined);
+      .catch(() => !cancelled && setUnread(null));
     return () => {
       cancelled = true;
     };
@@ -47,18 +49,33 @@ export default function HomeView({ firstName, onNavigate }: Props) {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <button type="button" data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
+          <button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
             <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("home.nextAppointment")}</p>
-            <h2 className="text-base font-bold text-slate-900 mt-1">
-              {next === undefined ? t("common.loading") : next ? formatWhen(next.scheduled_at, locale) : t("home.noneScheduled")}
-            </h2>
-            {next && <p className="text-xs text-emerald-600 font-medium mt-0.5">{appointmentTitle(next, t)}</p>}
+            {next === undefined ? (
+              <InlineSkeleton label={t("common.loading")}>
+                <Bone className="h-5 w-2/3 rounded mt-1.5" />
+                <Bone className="h-3.5 w-1/2 rounded mt-1.5" />
+              </InlineSkeleton>
+            ) : (
+              <>
+                <h2 className="text-base font-bold text-slate-900 mt-1">
+                  {next ? formatWhen(next.scheduled_at, locale) : t("home.noneScheduled")}
+                </h2>
+                {next && <p className="text-xs text-emerald-600 font-medium mt-0.5">{appointmentTitle(next, t)}</p>}
+              </>
+            )}
           </button>
-          <button type="button" data-purpose="home-unread" onClick={() => onNavigate("message")} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
+          <button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
             <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("home.notifications")}</p>
-            <h2 className="text-base font-bold text-slate-900 mt-1">
-              {unread === null ? "—" : unread === 0 ? t("home.upToDate") : t("home.unread", { count: unread })}
-            </h2>
+            {unread === undefined ? (
+              <InlineSkeleton label={t("common.loading")}>
+                <Bone className="h-5 w-1/2 rounded mt-1.5" />
+              </InlineSkeleton>
+            ) : (
+              <h2 className="text-base font-bold text-slate-900 mt-1">
+                {unread === null ? "—" : unread === 0 ? t("home.upToDate") : t("home.unread", { count: unread })}
+              </h2>
+            )}
           </button>
         </div>
 

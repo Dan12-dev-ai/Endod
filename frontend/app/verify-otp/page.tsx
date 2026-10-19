@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import { AuthPageSkeleton } from "@/app/components/skeleton";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useI18n, type TranslationKey } from "@/app/lib/i18n";
 
@@ -23,11 +24,7 @@ export default function VerifyOtpPage() {
   // prerendered; the actual form streams in after the shell.
   return (
     <Suspense
-      fallback={
-        <main className="w-full min-h-screen flex items-center justify-center bg-[#DDE9E6] text-brand-primary font-sans antialiased">
-          <p className="text-sm text-brand-muted">Loading…</p>
-        </main>
-      }
+      fallback={<LoadingShell />}
     >
       <VerifyOtp />
     </Suspense>
@@ -367,4 +364,9 @@ function VerifyOtp() {
       </div>
     </main>
   );
+}
+
+function LoadingShell() {
+  const { t } = useI18n();
+  return <AuthPageSkeleton label={t("common.loading")} />;
 }

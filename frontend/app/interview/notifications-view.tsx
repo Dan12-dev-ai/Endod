@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useI18n, type TranslationKey } from "../lib/i18n";
+import { Bone, RowBones, Skeleton } from "../components/skeleton";
 
 type Category = "appointments" | "records" | "messages" | "security";
 
@@ -117,6 +118,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- (re)load when the filter changes
     setItems(null);
     setNextCursor(null);
+    setLoadError("");
     void load();
   }, [load]);
 
@@ -213,6 +215,14 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
 
         {loadError && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" role="alert">{loadError}</p>
+        )}
+        {!items && !loadError && (
+          <Skeleton className="space-y-3" label={t("common.loading")}>
+            <Bone className="h-3 w-28 rounded" />
+            <RowBones />
+            <RowBones />
+            <RowBones />
+          </Skeleton>
         )}
         {items && groups.length === 0 && !loadError && (
           <p data-purpose="notif-empty" className="text-xs text-slate-500 bg-white border border-slate-200 rounded-2xl p-4">{t("notifications.empty")}</p>

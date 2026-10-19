@@ -15,6 +15,7 @@ import {
   localDateTimeToIso,
   TIME_WINDOWS,
 } from "./data";
+import { RowBones, Skeleton } from "../components/skeleton";
 
 type Props = {
   patientId: string;
@@ -50,10 +51,14 @@ export default function BookingView({ patientId, onToast }: Props) {
   const [bookingNote, setBookingNote] = useState("");
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // A new search is on its way: the current results are dimmed meanwhile.
+  const [isFetching, setIsFetching] = useState(true);
 
   // Load (and re-load on filter changes, debounced for typing).
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- marks the refetch below
+    setIsFetching(true);
     const timer = setTimeout(() => {
       api<FacilityList>("users/me/care/facilities", {
         query: {
@@ -71,7 +76,13 @@ export default function BookingView({ patientId, onToast }: Props) {
           setLoadError("");
         })
         .catch((error) => {
-          if (!cancelled) setLoadError(error instanceof ApiError ? error.message : t("booking.error.load"));
+          if (cancelled) return;
+          // Results for an earlier search would now be misleading.
+          setDirectory(null);
+          setLoadError(error instanceof ApiError ? error.message : t("booking.error.load"));
+        })
+        .finally(() => {
+          if (!cancelled) setIsFetching(false);
         });
     }, 250);
     return () => {
@@ -226,7 +237,7 @@ export default function BookingView({ patientId, onToast }: Props) {
           <div className="flex items-center justify-between px-1">
             <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
               <span>{t("booking.hospitalsCenters")}</span>
-              <span className="text-xs font-normal text-slate-400">({t("booking.shown", { count: facilities.length })})</span>
+              {directory && <span className="text-xs font-normal text-slate-400">({t("booking.shown", { count: facilities.length })})</span>}
             </h3>
           </div>
 
@@ -237,8 +248,18 @@ export default function BookingView({ patientId, onToast }: Props) {
             <p data-purpose="hospital-empty" className="text-xs text-slate-500 px-1">{t("booking.noMatch")}</p>
           )}
 
-          {/* Hospital Grid */}
-          <div id="hospital-grid" data-purpose="hospital-grid" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Hospital Grid: placeholders on the first load; later searches dim the current results. */}
+          <div
+            aria-busy={isFetching}
+            className={`grid grid-cols-1 lg:grid-cols-2 gap-4 transition-opacity ${directory && isFetching ? "opacity-60" : ""}`}
+            data-purpose="hospital-grid"
+            id="hospital-grid"
+          >
+            {!directory && !loadError && (
+              <Skeleton className="contents" label={t("common.loading")}>
+                {[0, 1, 2, 3].map((i) => <RowBones key={i} />)}
+              </Skeleton>
+            )}
             {facilities.map((facility) => (
               <div
                 key={facility.id}

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, passwordProblem } from "../lib/api";
 import { formatPhoneDisplay, type ProfileForCard } from "../health-card/health-card-data";
 import { useI18n, type TranslationKey } from "../lib/i18n";
+import { Bone, FieldBones, Skeleton } from "../components/skeleton";
 
 type Profile = ProfileForCard & {
   email: string | null;
@@ -377,7 +378,18 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     return (
       <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-5xl mx-auto py-6">
-          {loadError ? <p className="text-sm text-red-600" role="alert">{loadError}</p> : <p className="text-sm text-slate-500">{t("settings.loading")}</p>}
+          {loadError ? <p className="text-sm text-red-600" role="alert">{loadError}</p> : (
+            <Skeleton className="space-y-6" label={t("settings.loading")}>
+              {[3, 2, 2].map((fields, section) => (
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-7 space-y-5" key={section}>
+                  <Bone className="h-4 w-40 rounded" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {Array.from({ length: fields }, (_, i) => <FieldBones key={i} />)}
+                  </div>
+                </div>
+              ))}
+            </Skeleton>
+          )}
         </div>
       </div>
     );
