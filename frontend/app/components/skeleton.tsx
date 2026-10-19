@@ -3,7 +3,7 @@
 // grey shapes were. The pulse stops for people who ask for reduced motion.
 //
 // Each placeholder is hidden from screen readers; the wrapper announces one
-// "Loading" status instead of a list of empty shapes.
+// "Loading" status (visually hidden text) instead of a list of empty shapes.
 
 import type { CSSProperties, ReactNode } from "react";
 
@@ -17,9 +17,24 @@ export function Bone({ className = "", style }: { className?: string; style?: CS
 /** Wraps placeholders: one status for assistive tech, and a hook for tests. */
 export function Skeleton({ label, children, className = "" }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <div aria-busy="true" aria-label={label} className={className} data-purpose="skeleton" role="status">
+    <div className={className} data-purpose="skeleton" role="status">
+      <span className="sr-only">{label}</span>
       {children}
     </div>
+  );
+}
+
+/**
+ * Placeholders inside a button or other control, where a status region is not
+ * allowed: the shapes plus visually hidden text that becomes part of the
+ * control's name ("Next appointment, Loading").
+ */
+export function InlineSkeleton({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <span className="block" data-purpose="skeleton">
+      <span className="sr-only">{label}</span>
+      {children}
+    </span>
   );
 }
 

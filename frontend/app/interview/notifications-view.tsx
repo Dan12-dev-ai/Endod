@@ -118,6 +118,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- (re)load when the filter changes
     setItems(null);
     setNextCursor(null);
+    setLoadError("");
     void load();
   }, [load]);
 

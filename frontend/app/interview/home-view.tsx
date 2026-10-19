@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useI18n, type TranslationKey } from "../lib/i18n";
 import { type Appointment, appointmentTitle, formatWhen } from "./data";
-import { Bone, Skeleton } from "../components/skeleton";
+import { Bone, InlineSkeleton } from "../components/skeleton";
 
 type Props = {
   firstName: string;
@@ -49,13 +49,13 @@ export default function HomeView({ firstName, onNavigate }: Props) {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <button type="button" data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
+          <button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
             <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("home.nextAppointment")}</p>
             {next === undefined ? (
-              <Skeleton className="mt-2 space-y-2" label={t("common.loading")}>
-                <Bone className="h-4 w-2/3 rounded" />
-                <Bone className="h-3 w-1/2 rounded" />
-              </Skeleton>
+              <InlineSkeleton label={t("common.loading")}>
+                <Bone className="h-5 w-2/3 rounded mt-1.5" />
+                <Bone className="h-3.5 w-1/2 rounded mt-1.5" />
+              </InlineSkeleton>
             ) : (
               <>
                 <h2 className="text-base font-bold text-slate-900 mt-1">
@@ -65,12 +65,12 @@ export default function HomeView({ firstName, onNavigate }: Props) {
               </>
             )}
           </button>
-          <button type="button" data-purpose="home-unread" onClick={() => onNavigate("message")} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
+          <button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:border-emerald-300 transition">
             <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("home.notifications")}</p>
             {unread === undefined ? (
-              <Skeleton className="mt-2" label={t("common.loading")}>
-                <Bone className="h-4 w-1/2 rounded" />
-              </Skeleton>
+              <InlineSkeleton label={t("common.loading")}>
+                <Bone className="h-5 w-1/2 rounded mt-1.5" />
+              </InlineSkeleton>
             ) : (
               <h2 className="text-base font-bold text-slate-900 mt-1">
                 {unread === null ? "—" : unread === 0 ? t("home.upToDate") : t("home.unread", { count: unread })}

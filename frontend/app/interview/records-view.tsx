@@ -151,7 +151,13 @@ export default function RecordsView({ highlightTarget, onToast, onOpenSettings }
           ].map((stat) => (
             <div key={stat.id} data-purpose={stat.id} className="bg-white rounded-2xl border border-slate-200 card-shadow p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{stat.label}</p>
-              <p className="text-xl font-bold text-slate-900 leading-tight tabular-nums">{stat.value}</p>
+              {data ? (
+                <p className="text-xl font-bold text-slate-900 leading-tight tabular-nums">{stat.value}</p>
+              ) : loadError ? (
+                <p className="text-xl font-bold text-slate-300 leading-tight">—</p>
+              ) : (
+                <Bone className="h-6 w-12 rounded mt-0.5" />
+              )}
             </div>
           ))}
         </div>
@@ -160,6 +166,9 @@ export default function RecordsView({ highlightTarget, onToast, onOpenSettings }
           <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" role="alert">{loadError}</p>
         )}
 
+        {!data && !loadError && (
+          <p className="sr-only" data-purpose="skeleton" role="status">{t("common.loading")}</p>
+        )}
         <div data-purpose="medical-records-table" className="bg-white rounded-2xl border border-slate-200 card-shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
