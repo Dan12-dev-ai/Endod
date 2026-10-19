@@ -25,42 +25,70 @@ async function newPatientSignedIn(page: Page) {
   expect(login.ok()).toBeTruthy();
 }
 
-async function answerUpToAge(page: Page, { open = true } = {}) {
+/** Answer the first four steps (name, goals, sex, age), arriving at the card step. */
+async function answerUpToCard(page: Page, { open = true, age = '41–60' } = {}) {
   if (open) await page.goto('/onboarding');
   await page.locator('#first-name').fill('Almaz');
   await page.locator('#last-name').fill('Bekele');
   await page.locator('#last-name').press('Enter');
   // Each step advances on its own after a short animation.
-  await expect(page.getByText('Step 2 of 4')).toBeVisible();
+  await expect(page.getByText('Step 2 of 5')).toBeVisible();
   await page.locator('[data-purpose="step-looking-for"] button').first().click();
-  await expect(page.getByText('Step 3 of 4')).toBeVisible();
+  await expect(page.getByText('Step 3 of 5')).toBeVisible();
   await page.locator('[data-purpose="step-sex"]').getByText('Female', { exact: true }).click();
-  await expect(page.getByText('Step 4 of 4')).toBeVisible();
+  await expect(page.getByText('Step 4 of 5')).toBeVisible();
+  await page.getByLabel(age).check({ force: true });
+  await expect(page.getByText('Step 5 of 5')).toBeVisible();
 }
 
 test.describe('Onboarding', () => {
-  test('with consent, sex and age are saved to the health profile', async ({ page }) => {
+  test('with consent, the health card details are saved and shown on the card', async ({ page }) => {
     await newPatientSignedIn(page);
-    await answerUpToAge(page);
+    await answerUpToCard(page, { age: '21–40' });
 
-    await page.locator('[data-purpose="health-consent"] input').check();
-    await page.getByLabel('21–40').check({ force: true });
-    // Picking an age does not finish on its own.
-    await page.waitForTimeout(800);
-    await expect(page).toHaveURL(/\/onboarding$/);
+    const card = page.locator('[data-purpose="step-card"]');
+    // The card questions wait for consent.
+    await expect(card.locator('#blood-type')).toBeDisabled();
+    await card.locator('[data-purpose="health-consent"] input').check();
+    await card.locator('#blood-type').selectOption('O+');
+    await card.locator('#allergies').fill('Penicillin, Latex');
+    await card.locator('#emergency-name').fill('Tesfaye Bekele');
+    await card.locator('#emergency-phone').fill('0911 223 344');
     await page.locator('[data-purpose="finish-onboarding"]').click();
     await expect(page).toHaveURL(/\/interview$/);
 
     const health = await (await page.request.get('/api/backend/users/me/health-profile')).json();
     expect(health.sex).toBe('female');
     expect(health.age_range).toBe('21-40');
+    expect(health.blood_type).toBe('O+');
+    expect(health.allergies).toEqual(['Penicillin', 'Latex']);
+    expect(health.emergency_contact_name).toBe('Tesfaye Bekele');
+    expect(health.emergency_contact_phone).toBe('+251911223344');
+
+    // The Overview opens with the card, showing what was just entered.
+    const home = page.locator('[data-purpose="home-card"]');
+    await expect(home.locator('[data-purpose="full-name"]')).toHaveText('Almaz Bekele');
+    await expect(home.locator('[data-purpose="blood-value"]')).toHaveText('O+');
+    await expect(home.locator('[data-purpose="allergies-value"]')).toHaveText('Penicillin, Latex');
+    await expect(home.locator('[data-purpose="emergency-value"]')).toContainText('Tesfaye Bekele');
+    await expect(home.locator('[data-purpose="qr-code"]')).toBeVisible();
   });
 
-  test('without consent, nothing health-related is stored', async ({ page }) => {
+  test('an invalid emergency phone is caught before anything is saved', async ({ page }) => {
     await newPatientSignedIn(page);
-    await answerUpToAge(page);
+    await answerUpToCard(page);
+    const card = page.locator('[data-purpose="step-card"]');
+    await card.locator('[data-purpose="health-consent"] input').check();
+    await card.locator('#emergency-phone').fill('12345');
+    await page.locator('[data-purpose="finish-onboarding"]').click();
+    await expect(page.locator('main').getByRole('alert')).toContainText("emergency contact's mobile number");
+    await expect(page).toHaveURL(/\/onboarding/);
+  });
 
-    await page.getByLabel('41–60').check({ force: true });
+  test('without consent, nothing health-related is stored and the card shows no details', async ({ page }) => {
+    await newPatientSignedIn(page);
+    await answerUpToCard(page);
+
     await page.locator('[data-purpose="finish-onboarding"]').click();
     await expect(page).toHaveURL(/\/interview$/);
 
@@ -68,6 +96,10 @@ test.describe('Onboarding', () => {
     expect(consent.treatment_processing).toBe(false);
     const profile = await (await page.request.get('/api/backend/users/me')).json();
     expect(profile.first_name).toBe('Almaz');
+    const home = page.locator('[data-purpose="home-card"]');
+    // Not recorded reads "—", never "none".
+    await expect(home.locator('[data-purpose="allergies-value"]')).toHaveText('—');
+    await expect(home.locator('[data-purpose="home-add-health-details"]')).toBeVisible();
   });
 });
 
@@ -79,8 +111,7 @@ test.describe('Onboarding redirects', () => {
     await page.goto('/health-card');
     await expect(page).toHaveURL(/\/onboarding\?next=%2Fhealth-card$/);
 
-    await answerUpToAge(page);
-    await page.getByLabel('41–60').check({ force: true });
+    await answerUpToCard(page);
     await page.locator('[data-purpose="finish-onboarding"]').click();
     await expect(page).toHaveURL(/\/interview$/);
 
@@ -94,9 +125,52 @@ test.describe('Onboarding keeps the destination', () => {
     await newPatientSignedIn(page);
     await page.goto('/health-card');
     await expect(page).toHaveURL(/\/onboarding\?next=%2Fhealth-card$/);
-    await answerUpToAge(page, { open: false });
-    await page.getByLabel('41–60').check({ force: true });
+    await answerUpToCard(page, { open: false });
     await page.locator('[data-purpose="finish-onboarding"]').click();
     await expect(page).toHaveURL(/\/health-card$/);
+  });
+});
+
+test.describe('Onboarding: the card step, edge cases', () => {
+  test('unticking consent after a failed save withdraws it', async ({ page }) => {
+    await newPatientSignedIn(page);
+    await answerUpToCard(page);
+    const card = page.locator('[data-purpose="step-card"]');
+    await card.locator('[data-purpose="health-consent"] input').check();
+    await card.locator('#allergies').fill('Penicillin');
+    // The health details fail to save after consent was recorded.
+    await page.route('**/api/backend/users/me/health-profile', (route) =>
+      route.request().method() === 'PATCH'
+        ? route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Try again later."}' })
+        : route.continue());
+    await page.locator('[data-purpose="finish-onboarding"]').click();
+    await expect(page.locator('main').getByRole('alert')).toContainText('Try again later.');
+    expect((await (await page.request.get('/api/backend/users/me/consent')).json()).treatment_processing).toBe(true);
+
+    // The patient changes their mind.
+    await page.unroute('**/api/backend/users/me/health-profile');
+    await card.locator('[data-purpose="health-consent"] input').uncheck();
+    await page.locator('[data-purpose="finish-onboarding"]').click();
+    await expect(page).toHaveURL(/\/interview$/);
+    expect((await (await page.request.get('/api/backend/users/me/consent')).json()).treatment_processing).toBe(false);
+  });
+
+  test('07 numbers, numbers abroad and Amharic commas are accepted', async ({ page }) => {
+    await newPatientSignedIn(page);
+    await answerUpToCard(page);
+    const card = page.locator('[data-purpose="step-card"]');
+    await card.locator('[data-purpose="health-consent"] input').check();
+    await card.locator('#allergies').fill('ፔኒሲሊን፣ ላቴክስ');
+    await card.locator('#emergency-phone').fill('0712 345 678');
+    await page.locator('[data-purpose="finish-onboarding"]').click();
+    await expect(page).toHaveURL(/\/interview$/);
+    let health = await (await page.request.get('/api/backend/users/me/health-profile')).json();
+    expect(health.allergies).toEqual(['ፔኒሲሊን', 'ላቴክስ']);
+    expect(health.emergency_contact_phone).toBe('+251712345678');
+
+    // Settings takes a number abroad too, and the Overview card shows the change.
+    await page.request.patch('/api/backend/users/me/health-profile', { data: { emergency_contact_phone: '+14155550123' } });
+    health = await (await page.request.get('/api/backend/users/me/health-profile')).json();
+    expect(health.emergency_contact_phone).toBe('+14155550123');
   });
 });
