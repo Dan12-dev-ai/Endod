@@ -1,9 +1,6 @@
 /**
- * SVG health-card generator.
- * Given user data, returns a self-contained pure-SVG string.
- *
- * Uses inline attributes (no <style>, no <foreignObject>) so the SVG
- * renders reliably in <img> tags and when converted to PNG via canvas.drawImage.
+ * The Digital Health Card as self-contained HTML, for printing / saving as PDF.
+ * Shows the same fields as the screen (card-view.tsx) and the image download.
  */
 
 /** The card's printed labels, supplied already translated by the caller. */
@@ -11,7 +8,9 @@ export type HealthCardLabels = {
   brand: string;
   digitalId: string;
   phone: string;
-  patientId: string;
+  bloodGroup: string;
+  allergies: string;
+  emergency: string;
   issued: string;
   expires: string;
   scanToVerify: string;
@@ -21,6 +20,9 @@ export type HealthCardData = {
   fullName: string;
   userId: string;
   phone: string;
+  blood: string;
+  allergies: string;
+  emergency: string;
   issuedDate: string;
   expiryDate: string;
   qrSvg: string; // raw svg string from qrMatrixToSvg
@@ -47,81 +49,8 @@ function extractViewBox(svgRaw: string): string {
   return match ? match[1] : "0 0 37 37";
 }
 
-/** Extract the square side length (in user units) from a viewBox string. */
-function viewBoxSize(viewBox: string): number {
-  const parts = viewBox.trim().split(/\s+/).map(Number);
-  return parts.length === 4 && Number.isFinite(parts[2]) ? parts[2] : 37;
-}
-
-export function buildHealthCardSvg(d: HealthCardData): string {
-  const qrPaths = extractPaths(d.qrSvg);
-  const qrViewBox = extractViewBox(d.qrSvg);
-
-  // Pure SVG with inline attributes — no <style>, no <foreignObject>,
-  // no <filter>, no currentColor. This ensures reliable rendering
-  // when loaded as an <img> and drawn to <canvas> for PNG export.
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="720" height="480" viewBox="0 0 720 480">
-  <defs>
-    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1e3a2e"/>
-      <stop offset="100%" stop-color="#1e5852"/>
-    </linearGradient>
-  </defs>
-
-  <!-- Card background -->
-  <rect x="40" y="40" width="640" height="400" rx="24" fill="url(#g1)"/>
-
-  <!-- Subtle pattern overlay -->
-  <g transform="translate(40,40) scale(6.4,4)" opacity="3%" fill="none">
-    <circle cx="31.25" cy="31.25" r="7.8125" stroke="#ffffff" stroke-width="0.03125"/>
-    <circle cx="31.25" cy="31.25" r="18.75" stroke="#ffffff" stroke-width="0.015625"/>
-  </g>
-
-  <!-- Brand -->
-  <text x="80" y="120" font-family="Arial, sans-serif" font-size="26" font-weight="800" letter-spacing="-0.5px" fill="#ffffff">${escapeXml(d.labels.brand)}</text>
-
-  <!-- Card type label -->
-  <text x="80" y="152" font-family="Arial, sans-serif" font-size="11" font-weight="600" text-anchor="start" fill="#94e0c0">${escapeXml(d.labels.digitalId)}</text>
-
-  <!-- Full name -->
-  <text x="80" y="200" font-family="Georgia, serif" font-size="32" font-weight="700" fill="#ffffff">${escapeXml(d.fullName)}</text>
-
-  <!-- User ID -->
-  <text x="80" y="240" font-family="Arial, sans-serif" font-size="16" font-weight="600" fill="#94e0c0">${escapeXml(d.userId)}</text>
-
-  <!-- QR code -->
-  <g transform="translate(80,268)">
-    <svg x="0" y="0" width="132" height="132" viewBox="${qrViewBox}" preserveAspectRatio="xMidYMid meet" fill="#000000">
-      <rect x="0" y="0" width="${viewBoxSize(qrViewBox)}" height="${viewBoxSize(qrViewBox)}" fill="#ffffff"/>
-      ${qrPaths}
-    </svg>
-    <text x="66" y="155" font-family="Arial, sans-serif" font-size="9" font-weight="600" text-anchor="middle" fill="#94a3a8">${escapeXml(d.labels.scanToVerify)}</text>
-  </g>
-
-  <!-- Info grid -->
-  <!-- Phone -->
-  <text x="244" y="300" font-family="Arial, sans-serif" font-size="10" font-weight="600" text-transform="uppercase" fill="#94a3a8">${escapeXml(d.labels.phone)}</text>
-  <text x="244" y="328" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="#ffffff">${escapeXml(d.phone)}</text>
-  <!-- Patient ID -->
-  <text x="494" y="300" font-family="Arial, sans-serif" font-size="10" font-weight="600" text-transform="uppercase" fill="#94a3a8">${escapeXml(d.labels.patientId)}</text>
-  <text x="494" y="328" font-family="Arial, sans-serif" font-size="15" font-weight="600" fill="#ffffff">${escapeXml(d.userId)}</text>
-  <!-- Issued -->
-  <text x="244" y="366" font-family="Arial, sans-serif" font-size="10" font-weight="600" text-transform="uppercase" fill="#94a3a8">${escapeXml(d.labels.issued)}</text>
-  <text x="244" y="394" font-family="Arial, sans-serif" font-size="13" font-weight="500" fill="#ffffff" opacity="0.9">${escapeXml(d.issuedDate)}</text>
-  <!-- Expires -->
-  <text x="494" y="366" font-family="Arial, sans-serif" font-size="10" font-weight="600" text-transform="uppercase" fill="#94a3a8">${escapeXml(d.labels.expires)}</text>
-  <text x="494" y="394" font-family="Arial, sans-serif" font-size="13" font-weight="600" fill="#6ee7b7">${escapeXml(d.expiryDate)}</text>
-
-  <!-- Footer -->
-  <line x1="80" y1="384" x2="680" y2="384" stroke="#ffffff" stroke-width="1" opacity="0.1"/>
-  <text x="80" y="416" font-family="Arial, sans-serif" font-size="11" fill="#94a3a8">${escapeXml(d.labels.issued)} ${escapeXml(d.issuedDate)}</text>
-
-  <!-- Footer badge -->
-  <g transform="translate(540,400)">
-    <rect x="0" y="0" width="140" height="32" rx="20" fill="#ffffff" opacity="0.1" stroke="#94e0c0" stroke-width="1"/>
-    <text x="70" y="20" font-family="Arial, sans-serif" font-size="11" font-weight="600" text-anchor="middle" fill="#6ee7b7">${escapeXml(d.labels.expires)}: ${escapeXml(d.expiryDate)}</text>
-  </g>
-</svg>`;
+function field(label: string, value: string, colour?: string): string {
+  return `<div style="min-width:0"><span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#94a3a8">${escapeXml(label)}</span><div style="font-size:14px;font-weight:600;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${colour ? `;color:${colour}` : ""}">${escapeXml(value)}</div></div>`;
 }
 
 export function buildHealthCardHtml(d: HealthCardData): string {
@@ -143,16 +72,14 @@ export function buildHealthCardHtml(d: HealthCardData): string {
         <svg width="132" height="132" viewBox="${qrViewBox}" style="background:#fff;border-radius:12px;padding:8px">${qrPaths}</svg>
         <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#94a3a8;margin-top:6px">${escapeXml(d.labels.scanToVerify)}</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1">
-        <div><span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#94a3a8">${escapeXml(d.labels.phone)}</span><div style="font-size:15px;font-weight:600;margin-top:4px">${escapeXml(d.phone)}</div></div>
-        <div><span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#94a3a8">${escapeXml(d.labels.patientId)}</span><div style="font-size:15px;font-weight:600;margin-top:4px">${escapeXml(d.userId)}</div></div>
-        <div><span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#94a3a8">${escapeXml(d.labels.issued)}</span><div style="font-size:13px;font-weight:500;margin-top:4px;opacity:0.9">${escapeXml(d.issuedDate)}</div></div>
-        <div><span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#94a3a8">${escapeXml(d.labels.expires)}</span><div style="font-size:13px;font-weight:600;margin-top:4px;color:#6ee7b7">${escapeXml(d.expiryDate)}</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;flex:1;min-width:0">
+        ${field(d.labels.phone, d.phone)}
+        ${field(d.labels.bloodGroup, d.blood, d.blood !== "—" ? "#fca5a5" : undefined)}
+        ${field(d.labels.allergies, d.allergies)}
+        ${field(d.labels.emergency, d.emergency)}
+        ${field(d.labels.issued, d.issuedDate)}
+        ${field(d.labels.expires, d.expiryDate, "#6ee7b7")}
       </div>
-    </div>
-    <div style="margin-top:24px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.1);display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#94a3a8">
-      <span>${escapeXml(d.labels.issued)} ${escapeXml(d.issuedDate)}</span>
-      <span style="background:rgba(255,255,255,0.1);border:1px solid rgba(148,224,192,0.3);color:#6ee7b7;padding:5px 14px;border-radius:20px;font-weight:600">${escapeXml(d.labels.expires)}: ${escapeXml(d.expiryDate)}</span>
     </div>
   </div>`;
 }

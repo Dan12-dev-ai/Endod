@@ -89,3 +89,33 @@ test.describe('Digital Health Card', () => {
     await scanner.close();
   });
 });
+
+test.describe('The card on the Overview', () => {
+  test('comes first, and its QR opens full screen for scanning', async ({ page }) => {
+    await page.goto('/interview', { waitUntil: 'networkidle' });
+    const home = page.locator('[data-purpose="home-view"]');
+    // The card is the first section of the Overview.
+    await expect(home.locator('section').first()).toHaveAttribute('data-purpose', 'home-card');
+    await expect(home.locator('[data-purpose="home-card"] [data-purpose="user-id"]')).toHaveText(/^DE\d{6}$/);
+
+    await page.locator('[data-purpose="home-show-qr"]').click();
+    const screen = page.locator('[data-purpose="qr-screen"]');
+    await expect(screen).toBeVisible();
+    await expect(screen.getByText('Test Patient')).toBeVisible();
+    const box = await screen.locator('[role="img"]').boundingBox();
+    expect(box!.width).toBeGreaterThanOrEqual(250);
+    await page.keyboard.press('Escape');
+    await expect(screen).toHaveCount(0);
+  });
+
+  test('on a phone, the card and its QR fit the screen', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto('/interview', { waitUntil: 'networkidle' });
+    const card = page.locator('[data-purpose="home-card"] [data-purpose="health-card-preview"]');
+    const box = await card.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(360);
+    const qr = await card.locator('[data-purpose="qr-code"]').boundingBox();
+    expect(qr!.width).toBeGreaterThanOrEqual(64);
+  });
+});

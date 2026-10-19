@@ -1,10 +1,11 @@
 /**
  * Shared Digital Health Card data helpers.
  *
- * Single source of truth for the card identity data (full name, patient ID,
- * phone, issued/expiry dates, QR payload) used by both the /health-card
- * route and the Digital Health Card preview on the /interview settings page.
- * Data comes from the signed-in patient's profile (GET /users/me).
+ * Single source of truth for what the card shows: identity (name, ID, phone,
+ * dates, the signed QR code) from GET /users/me and /users/me/card, and the
+ * emergency details (blood group, allergies, emergency contact) from
+ * GET /users/me/health-profile, which exists only with the patient's consent.
+ * Used by the /health-card page and the card on the dashboard's Overview.
  */
 
 import { api } from "../lib/api";
@@ -21,7 +22,28 @@ export type HealthCardInfo = {
   expiryDate: string;
   qrData: string;
   qrSvg: string;
+  /** Null without consent to store health details (nothing to show). */
+  medical: CardMedical | null;
 };
+
+/** What a hospital needs at a glance in an emergency. */
+export type CardMedical = {
+  bloodType: string | null;
+  allergies: string[];
+  emergencyName: string | null;
+  emergencyPhone: string | null;
+};
+
+/** The parts of GET /users/me/health-profile the card uses. */
+export type HealthDetails = {
+  blood_type?: string | null;
+  allergies?: string[] | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
+};
+
+/** The blood groups the backend accepts. */
+export const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 
 /** The parts of GET /users/me the card uses. */
 export type ProfileForCard = {
@@ -87,7 +109,11 @@ export function cardVerifyUrl(origin: string, card: CardSignature): string {
  * drawn only with a signed verification link (`qrLink`); without one (e.g.
  * the name-only uses on the dashboard) it is left empty.
  */
-export function healthCardFromProfile(profile: ProfileForCard, qrLink = ""): HealthCardInfo {
+export function healthCardFromProfile(
+  profile: ProfileForCard,
+  qrLink = "",
+  health: HealthDetails | null = null,
+): HealthCardInfo {
   const firstName = profile.first_name ?? "";
   const middleName = profile.middle_name ?? "";
   const lastName = profile.last_name ?? "";
@@ -109,18 +135,42 @@ export function healthCardFromProfile(profile: ProfileForCard, qrLink = ""): Hea
     expiryDate: getExpiryDate(createdAt),
     qrData,
     qrSvg: qrData ? qrMatrixToSvg(generateQrMatrix(qrData), 152) : "",
+    medical: health ? {
+      bloodType: health.blood_type || null,
+      allergies: (health.allergies ?? []).filter(Boolean),
+      emergencyName: health.emergency_contact_name || null,
+      emergencyPhone: health.emergency_contact_phone ? formatPhoneDisplay(health.emergency_contact_phone) : null,
+    } : null,
   };
 }
 
 /**
  * The full card, with its signed QR code (redirects to login when signed out).
  * If only the signature cannot be fetched, the card still shows, without a QR
- * code, rather than not at all.
+ * code, rather than not at all. The health details are absent (403) without
+ * consent; the card then shows identity only.
  */
 export async function loadHealthCard(): Promise<HealthCardInfo> {
-  const [profile, card] = await Promise.all([
+  const [profile, card, health] = await Promise.all([
     api<ProfileForCard>("users/me"),
     api<CardSignature>("users/me/card").catch(() => null),
+    api<HealthDetails>("users/me/health-profile").catch(() => null),
   ]);
-  return healthCardFromProfile(profile, card ? cardVerifyUrl(window.location.origin, card) : "");
+  return healthCardFromProfile(profile, card ? cardVerifyUrl(window.location.origin, card) : "", health);
+}
+
+/**
+ * The card's emergency lines as text: what the screen, print and image all show.
+ * Nothing recorded shows "—", never "none": a blank allergy field must not
+ * read as "no allergies" to someone treating the patient.
+ */
+export function medicalLines(medical: CardMedical | null): {
+  blood: string; allergies: string; emergency: string; emergencyPhone: string;
+} {
+  return {
+    blood: medical?.bloodType ?? "—",
+    allergies: medical?.allergies.length ? medical.allergies.join(", ") : "—",
+    emergency: medical?.emergencyName ?? "—",
+    emergencyPhone: medical?.emergencyPhone ?? "",
+  };
 }

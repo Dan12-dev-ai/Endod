@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, safeNext } from "@/app/lib/api";
+import { BLOOD_TYPES } from "@/app/health-card/health-card-data";
+import { normalizeEthiopianPhone } from "@/app/lib/phone";
 import { useI18n, type TranslationKey } from "@/app/lib/i18n";
 
 const LOOKING_FOR_OPTIONS: { id: string; labelKey: TranslationKey; hintKey: TranslationKey }[] = [
@@ -26,6 +28,7 @@ const STEP_TITLE_KEYS: TranslationKey[] = [
   "onboarding.title.lookingFor",
   "onboarding.title.sex",
   "onboarding.title.age",
+  "onboarding.title.card",
 ];
 
 // Age is collected in clinical-style ranges (as common in medical software)
@@ -58,7 +61,12 @@ export default function OnboardingPage() {
 
   // Step 4: age (clinical-style ranges)
   const [ageRange, setAgeRange] = useState<string>('');
-  // Explicit, opt-in consent to store health details (sex and age).
+  // Step 5: what the health card shows in an emergency (all optional).
+  const [bloodType, setBloodType] = useState("");
+  const [allergies, setAllergies] = useState("");
+  const [emergencyName, setEmergencyName] = useState("");
+  const [emergencyPhone, setEmergencyPhone] = useState("");
+  // Explicit, opt-in consent to store health details (sex, age and the card's).
   const [healthConsent, setHealthConsent] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
@@ -159,15 +167,27 @@ export default function OnboardingPage() {
 
   // Keep the newest form values in a ref so timer callbacks (which capture an
   // older render's closure) always save the latest answers, not stale ones.
-  const formRef = useRef({ firstName, middleName, lastName, lookingFor, sex, age: ageRange, healthConsent });
+  const formRef = useRef({
+    firstName, middleName, lastName, lookingFor, sex, age: ageRange, healthConsent,
+    bloodType, allergies, emergencyName, emergencyPhone,
+  });
   useEffect(() => {
-    formRef.current = { firstName, middleName, lastName, lookingFor, sex, age: ageRange, healthConsent };
-  }, [firstName, middleName, lastName, lookingFor, sex, ageRange, healthConsent]);
+    formRef.current = {
+      firstName, middleName, lastName, lookingFor, sex, age: ageRange, healthConsent,
+      bloodType, allergies, emergencyName, emergencyPhone,
+    };
+  }, [firstName, middleName, lastName, lookingFor, sex, ageRange, healthConsent, bloodType, allergies, emergencyName, emergencyPhone]);
 
   const handleFinish = async () => {
     const current = formRef.current;
     if (!current.sex || !current.age) return; // final step not complete yet
     if (savingRef.current) return;
+    const phone = current.emergencyPhone.trim();
+    const normalizedPhone = phone ? normalizeEthiopianPhone(phone) : null;
+    if (current.healthConsent && phone && !normalizedPhone) {
+      setFormError(t("onboarding.card.emergencyPhoneInvalid"));
+      return;
+    }
     clearAdvanceTimer();
     clearFinishTimer();
     savingRef.current = true;
@@ -182,7 +202,17 @@ export default function OnboardingPage() {
         await api("users/me/consent", { method: "PATCH", body: { treatment_processing: true } });
         await api("users/me/health-profile", {
           method: "PATCH",
-          body: { sex: current.sex, age_range: current.age },
+          body: {
+            sex: current.sex,
+            age_range: current.age,
+            // The card's emergency details; empty ones are simply not set.
+            ...(current.bloodType ? { blood_type: current.bloodType } : {}),
+            ...(current.allergies.trim()
+              ? { allergies: current.allergies.split(",").map((a) => a.trim()).filter(Boolean) }
+              : {}),
+            ...(current.emergencyName.trim() ? { emergency_contact_name: current.emergencyName.trim() } : {}),
+            ...(normalizedPhone ? { emergency_contact_phone: `+${normalizedPhone}` } : {}),
+          },
         });
       }
       // The name goes last: a saved name is what marks onboarding finished
@@ -398,15 +428,6 @@ export default function OnboardingPage() {
                 <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-brand-heading tracking-tight mb-4">
                   {t(STEP_TITLE_KEYS[3])}
                 </h2>
-                <label className="flex items-start gap-2.5 mb-4 text-xs text-brand-muted leading-relaxed cursor-pointer" data-purpose="health-consent">
-                  <input
-                    checked={healthConsent}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-[#1E5852]"
-                    onChange={(e) => setHealthConsent(e.target.checked)}
-                    type="checkbox"
-                  />
-                  <span>{t("onboarding.consent")}</span>
-                </label>
                 <div className="flex flex-col gap-2" role="radiogroup" aria-label={t("onboarding.ageAria")}>
                   {AGE_RANGES.map((range) => {
                     const selected = ageRange === range.label;
@@ -426,10 +447,9 @@ export default function OnboardingPage() {
                           value={range.label}
                           checked={selected}
                           onChange={(e) => {
-                            // No auto-finish here: the consent choice above
-                            // must be made before anything is saved.
                             setAgeRange(e.target.value);
                             setFormError("");
+                            autoAdvance();
                           }}
                           className="sr-only"
                           aria-label={range.label}
@@ -439,6 +459,93 @@ export default function OnboardingPage() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Slide 5: what the health card shows in an emergency */}
+              <div className="w-full flex-shrink-0 space-y-4" data-purpose="step-card">
+                <div>
+                  <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-brand-heading tracking-tight mb-1">
+                    {t(STEP_TITLE_KEYS[4])}
+                  </h2>
+                  <p className="text-xs text-brand-muted">{t("onboarding.card.hint")}</p>
+                </div>
+                <label className="flex items-start gap-2.5 text-xs text-brand-muted leading-relaxed cursor-pointer" data-purpose="health-consent">
+                  <input
+                    checked={healthConsent}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-[#1E5852]"
+                    onChange={(e) => {
+                      setHealthConsent(e.target.checked);
+                      setFormError("");
+                    }}
+                    type="checkbox"
+                  />
+                  <span>{t("onboarding.consentAll")}</span>
+                </label>
+                <fieldset className="space-y-3" disabled={!healthConsent}>
+                  {!healthConsent && (
+                    <p className="text-[11px] text-brand-muted" data-purpose="card-consent-first">{t("onboarding.card.consentFirst")}</p>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="blood-type">
+                        {t("settings.card.bloodGroupLabel")}
+                      </label>
+                      <select
+                        className="field-input w-full px-4 py-2.5 rounded-xl text-sm border focus:outline-hidden placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                        id="blood-type"
+                        onChange={(event) => setBloodType(event.target.value)}
+                        value={bloodType}
+                      >
+                        <option value="">{t("settings.card.notSpecified")}</option>
+                        {BLOOD_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="allergies">
+                        {t("settings.card.allergiesLabel")}
+                      </label>
+                      <input
+                        className="field-input w-full px-4 py-2.5 rounded-xl text-sm border focus:outline-hidden placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                        id="allergies"
+                        maxLength={300}
+                        onChange={(event) => setAllergies(event.target.value)}
+                        placeholder={t("settings.card.allergiesPlaceholder")}
+                        value={allergies}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="emergency-name">
+                      {t("settings.card.emergencyName")}
+                    </label>
+                    <input
+                      autoComplete="off"
+                      className="field-input w-full px-4 py-2.5 rounded-xl text-sm border focus:outline-hidden placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      id="emergency-name"
+                      maxLength={120}
+                      onChange={(event) => setEmergencyName(event.target.value)}
+                      value={emergencyName}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-brand-heading mb-1.5" htmlFor="emergency-phone">
+                      {t("settings.card.emergencyPhone")}
+                    </label>
+                    <input
+                      autoComplete="off"
+                      className="field-input w-full px-4 py-2.5 rounded-xl text-sm border focus:outline-hidden placeholder:text-slate-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      id="emergency-phone"
+                      inputMode="tel"
+                      maxLength={20}
+                      onChange={(event) => {
+                        setEmergencyPhone(event.target.value);
+                        setFormError("");
+                      }}
+                      placeholder="0911 234 567"
+                      value={emergencyPhone}
+                    />
+                  </div>
+                </fieldset>
               </div>
 
             </div>

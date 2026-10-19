@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, passwordProblem } from "../lib/api";
-import { formatPhoneDisplay, type ProfileForCard } from "../health-card/health-card-data";
+import { BLOOD_TYPES, formatPhoneDisplay, type ProfileForCard } from "../health-card/health-card-data";
 import { useI18n, type TranslationKey } from "../lib/i18n";
 import { Bone, FieldBones, Skeleton } from "../components/skeleton";
 
@@ -50,7 +50,6 @@ const COUNTRIES: { value: string; labelKey: TranslationKey }[] = [
   { value: "UG", labelKey: "settings.country.UG" },
   { value: "TZ", labelKey: "settings.country.TZ" },
 ];
-const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 const DEFAULT_RADIUS_KM = 15;
 // The backend accepts 1-200 km.
 const RADIUS_MIN_KM = 5;
@@ -646,7 +645,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                 {[
                   [t("settings.card.phone"), profile.phone ? formatPhoneDisplay(profile.phone) : "—"],
                   [t("settings.card.bloodGroup"), bloodType || "—"],
-                  [t("settings.card.allergies"), allergies || t("settings.card.none")],
+                  [t("settings.card.allergies"), allergies || "—"],
                   [t("settings.card.emergency"), emergencyName || "—"],
                 ].map(([label, value]) => (
                   <div key={label}>
