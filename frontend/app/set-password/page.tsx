@@ -4,6 +4,8 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { passwordProblem } from "@/app/lib/api";
 import { useI18n } from "@/app/lib/i18n";
+import { syncLanguageAfterSignIn } from "@/app/components/language-switcher";
+import { forgetSession } from "@/app/lib/session";
 
 export default function SetPasswordPage() {
   // `useSearchParams()` needs a Suspense boundary for prerendering.
@@ -69,6 +71,8 @@ function SetPassword() {
       }
 
       // Signed in (httpOnly cookie). New accounts continue to onboarding.
+      forgetSession();
+      await syncLanguageAfterSignIn();
       router.push(data.created ? "/onboarding" : "/interview");
     } catch {
       setFormError(t("setPassword.error.network"));

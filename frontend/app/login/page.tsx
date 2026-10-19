@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { safeNext } from "@/app/lib/api";
 import { useI18n, type TranslationKey } from "@/app/lib/i18n";
+import { syncLanguageAfterSignIn } from "@/app/components/language-switcher";
+import { forgetSession } from "@/app/lib/session";
 
 type Testimonial = {
   quoteKey: TranslationKey;
@@ -97,6 +99,8 @@ export default function LoginPage() {
       }
 
       // The session is an httpOnly cookie set by the route handler.
+      forgetSession();
+      await syncLanguageAfterSignIn();
       router.push(safeNext(new URLSearchParams(window.location.search).get("next"), "/interview"));
     } catch {
       setFormError(t("login.error.generic"));

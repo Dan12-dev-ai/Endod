@@ -5,11 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { logout } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { accountName, homeFor, useSession } from "../lib/session";
-import LanguageSwitcher, { saveAccountLanguage } from "./language-switcher";
+import LanguageSwitcher from "./language-switcher";
 
 export default function Header() {
   const { t } = useI18n();
-  const session = useSession();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -112,10 +111,7 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-3">
-        <LanguageSwitcher
-          onChange={session.status === "signed-in" ? saveAccountLanguage : undefined}
-          tone="dark"
-        />
+        <LanguageSwitcher tone="dark" />
 
         <AccountArea />
         </div>

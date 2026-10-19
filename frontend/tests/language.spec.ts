@@ -44,14 +44,44 @@ test.describe('Dashboard language', () => {
     await expect(page.locator('[data-purpose="language-menu"]')).toHaveCount(0);
   });
 
-  test('fits on a small phone', async ({ page }) => {
+  test('fits on a small phone, in both languages', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 740 });
+    for (const language of ['en', 'am']) {
+      await page.request.patch('/api/backend/users/me/preferences', { data: { language } });
+      await page.goto('/interview', { waitUntil: 'networkidle' });
+      await expect(page.locator('html')).toHaveAttribute('lang', language);
+      const box = await page.locator('[data-purpose="sign-out"]').boundingBox();
+      expect(box, language).not.toBeNull();
+      expect(box!.x + box!.width, language).toBeLessThanOrEqual(360);
+      expect(box!.height, `${language}: sign out on one line`).toBeLessThan(40);
+    }
+  });
+
+  test('a device that already has a language follows the account', async ({ page }) => {
+    // This device last showed English; the patient then chose Amharic elsewhere.
     await page.goto('/interview', { waitUntil: 'networkidle' });
-    const header = page.locator('header').first();
-    await expect(header.locator('[data-purpose="language-select"]')).toBeVisible();
-    await expect(page.locator('[data-purpose="sign-out"]')).toBeVisible();
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await page.request.patch('/api/backend/users/me/preferences', { data: { language: 'am' } });
+    await page.goto('/interview', { waitUntil: 'networkidle' });
+    await expect(page.locator('html')).toHaveAttribute('lang', 'am');
+  });
+
+  test('the menu works from the keyboard', async ({ page }) => {
+    await page.goto('/interview', { waitUntil: 'networkidle' });
+    const trigger = page.locator('header [data-purpose="language-select"]');
+    await expect(trigger).toHaveAttribute('aria-label', /English/);
+    await trigger.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('[data-purpose="language-option-en"]')).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('[data-purpose="language-option-am"]')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-purpose="language-menu"]')).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+    await trigger.press('Enter');
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'am');
   });
 });
 
@@ -69,5 +99,29 @@ test.describe('Phone tab bar', () => {
     // The dev-only Next.js badge covers this corner in tests; real phones have no badge.
     await bar.locator('[data-purpose="mobile-nav-home"]').dispatchEvent('click');
     await expect(page.getByText('Welcome, Test')).toBeVisible();
+  });
+});
+
+test.describe('A choice made while signed out', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('is copied to the account at sign-in', async ({ page }) => {
+    const { email, password } = JSON.parse(
+      (await import('node:fs')).readFileSync('tests/.auth/credentials.json', 'utf8'),
+    ) as { email: string; password: string };
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await page.locator('[data-purpose="language-select"]').click();
+    await page.locator('[data-purpose="language-option-am"]').click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'am');
+
+    await page.goto('/login', { waitUntil: 'networkidle' });
+    await page.locator('input[type="password"]').fill(password);
+    await page.locator('input:not([type=password])').first().fill(email);
+    await page.locator('button[type="submit"]').click();
+    await expect(page).toHaveURL(/\/interview$/);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'am');
+    const prefs = await (await page.request.get('/api/backend/users/me/preferences')).json();
+    expect(prefs.language).toBe('am');
+    await page.request.patch('/api/backend/users/me/preferences', { data: { language: 'en' } });
   });
 });

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { healthCardFromProfile, type HealthCardInfo, type ProfileForCard } from "../health-card/health-card-data";
-import LanguageSwitcher, { saveAccountLanguage } from "../components/language-switcher";
+import LanguageSwitcher from "../components/language-switcher";
 import AppointmentsView from "./appointments-view";
 import BookingView from "./booking-view";
 import HomeView from "./home-view";
@@ -10,10 +10,13 @@ import NotificationsView from "./notifications-view";
 import RecordsView from "./records-view";
 import SettingsView from "./settings-view";
 import { api, logout } from "../lib/api";
-import { isLanguage, readStoredLanguage, useI18n, type TranslationKey } from "../lib/i18n";
+import { isLanguage, useI18n, type TranslationKey } from "../lib/i18n";
 
 export default function Interview() {
-  const { t, setLanguage } = useI18n();
+  const { t, language, setLanguage } = useI18n();
+  const setAccountLanguage = (saved: Parameters<typeof setLanguage>[0]) => {
+    if (saved !== language) setLanguage(saved);
+  };
   const [activeNav, setActiveNav] = useState("home");
   // Shared: which card/record a notification click should highlight on the target page
   const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
@@ -57,17 +60,18 @@ export default function Interview() {
       .then((profile) => {
         if (cancelled) return;
         setHealthCard(healthCardFromProfile(profile));
-        // A device with no language chosen yet takes the account's (set on
-        // another device); a choice made on this device stays.
+        // Signed in, the account's language is the one to show: every choice
+        // made in the switcher while signed in is saved there, on any device.
         const saved = profile.preferences?.language;
-        if (!readStoredLanguage() && isLanguage(saved)) setLanguage(saved);
+        if (isLanguage(saved)) setAccountLanguage(saved);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
-    // setLanguage is stable: this runs once, on mount.
-  }, [setLanguage]);
+    // Runs once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ===== Notification page state =====
   // A notification opens another screen and highlights its card there.
@@ -164,7 +168,7 @@ export default function Interview() {
           </div>
         </div>
         <div className="flex items-center space-x-1.5 sm:space-x-3">
-          <LanguageSwitcher onChange={saveAccountLanguage} tone="light" />
+          <LanguageSwitcher tone="light" />
           <div className="flex items-center space-x-2 pl-1 sm:pl-2 py-1">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
               <svg className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700" fill="currentColor" viewBox="0 0 20 20">
