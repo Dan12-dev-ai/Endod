@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { futureSlot, openSection } from './helpers';
 
 // The hospital directory and booking, against the real backend directory.

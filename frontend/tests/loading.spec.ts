@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 
 // While a page's data loads, it shows a placeholder in the shape of what is
 // coming (data-purpose="skeleton"), never "Loading…" or a blank area; the

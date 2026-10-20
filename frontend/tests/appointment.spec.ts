@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { createAppointment, futureSlot, openSection } from './helpers';
 
 // Appointments against the real backend. Each test creates its own

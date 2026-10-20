@@ -1,4 +1,4 @@
-import { test, expect, request as playwrightRequest, type Page } from '@playwright/test';
+import { test, expect, request as playwrightRequest, type Page } from './fixtures';
 
 // Onboarding for a brand-new account, against the real backend.
 test.use({ storageState: { cookies: [], origins: [] } });

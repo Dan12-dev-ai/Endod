@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // Sign-in against the real backend. These start signed out.
 test.use({ storageState: { cookies: [], origins: [] } });

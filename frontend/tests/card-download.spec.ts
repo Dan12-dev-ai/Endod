@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import fs from 'node:fs';
 import jsQR from 'jsqr';
 import { PNG } from 'pngjs';

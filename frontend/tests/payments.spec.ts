@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, BLANK_PNG, type Page } from './fixtures';
 import { createAppointment, futureSlot, openSection, PARTNER_ID, seed } from './helpers';
 
 // The Endod balance (through tests/fake-chapa.mjs, which behaves like Chapa's
@@ -12,8 +12,6 @@ test.describe.configure({ mode: 'serial' });
 test.use({ timezoneId: 'Africa/Addis_Ababa' });
 
 const PARTNER = `[data-purpose="hospital-${PARTNER_ID}"]`;
-// A 1x1 transparent PNG, served in place of map tiles.
-const BLANK_PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
 
 async function balanceText(page: Page) {
   await openSection(page, 'Balance', 'wallet-view');
@@ -189,7 +187,7 @@ test.describe('Emergency', () => {
     await expect(map).toBeVisible();
     await expect(map.locator('.leaflet-marker-icon[title="Endod Test General Hospital"]')).toBeVisible();
     await expect(map).toContainText('OpenStreetMap');
-    expect(tiles).toBeGreaterThan(0);
+    await expect.poll(() => tiles).toBeGreaterThan(0);
 
     // Located: the patient's own dot joins the hospitals.
     await panel.locator('[data-purpose="emergency-locate"]').click();

@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext } from './fixtures';
 import { openSection } from './helpers';
 
 // Settings against the real backend. These change the shared test patient,

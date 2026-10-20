@@ -54,17 +54,30 @@ export default function HospitalMap({
   // Leaflet needs the browser: loaded here, once.
   useEffect(() => {
     let cancelled = false;
+    let resize: ResizeObserver | null = null;
     void import("leaflet").then((L) => {
       if (cancelled || !box.current || map.current) return;
       leaflet.current = L;
-      map.current = L.map(box.current, { center: ADDIS_ABABA, zoom: 12, scrollWheelZoom: false });
+      map.current = L.map(box.current, {
+        center: ADDIS_ABABA,
+        zoom: 12,
+        scrollWheelZoom: false,
+        // On phones a swipe scrolls the page (or the dialog); pinch zooms the map.
+        dragging: !L.Browser.mobile,
+      });
       map.current.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
       L.tileLayer(TILES, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(map.current);
       layer.current = L.layerGroup().addTo(map.current);
+      // The box can change width without the window resizing (a scrollbar
+      // appearing in a dialog): keep the map's own idea of its size right.
+      const current = map.current;
+      resize = new ResizeObserver(() => current.invalidateSize());
+      resize.observe(box.current);
       setReady(true);
     });
     return () => {
       cancelled = true;
+      resize?.disconnect();
       map.current?.remove();
       map.current = null;
       layer.current = null;
@@ -82,7 +95,8 @@ export default function HospitalMap({
         icon: L.divIcon({ className: "", html: HOSPITAL_PIN, iconSize: [22, 22], iconAnchor: [11, 22] }),
         title: point.label,
         alt: point.label,
-        keyboard: true,
+        // A Tab stop only when choosing a pin does something.
+        keyboard: Boolean(select.current),
       })
         .on("click", () => select.current?.(point.id))
         .addTo(layer.current);
@@ -98,6 +112,7 @@ export default function HospitalMap({
       }).addTo(layer.current);
       bounds.extend(position);
     }
+    map.current.invalidateSize();
     if (bounds.isValid()) {
       if (points.length + (here ? 1 : 0) === 1) map.current.setView(bounds.getCenter(), 14);
       else map.current.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
