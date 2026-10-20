@@ -1,9 +1,9 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, BLANK_PNG, type Page } from './fixtures';
 import { createAppointment, futureSlot, openSection, PARTNER_ID, seed } from './helpers';
 
 // The Endod balance (through tests/fake-chapa.mjs, which behaves like Chapa's
 // checkout), paid bookings at a partner hospital (listed by tests/seed.py),
-// video visits (Jitsi's script stubbed) and the emergency panel (Google Maps
+// video visits (Jitsi's script stubbed) and the emergency panel (map tiles
 // stubbed). The tests build on each other, so they run in order.
 
 test.describe.configure({ mode: 'serial' });
@@ -165,8 +165,6 @@ test.describe('Emergency', () => {
     const hospital = panel.locator(`[data-purpose="emergency-hospital-${PARTNER_ID}"]`);
     await expect(hospital.getByRole('link', { name: /Call their ambulance/ })).toHaveAttribute('href', 'tel:+251911000111');
     await expect(hospital).not.toContainText(' km');
-    // No Maps key in this deployment: no map, and nothing breaks.
-    await expect(panel.locator('[data-purpose="hospital-map"]')).toHaveCount(0);
 
     await panel.locator('[data-purpose="emergency-locate"]').click();
     await expect(hospital).toContainText(' km');
@@ -175,31 +173,25 @@ test.describe('Emergency', () => {
     await expect(panel).toHaveCount(0);
   });
 
-  test('shows the hospitals on a map when a Maps key is configured', async ({ page }) => {
-    await page.route('**/api/config', (route) => route.fulfill({ json: { googleMapsKey: 'e2e-browser-key' } }));
-    await page.route('https://maps.googleapis.com/**', (route) =>
-      route.fulfill({
-        contentType: 'application/javascript',
-        body: `(() => {
-          window.__markers = [];
-          class LatLngBounds { constructor() { this.n = 0; } extend() { this.n++; } isEmpty() { return this.n === 0; } getCenter() { return {}; } }
-          window.google = { maps: {
-            Map: class { constructor(el) { el.setAttribute('data-map-ready', 'yes'); } setCenter() {} setZoom() {} fitBounds() {} },
-            Marker: class { constructor(o) { window.__markers.push(o.title); } setMap() {} addListener() {} },
-            LatLngBounds, SymbolPath: { CIRCLE: 0 },
-          } };
-          window.__endodMapsReady();
-        })();`,
-      }),
-    );
+  test('shows the hospitals and the patient on an OpenStreetMap map', async ({ page }) => {
+    // Tiles come from OpenStreetMap; the test serves a blank tile instead.
+    let tiles = 0;
+    await page.route('https://tile.openstreetmap.org/**', (route) => {
+      tiles += 1;
+      return route.fulfill({ contentType: 'image/png', body: BLANK_PNG });
+    });
     await page.goto('/interview', { waitUntil: 'networkidle' });
     await page.locator('[data-purpose="emergency-button"]').click();
-    const map = page.locator('[data-purpose="hospital-map"]');
+    const panel = page.locator('[data-purpose="emergency-panel"]');
+    const map = panel.locator('[data-purpose="hospital-map"]');
     await expect(map).toBeVisible();
-    await expect(map).toHaveAttribute('data-map-ready', 'yes');
-    await expect.poll(() => page.evaluate(() => (window as unknown as { __markers: string[] }).__markers)).toContain(
-      'Endod Test General Hospital',
-    );
+    await expect(map.locator('.leaflet-marker-icon[title="Endod Test General Hospital"]')).toBeVisible();
+    await expect(map).toContainText('OpenStreetMap');
+    await expect.poll(() => tiles).toBeGreaterThan(0);
+
+    // Located: the patient's own dot joins the hospitals.
+    await panel.locator('[data-purpose="emergency-locate"]').click();
+    await expect(map.locator('.leaflet-marker-icon[title="You are here"]')).toBeVisible();
   });
 });
 

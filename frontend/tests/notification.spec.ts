@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './fixtures';
 import { createAppointment, futureSlot, openSection } from './helpers';
 
 // The in-app inbox against the real backend: booking and cancelling

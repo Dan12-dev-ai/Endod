@@ -1,45 +1,28 @@
 "use client";
 
-// A Google map of hospitals and the patient's location. Shown only when the
-// deployment has a Google Maps browser key (GOOGLE_MAPS_BROWSER_KEY, read at
-// run time through /api/config); without one, the screens keep their lists
-// and directions links and simply have no map.
+// A map of hospitals and the patient's location: Leaflet with OpenStreetMap
+// tiles (free, no key). Turn-by-turn directions stay a link that opens the
+// phone's maps app (Google Maps), so no paid routing service is needed.
 
 import { useEffect, useRef, useState } from "react";
+import type { LayerGroup, Map as LeafletMap } from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { useI18n } from "../lib/i18n";
 
 export type MapPoint = { id: string; latitude: number; longitude: number; label: string };
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- the Maps script defines window.google at run time */
-type MapsWindow = Window & { google?: any; __endodMapsReady?: () => void };
+const ADDIS_ABABA: [number, number] = [9.03, 38.74];
+const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
-let configPromise: Promise<string | null> | null = null;
-let scriptPromise: Promise<void> | null = null;
-
-function mapsKey(): Promise<string | null> {
-  configPromise ??= fetch("/api/config")
-    .then((r) => (r.ok ? r.json() : {}))
-    .then((c: { googleMapsKey?: string | null }) => c.googleMapsKey || null)
-    .catch(() => null);
-  return configPromise;
-}
-
-function loadMaps(key: string): Promise<void> {
-  const w = window as MapsWindow;
-  if (w.google?.maps?.Map) return Promise.resolve();
-  scriptPromise ??= new Promise<void>((resolve, reject) => {
-    w.__endodMapsReady = () => resolve();
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&loading=async&callback=__endodMapsReady&v=weekly`;
-    script.async = true;
-    script.onerror = () => {
-      scriptPromise = null;
-      reject(new Error("Google Maps did not load"));
-    };
-    document.head.appendChild(script);
-  });
-  return scriptPromise;
-}
+// Markers drawn with CSS (no image files to bundle): a red pin per hospital,
+// a blue dot for the patient.
+const HOSPITAL_PIN =
+  '<span style="display:block;width:22px;height:22px;border-radius:50% 50% 50% 0;background:#dc2626;' +
+  'border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 1px 4px rgba(0,0,0,.4)"></span>';
+const YOU_DOT =
+  '<span style="display:block;width:16px;height:16px;border-radius:50%;background:#2563eb;' +
+  'border:3px solid #fff;box-shadow:0 0 0 2px rgba(37,99,235,.35)"></span>';
 
 export default function HospitalMap({
   points,
@@ -52,10 +35,10 @@ export default function HospitalMap({
 }) {
   const { t } = useI18n();
   const box = useRef<HTMLDivElement>(null);
-  const map = useRef<any>(null);
-  const markers = useRef<any[]>([]);
+  const map = useRef<LeafletMap | null>(null);
+  const layer = useRef<LayerGroup | null>(null);
+  const leaflet = useRef<typeof import("leaflet") | null>(null);
   const [ready, setReady] = useState(false);
-  const [available, setAvailable] = useState(false);
   // The latest click handler, without redrawing the markers when it changes.
   const select = useRef(onSelect);
   useEffect(() => {
@@ -68,72 +51,79 @@ export default function HospitalMap({
     here ? [here.latitude, here.longitude] : null,
   ]);
 
+  // Leaflet needs the browser: loaded here, once.
   useEffect(() => {
     let cancelled = false;
-    void mapsKey().then(async (key) => {
-      if (!key || cancelled) return;
-      try {
-        await loadMaps(key);
-        if (!cancelled) {
-          setAvailable(true);
-          setReady(true);
-        }
-      } catch {
-        // No map; the lists still work.
-      }
+    let resize: ResizeObserver | null = null;
+    void import("leaflet").then((L) => {
+      if (cancelled || !box.current || map.current) return;
+      leaflet.current = L;
+      map.current = L.map(box.current, {
+        center: ADDIS_ABABA,
+        zoom: 12,
+        scrollWheelZoom: false,
+        // On phones a swipe scrolls the page (or the dialog); pinch zooms the map.
+        dragging: !L.Browser.mobile,
+      });
+      map.current.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
+      L.tileLayer(TILES, { maxZoom: 19, attribution: ATTRIBUTION }).addTo(map.current);
+      layer.current = L.layerGroup().addTo(map.current);
+      // The box can change width without the window resizing (a scrollbar
+      // appearing in a dialog): keep the map's own idea of its size right.
+      const current = map.current;
+      resize = new ResizeObserver(() => current.invalidateSize());
+      resize.observe(box.current);
+      setReady(true);
     });
     return () => {
       cancelled = true;
+      resize?.disconnect();
+      map.current?.remove();
+      map.current = null;
+      layer.current = null;
     };
   }, []);
 
   useEffect(() => {
-    if (!ready || !box.current) return;
-    const google = (window as MapsWindow).google;
-    if (!map.current) {
-      map.current = new google.maps.Map(box.current, {
-        center: { lat: 9.03, lng: 38.74 }, // Addis Ababa
-        zoom: 12,
-        disableDefaultUI: true,
-        zoomControl: true,
-        clickableIcons: false,
-      });
-    }
-    for (const marker of markers.current) marker.setMap(null);
-    markers.current = [];
-    const bounds = new google.maps.LatLngBounds();
+    const L = leaflet.current;
+    if (!ready || !L || !map.current || !layer.current) return;
+    layer.current.clearLayers();
+    const bounds = L.latLngBounds([]);
     for (const point of points) {
-      const position = { lat: point.latitude, lng: point.longitude };
-      const marker = new google.maps.Marker({ map: map.current, position, title: point.label });
-      marker.addListener("click", () => select.current?.(point.id));
-      markers.current.push(marker);
+      const position: [number, number] = [point.latitude, point.longitude];
+      L.marker(position, {
+        icon: L.divIcon({ className: "", html: HOSPITAL_PIN, iconSize: [22, 22], iconAnchor: [11, 22] }),
+        title: point.label,
+        alt: point.label,
+        // A Tab stop only when choosing a pin does something.
+        keyboard: Boolean(select.current),
+      })
+        .on("click", () => select.current?.(point.id))
+        .addTo(layer.current);
       bounds.extend(position);
     }
     if (here) {
-      const position = { lat: here.latitude, lng: here.longitude };
-      markers.current.push(new google.maps.Marker({
-        map: map.current, position, title: t("map.you"),
-        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: "#2563eb", fillOpacity: 1,
-                strokeColor: "#ffffff", strokeWeight: 2 },
-      }));
+      const position: [number, number] = [here.latitude, here.longitude];
+      L.marker(position, {
+        icon: L.divIcon({ className: "", html: YOU_DOT, iconSize: [16, 16], iconAnchor: [8, 8] }),
+        title: t("map.you"),
+        alt: t("map.you"),
+        keyboard: false,
+      }).addTo(layer.current);
       bounds.extend(position);
     }
-    if (!bounds.isEmpty()) {
-      if (points.length + (here ? 1 : 0) === 1) {
-        map.current.setCenter(bounds.getCenter());
-        map.current.setZoom(14);
-      } else {
-        map.current.fitBounds(bounds, 48);
-      }
+    map.current.invalidateSize();
+    if (bounds.isValid()) {
+      if (points.length + (here ? 1 : 0) === 1) map.current.setView(bounds.getCenter(), 14);
+      else map.current.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `shown` stands for points and here; t only labels the marker
   }, [ready, shown]);
 
-  if (!available) return null;
   return (
     <div
       aria-label={t("map.label")}
-      className="w-full h-56 sm:h-64 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100"
+      className="relative z-0 w-full h-56 sm:h-64 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100"
       data-purpose="hospital-map"
       ref={box}
       role="region"

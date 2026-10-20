@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { openSection } from './helpers';
 
 // Medical records against the real backend (the shared test patient).

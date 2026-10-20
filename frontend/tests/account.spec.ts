@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 
 // The signed-in state on public pages, the sign-in redirects, and the
 // Digital Health Card's verifiable QR code. Runs as the shared test patient

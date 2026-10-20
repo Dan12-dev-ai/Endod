@@ -53,8 +53,6 @@ services:
       DEDAN_API_URL: http://backend:8000
       # Cloudflare appends the client address it saw: one hop from the right.
       TRUSTED_PROXY_HOPS: "1"
-      # Read per request, so the key can be added without a rebuild.
-      GOOGLE_MAPS_BROWSER_KEY: ${GOOGLE_MAPS_BROWSER_KEY:-}
     depends_on:
       backend:
         condition: service_healthy
