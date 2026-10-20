@@ -1,4 +1,5 @@
-# Endod Health: Postgres, the API, the patient web app and a Cloudflare Tunnel.
+# Endod Health: Postgres, the API, the patient web app, the event bus (Redis
+# with Sentinel) and its worker, and a Cloudflare Tunnel.
 #
 # Nothing is published on the host: the only way in is the tunnel, which
 # reaches the web app, and the web app reaches the API on the private
@@ -52,9 +53,116 @@ services:
       DEDAN_API_URL: http://backend:8000
       # Cloudflare appends the client address it saw: one hop from the right.
       TRUSTED_PROXY_HOPS: "1"
+      # Read per request, so the key can be added without a rebuild.
+      GOOGLE_MAPS_BROWSER_KEY: ${GOOGLE_MAPS_BROWSER_KEY:-}
     depends_on:
       backend:
         condition: service_healthy
+
+  # --- Events between Endod and the hospital service (Redis Streams) ---------
+  # A master, a replica and three Sentinels that elect a new master if it
+  # fails. Only on the private "bus" network, which the hospital service's
+  # own Compose project joins (see Hospital-service/deploy).
+  redis-1:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --masterauth \"$$REDIS_PASSWORD\" --appendonly yes --replica-announce-ip endod-redis-1"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in deploy/.env}
+    volumes:
+      - redis1:/data
+    networks:
+      bus:
+        aliases: [endod-redis-1]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis-2:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --masterauth \"$$REDIS_PASSWORD\" --appendonly yes --replica-announce-ip endod-redis-2 --replicaof endod-redis-1 6379"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis2:/data
+    networks:
+      bus:
+        aliases: [endod-redis-2]
+    depends_on:
+      redis-1:
+        condition: service_healthy
+
+  sentinel-1: &sentinel
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    entrypoint: ["sh", "/sentinel.sh"]
+    environment: &sentinel-env
+      SENTINEL_NAME: endod-sentinel-1
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
+    volumes:
+      - ./redis/sentinel.sh:/sentinel.sh:ro
+      - sentinel1:/data
+    networks:
+      bus:
+        aliases: [endod-sentinel-1]
+    depends_on:
+      redis-1:
+        condition: service_healthy
+
+  sentinel-2:
+    <<: *sentinel
+    environment:
+      <<: *sentinel-env
+      SENTINEL_NAME: endod-sentinel-2
+    volumes:
+      - ./redis/sentinel.sh:/sentinel.sh:ro
+      - sentinel2:/data
+    networks:
+      bus:
+        aliases: [endod-sentinel-2]
+
+  sentinel-3:
+    <<: *sentinel
+    environment:
+      <<: *sentinel-env
+      SENTINEL_NAME: endod-sentinel-3
+    volumes:
+      - ./redis/sentinel.sh:/sentinel.sh:ro
+      - sentinel3:/data
+    networks:
+      bus:
+        aliases: [endod-sentinel-3]
+
+  # Sends Endod's events to the hospital service and applies its replies
+  # (listings, decisions on bookings, refunds); re-checks Chapa deposits.
+  events-worker:
+    build:
+      context: ..
+      dockerfile: backend-v2/Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "dedan_platform.events_worker"]
+    env_file: .env
+    environment:
+      DEDAN_DATABASE_URL: postgresql+psycopg://endod:${POSTGRES_PASSWORD}@postgres:5432/endod
+      REDIS_SENTINELS: endod-sentinel-1:26379,endod-sentinel-2:26379,endod-sentinel-3:26379
+      REDIS_SENTINEL_MASTER: endod
+      REDIS_MIN_REPLICAS: "1"
+    healthcheck:
+      disable: true
+    networks:
+      default: {}
+      bus: {}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      sentinel-1:
+        condition: service_started
 
   # Only with the tunnel: `docker compose --profile tunnel up -d`.
   # (Alternatively an existing nginx fronts the app: see shared-nginx/.)
@@ -70,3 +178,15 @@ services:
 
 volumes:
   pgdata:
+  redis1:
+  redis2:
+  sentinel1:
+  sentinel2:
+  sentinel3:
+
+networks:
+  # Shared with the hospital service's Compose project (by this name). No
+  # internet access from it; each service keeps its own network for that.
+  bus:
+    name: endod-bus
+    internal: true
