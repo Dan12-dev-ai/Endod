@@ -24,7 +24,8 @@ browser ──HTTPS──> Cloudflare ──tunnel──> cloudflared ──> fr
 
 ```sh
 cd /opt/endod/deploy
-docker compose --env-file .env up -d --build
+# On this server the shared nginx fronts Endod (no tunnel): add its override.
+docker compose -f docker-compose.yml -f shared-nginx/docker-compose.override.yml \n  --env-file .env up -d --build
 docker compose ps            # all healthy
 docker compose logs -f backend
 ```

@@ -5,7 +5,7 @@
 # reaches the web app, and the web app reaches the API on the private
 # network. See deploy/README.md.
 #
-#   cd deploy && docker compose --env-file .env up -d --build
+#   cd deploy && docker compose -f docker-compose.yml -f shared-nginx/docker-compose.override.yml --env-file .env up -d --build
 
 name: endod
 
@@ -66,10 +66,15 @@ services:
   redis-1:
     image: redis:7.4-alpine
     restart: unless-stopped
-    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --masterauth \"$$REDIS_PASSWORD\" --appendonly yes --replica-announce-ip 172.30.77.11"]
+    # Starts as master or replica, whichever the Sentinels say (redis/redis.sh).
+    entrypoint: ["sh", "/redis.sh"]
     environment:
+      MY_IP: 172.30.77.11
+      DEFAULT_MASTER_IP: 172.30.77.11
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in deploy/.env}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
     volumes:
+      - ./redis/redis.sh:/redis.sh:ro
       - redis1:/data
     networks:
       bus:
@@ -84,18 +89,19 @@ services:
   redis-2:
     image: redis:7.4-alpine
     restart: unless-stopped
-    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --masterauth \"$$REDIS_PASSWORD\" --appendonly yes --replica-announce-ip 172.30.77.12 --replicaof 172.30.77.11 6379"]
+    entrypoint: ["sh", "/redis.sh"]
     environment:
+      MY_IP: 172.30.77.12
+      DEFAULT_MASTER_IP: 172.30.77.11
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
     volumes:
+      - ./redis/redis.sh:/redis.sh:ro
       - redis2:/data
     networks:
       bus:
         ipv4_address: 172.30.77.12
         aliases: [endod-redis-2]
-    depends_on:
-      redis-1:
-        condition: service_healthy
 
   sentinel-1: &sentinel
     image: redis:7.4-alpine
@@ -112,9 +118,6 @@ services:
       bus:
         ipv4_address: 172.30.77.21
         aliases: [endod-sentinel-1]
-    depends_on:
-      redis-1:
-        condition: service_healthy
 
   sentinel-2:
     <<: *sentinel
