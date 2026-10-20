@@ -314,10 +314,11 @@ def _validate_visit(
         raise AppointmentError("meeting_url is only for telehealth visits.")
     location = _short_text(location, "location", 200)
     if facility_id:
+        from dedan_platform import partner_config
         from dedan_platform.care_navigation import get_facility
 
         facility = get_facility(facility_id)
-        if facility is None:
+        if facility is None or (not facility.partner and not partner_config.demo_directory()):
             raise AppointmentError("Unknown facility_id.")
         if mode == "telehealth":
             raise AppointmentError("A telehealth visit is not at a facility; leave facility_id empty.")

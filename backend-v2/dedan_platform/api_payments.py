@@ -114,11 +114,11 @@ def emergency(latitude: Optional[float] = Query(default=None, ge=-90, le=90),
 
 # --- Chapa (public) ---------------------------------------------------------------------
 
-def _settle(tx_ref: Optional[str]) -> Dict[str, Any]:
+def _settle(tx_ref: Optional[str], recheck_settled: bool = False) -> Dict[str, Any]:
     if not tx_ref or len(tx_ref) > 64:
         raise HTTPException(status_code=400, detail="Missing transaction reference.")
     try:
-        result = deposits.settle(tx_ref)
+        result = deposits.settle(tx_ref, recheck_settled=recheck_settled)
     except chapa.ChapaError as exc:
         # Chapa will notify again; the patient's return also re-checks.
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -147,6 +147,11 @@ async def chapa_webhook(request: Request) -> Dict[str, Any]:
         body = json.loads(raw or b"{}")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Bad body.") from exc
-    tx_ref = (body.get("tx_ref") or body.get("trx_ref")) if isinstance(body, dict) else None
+    body = body if isinstance(body, dict) else {}
+    tx_ref = body.get("tx_ref") or body.get("trx_ref")
+    # A refund or reversal of an earlier payment is checked even though the
+    # deposit was already credited (Chapa's verify is still the judge).
+    words = f"{body.get('event', '')} {body.get('status', '')}".lower()
+    reversal = "refund" in words or "revers" in words
     # Settling calls Chapa (blocking I/O): off the event loop.
-    return await run_in_threadpool(_settle, tx_ref)
+    return await run_in_threadpool(_settle, tx_ref, reversal)

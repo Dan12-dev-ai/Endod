@@ -152,10 +152,12 @@ def create_appointment(
             raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc)) from exc
         except appt.AppointmentError as exc:
             raise _error(exc) from exc
-        queued = scheduler.schedule_all_channels(
-            user_id=user_id, appointment_id=result["appointment"]["appointment_id"],
-            correlation_id=request.headers.get("X-Correlation-ID"),
-        )
+        # A video visit gets its reminders once a doctor approves it.
+        queued = {"queued": 0, "job_ids": [], "skipped": [], "offsets": [], "channels": {}} if result["appointment"]["hospital_booking"]["state"] == "awaiting_doctor" else \
+            scheduler.schedule_all_channels(
+                user_id=user_id, appointment_id=result["appointment"]["appointment_id"],
+                correlation_id=request.headers.get("X-Correlation-ID"),
+            )
         return {**result, "reminders": queued}
 
     try:

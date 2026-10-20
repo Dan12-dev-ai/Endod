@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from sqlalchemy import select
 
@@ -75,44 +75,74 @@ def start(user_id: str, amount: int) -> Dict[str, Any]:
         return _payload(deposit)
 
 
-def settle(tx_ref: str) -> Optional[Dict[str, Any]]:
-    """Check a deposit with Chapa and credit it if paid. Returns the deposit, or None if unknown."""
+def settle(tx_ref: str, recheck_settled: bool = False) -> Optional[Dict[str, Any]]:
+    """Check a deposit with Chapa and credit it if paid. Returns the deposit, or None if unknown.
+
+    A pending or failed deposit Chapa reports as paid (for the right amount
+    in birr) is credited, once. With ``recheck_settled`` (Chapa's webhook told
+    of a refund or reversal), a credited deposit is checked again and taken
+    back if Chapa reversed it. Raises ChapaError when Chapa gave no answer.
+    """
     with session_scope() as session:
         deposit = session.scalar(select(Deposit).where(Deposit.tx_ref == tx_ref))
         if deposit is None:
             return None
-        if deposit.status != DepositStatus.PENDING:
+        settled = deposit.status in (DepositStatus.SUCCEEDED, DepositStatus.REVERSED)
+        if settled and not (recheck_settled and deposit.status == DepositStatus.SUCCEEDED):
             return _payload(deposit)
         deposit_id = deposit.id
     record = chapa.verify(tx_ref)
+    notify: Optional[Tuple[str, str, str]] = None
     with session_scope() as session:
         deposit = session.get(Deposit, deposit_id, with_for_update=True)
-        if deposit.status != DepositStatus.PENDING:
-            return _payload(deposit)  # settled meanwhile by another notification
-        if record["paid"]:
+        deposit.last_checked_at = utcnow()
+        if deposit.status == DepositStatus.SUCCEEDED:
+            if record.get("reversed"):
+                # Chapa gave the money back to the payer: take the credit back.
+                wallet.post(session, deposit.user_id, WalletEntryKind.REVERSAL, -deposit.amount,
+                            deposit_id=deposit.id, description="Deposit refunded by Chapa", allow_negative=True)
+                deposit.status, deposit.failure = DepositStatus.REVERSED, "Refunded or reversed at Chapa."
+                logger.warning("deposit_reversed tx_ref=%s amount=%s", tx_ref, deposit.amount)
+                notify = (deposit.user_id, "Deposit reversed",
+                          f"{wallet.birr(deposit.amount)} birr was refunded to you by Chapa and taken off your balance.")
+            result = _payload(deposit)
+        elif deposit.status == DepositStatus.REVERSED:
+            result = _payload(deposit)
+        elif record["paid"]:
             if record["amount"] != deposit.amount or (record.get("currency") or "ETB") != "ETB":
-                # Never credit an amount other than the one asked for.
-                logger.error("deposit_amount_mismatch tx_ref=%s expected=%s got=%s %s",
+                # Never credit an amount other than the one asked for; a person
+                # sorts it out (the patient was charged something).
+                logger.error("ALERT deposit_amount_mismatch tx_ref=%s expected=%s got=%s %s",
                              tx_ref, deposit.amount, record["amount"], record.get("currency"))
                 deposit.status, deposit.failure = DepositStatus.FAILED, "Amount did not match; contact Endod."
                 deposit.completed_at = utcnow()
-                return _payload(deposit)
-            wallet.post(session, deposit.user_id, WalletEntryKind.DEPOSIT, deposit.amount, deposit_id=deposit.id,
-                        description="Deposit through Chapa")
-            deposit.status, deposit.completed_at = DepositStatus.SUCCEEDED, utcnow()
-            deposit.provider_reference = (record.get("reference") or "")[:100] or None
-            user_id, amount = deposit.user_id, deposit.amount
+                notify = (deposit.user_id, "Deposit needs checking",
+                          "Your payment did not match the amount requested. Endod will contact you; "
+                          "nothing is lost.")
+            else:
+                wallet.post(session, deposit.user_id, WalletEntryKind.DEPOSIT, deposit.amount,
+                            deposit_id=deposit.id, description="Deposit through Chapa")
+                deposit.status, deposit.completed_at, deposit.failure = DepositStatus.SUCCEEDED, utcnow(), None
+                deposit.provider_reference = (record.get("reference") or "")[:100] or None
+                notify = (deposit.user_id, "Money added",
+                          f"{wallet.birr(deposit.amount)} birr was added to your Endod balance.")
             result = _payload(deposit)
         else:
+            # Closed only on Chapa's definite word (failed, or no such payment
+            # a day later); a pending one stays pending.
             stale = utcnow() - ensure_aware(deposit.created_at) > ABANDONED_AFTER
-            if record.get("failed") or stale:
+            if deposit.status == DepositStatus.PENDING and (record.get("failed") and (record.get("known") or stale)):
                 deposit.status, deposit.completed_at = DepositStatus.FAILED, utcnow()
                 deposit.failure = "Payment was not completed."
-            return _payload(deposit)
-    from dedan_platform import inbox
+            result = _payload(deposit)
+    if notify:
+        from dedan_platform import inbox
 
-    inbox.add_item(user_id, "messages", "deposit_received", "Money added",
-                   body=f"{wallet.birr(amount)} birr was added to your Endod balance.")
+        try:
+            kind = "deposit_received" if notify[1] == "Money added" else "deposit_update"
+            inbox.add_item(notify[0], "messages", kind, notify[1], body=notify[2])
+        except Exception:  # noqa: BLE001 -- the money moved; the message is best effort
+            logger.exception("deposit_inbox_failed tx_ref=%s", tx_ref)
     return result
 
 
@@ -122,7 +152,7 @@ def status_for(user_id: str, deposit_id: str) -> Dict[str, Any]:
         deposit = session.scalar(select(Deposit).where(Deposit.id == deposit_id, Deposit.user_id == user_id))
         if deposit is None:
             raise DepositError("Deposit not found.", 404)
-        if deposit.status != DepositStatus.PENDING:
+        if deposit.status not in (DepositStatus.PENDING, DepositStatus.FAILED):
             return _payload(deposit)
         tx_ref = deposit.tx_ref
     try:

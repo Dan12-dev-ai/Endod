@@ -66,15 +66,17 @@ def post(
     appointment_id: Optional[str] = None,
     deposit_id: Optional[str] = None,
     description: Optional[str] = None,
+    allow_negative: bool = False,
 ) -> WalletEntry:
-    """Record one movement in the caller's transaction. Raises InsufficientFunds."""
+    """Record one movement in the caller's transaction. Raises InsufficientFunds
+    (unless ``allow_negative``: only for taking back a reversed deposit)."""
     if kind not in WalletEntryKind.ALL:
         raise WalletError(f"Unknown wallet entry kind {kind!r}.")
     if amount == 0:
         raise WalletError("A wallet movement cannot be zero.")
     wallet = _wallet_for_update(session, user_id)
     new_balance = wallet.balance + amount
-    if new_balance < 0:
+    if new_balance < 0 and not allow_negative:
         raise InsufficientFunds(needed=-amount, balance=wallet.balance)
     entry = WalletEntry(
         user_id=user_id, kind=kind, amount=amount, balance_after=new_balance,

@@ -750,7 +750,10 @@ class WalletEntryKind:
     PAYMENT = "payment"
     SERVICE_FEE = "service_fee"
     REFUND = "refund"
-    ALL = (DEPOSIT, PAYMENT, SERVICE_FEE, REFUND)
+    #: Chapa refunded or reversed a deposit: the money is taken back (the
+    #: balance may go below zero until it is settled).
+    REVERSAL = "reversal"
+    ALL = (DEPOSIT, PAYMENT, SERVICE_FEE, REFUND, REVERSAL)
 
 
 class Wallet(Base):
@@ -778,7 +781,7 @@ class WalletEntry(Base):
     __table_args__ = (
         # A payment, fee or refund happens once per appointment, whatever retries.
         UniqueConstraint("appointment_id", "kind", name="uq_wallet_entry_appointment_kind"),
-        UniqueConstraint("deposit_id", name="uq_wallet_entry_deposit"),
+        UniqueConstraint("deposit_id", "kind", name="uq_wallet_entry_deposit_kind"),
         Index("ix_wallet_entries_user_created", "user_id", "created_at"),
     )
 
@@ -798,7 +801,9 @@ class DepositStatus:
     PENDING = "pending"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
-    ALL = (PENDING, SUCCEEDED, FAILED)
+    #: Paid, then refunded or reversed at Chapa (the credit was taken back).
+    REVERSED = "reversed"
+    ALL = (PENDING, SUCCEEDED, FAILED, REVERSED)
 
 
 class Deposit(Base):
@@ -820,6 +825,8 @@ class Deposit(Base):
     failure: Mapped[Optional[str]] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: When the worker last asked Chapa about it (so re-checks take turns).
+    last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
 class PayoutStatus:
@@ -832,7 +839,10 @@ class PayoutStatus:
     #: Refunded to the patient: nothing is owed.
     VOID = "void"
     PAID = "paid"
-    ALL = (HELD, DUE, VOID, PAID)
+    #: The hospital completed a visit the patient had cancelled (and been
+    #: refunded) at the same moment: for a person to settle.
+    DISPUTED = "disputed"
+    ALL = (HELD, DUE, VOID, PAID, DISPUTED)
 
 
 class HospitalPayout(Base):

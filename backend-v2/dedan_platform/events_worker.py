@@ -16,7 +16,7 @@ import time
 from datetime import timedelta
 
 import redis
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from dedan_platform import chapa, deposits, eventbus, hospital_bookings
 from dedan_platform.db import session_scope
@@ -26,8 +26,9 @@ logger = logging.getLogger("dedan.events_worker")
 _running = True
 
 DEPOSITS_EVERY = 300
+STALE_EVERY = 300
 HOUSEKEEPING_EVERY = 3600
-_last = {"deposits": 0.0, "housekeeping": 0.0}
+_last = {"deposits": 0.0, "stale": 0.0, "housekeeping": 0.0}
 
 
 def _stop(*_args) -> None:
@@ -35,19 +36,33 @@ def _stop(*_args) -> None:
     _running = False
 
 
-def recheck_deposits() -> int:
-    """Settle deposits still pending after a few minutes (a missed webhook)."""
-    cutoff = utcnow() - timedelta(minutes=3)
+#: Seconds a round may spend asking Chapa, so events are never held up long.
+RECHECK_BUDGET = 15
+
+
+def recheck_deposits(budget_seconds: float = RECHECK_BUDGET) -> int:
+    """Settle deposits still pending a few minutes on (a missed webhook):
+    newest and least recently checked first, within a time budget."""
+    now = utcnow()
     with session_scope() as session:
         refs = list(session.scalars(select(Deposit.tx_ref).where(
-            Deposit.status == DepositStatus.PENDING, Deposit.created_at < cutoff).limit(50)))
-    settled = 0
+            Deposit.status == DepositStatus.PENDING,
+            Deposit.created_at < now - timedelta(minutes=3),
+            or_(Deposit.last_checked_at.is_(None), Deposit.last_checked_at < now - timedelta(minutes=10)),
+        ).order_by(Deposit.created_at.desc()).limit(20)))
+    settled, started = 0, time.monotonic()
     for tx_ref in refs:
+        if time.monotonic() - started > budget_seconds:
+            break
         try:
             deposits.settle(tx_ref)
             settled += 1
         except chapa.ChapaError as exc:
             logger.warning("deposit_recheck_failed tx_ref=%s %s", tx_ref, exc)
+            with session_scope() as session:
+                deposit = session.scalar(select(Deposit).where(Deposit.tx_ref == tx_ref))
+                if deposit is not None:
+                    deposit.last_checked_at = utcnow()
     return settled
 
 
@@ -61,6 +76,9 @@ def run_once(client: redis.Redis, now: float | None = None) -> int:
             work += recheck_deposits()
         except chapa.ChapaNotConfigured:
             pass
+    if now - _last["stale"] >= STALE_EVERY:
+        _last["stale"] = now
+        work += hospital_bookings.refund_unanswered()
     if now - _last["housekeeping"] >= HOUSEKEEPING_EVERY:
         eventbus.housekeeping(client)
         _last["housekeeping"] = now

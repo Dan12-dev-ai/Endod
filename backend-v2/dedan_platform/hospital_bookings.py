@@ -93,10 +93,23 @@ def quote(hospital_id: str, visit_mode: Optional[str]) -> Dict[str, Any]:
 
 
 def _patient(user_id: str) -> Dict[str, Any]:
+    """What the hospital is told about the patient: their Endod ID, name and
+    (when it is an Ethiopian mobile) phone, so the hospital can reach them."""
+    from dedan_platform.phone import normalise_ethiopian_mobile
+
     profile = identity.get_profile_payload(user_id)
     names = [profile.get("first_name"), profile.get("middle_name"), profile.get("last_name")]
     name = " ".join(n for n in names if n) or profile.get("display_name") or profile["dedan_user_id"]
-    return {"dedan_id": profile["dedan_user_id"], "name": name[:160], "phone": profile.get("phone")}
+    return {"dedan_id": profile["dedan_user_id"], "name": name[:160],
+            "phone": normalise_ethiopian_mobile(profile.get("phone"))}
+
+
+def _quietly(what: str, action, *args, **kwargs) -> None:
+    """A side effect after the money has moved: logged on failure, never fatal."""
+    try:
+        action(*args, **kwargs)
+    except Exception:  # noqa: BLE001
+        logger.exception("after_payment_side_effect_failed what=%s", what)
 
 
 def book(
@@ -161,22 +174,24 @@ def book(
             "scheduled_at": scheduled_at.isoformat(), "duration_minutes": duration,
             "notes": notes, "price": price,
         })
-        payload = _to_payload(appointment)
         offsets = reminder_offsets_for(appointment, user_preferences)
+    # Built after the commit (objects stay loaded): no second session while
+    # the booking's transaction holds its locks.
+    payload = _to_payload(appointment)
 
-    record_event(
-        user_id=user_id, event_type=HealthEventType.APPOINTMENT,
-        title=f"{'Video visit' if mode == VIDEO else 'Visit'} at {hospital.name}", description=notes,
-        occurred_at=scheduled_at, status=EventStatus.SCHEDULED,
-        metadata={"appointment_id": payload["appointment_id"], "location": location, "hospital_id": hospital.id},
-        correlation_id=correlation_id,
-    )
-    _inbox(user_id, "appointment_booked",
-           "Video visit requested" if mode == VIDEO else "Visit booked",
-           f"Paid {wallet.birr(price + fee)} birr. "
-           + ("A doctor will approve it; you will be told here." if mode == VIDEO else
-              f"{hospital.name} has your booking."),
-           payload["appointment_id"])
+    _quietly("timeline", record_event,
+             user_id=user_id, event_type=HealthEventType.APPOINTMENT,
+             title=f"{'Video visit' if mode == VIDEO else 'Visit'} at {hospital.name}", description=notes,
+             occurred_at=scheduled_at, status=EventStatus.SCHEDULED,
+             metadata={"appointment_id": payload["appointment_id"], "location": location,
+                       "hospital_id": hospital.id},
+             correlation_id=correlation_id)
+    _quietly("inbox", _inbox, user_id, "appointment_booked",
+             "Video visit requested" if mode == VIDEO else "Visit booked",
+             f"Paid {wallet.birr(price + fee)} birr. "
+             + ("A doctor will approve it; you will be told here." if mode == VIDEO else
+                f"{hospital.name} has your booking."),
+             payload["appointment_id"])
     return {"appointment": payload, "reminder_policy_count": len(offsets), "reminder_offsets": offsets,
             "payment": {"price": price, "service_fee": fee, "total": price + fee}}
 
@@ -230,13 +245,17 @@ def cancel_by_patient(user_id: str, appointment_id: str, correlation_id: Optiona
         eventbus.emit(session, "appointment.cancelled", {
             "appointment_id": appointment.id, "hospital_id": appointment.hospital_id, "by": "patient"})
         session.flush()
-        payload = _to_payload(appointment)
+    payload = _to_payload(appointment)
 
     from dedan_platform import notifications
 
-    payload["reminders_cancelled"] = notifications.cancel_for_appointment(appointment_id)
-    _inbox(user_id, "appointment_cancelled", "Visit cancelled",
-           f"{wallet.birr(refunded)} birr is back in your balance.", appointment_id)
+    try:
+        payload["reminders_cancelled"] = notifications.cancel_for_appointment(appointment_id)
+    except Exception:  # noqa: BLE001 -- refunded already; a stray reminder is the lesser harm
+        logger.exception("cancel_reminders_failed appointment=%s", appointment_id)
+        payload["reminders_cancelled"] = 0
+    _quietly("inbox", _inbox, user_id, "appointment_cancelled", "Visit cancelled",
+             f"{wallet.birr(refunded)} birr is back in your balance.", appointment_id)
     return payload
 
 
@@ -280,8 +299,15 @@ def on_confirmed(session: Session, payload: Dict[str, Any]) -> None:
     if was_video:
         user_id, appointment_id = appointment.user_id, appointment.id
         body = f"{decision.doctor_name or 'A doctor'} will see you. Join from Appointments at the visit time."
-        eventbus.after_commit(session, lambda: _inbox(user_id, "appointment_confirmed", "Video visit approved",
-                                                      body, appointment_id))
+
+        def approved() -> None:
+            from dedan_platform import scheduler
+
+            _inbox(user_id, "appointment_confirmed", "Video visit approved", body, appointment_id)
+            # Reminders only once the visit is certain (none were set while it waited).
+            scheduler.schedule_all_channels(user_id=user_id, appointment_id=appointment_id)
+
+        eventbus.after_commit(session, approved)
 
 
 def _hospital_closed(session: Session, payload: Dict[str, Any], state: str, title: str) -> None:
@@ -313,6 +339,19 @@ def on_cancelled(session: Session, payload: Dict[str, Any]) -> None:
 
 def on_completed(session: Session, payload: Dict[str, Any]) -> None:
     decision, appointment = _decision(session, payload)
+    if appointment.hospital_state in (HospitalState.AWAITING_HOSPITAL, HospitalState.AWAITING_DOCTOR):
+        # The confirmation has not been applied yet (it is being retried).
+        raise eventbus.RetryLater(f"appointment {appointment.id} not confirmed here yet")
+    if appointment.hospital_state == HospitalState.CANCELLED:
+        # The patient cancelled (and was refunded) just as the hospital
+        # completed the visit: flag the payout for a person to settle.
+        payout = session.scalar(select(HospitalPayout).where(HospitalPayout.appointment_id == appointment.id)
+                                .with_for_update())
+        if payout is not None and payout.status in (PayoutStatus.VOID, PayoutStatus.HELD):
+            payout.status = PayoutStatus.DISPUTED
+            payout.updated_at = utcnow()
+        logger.warning("ALERT completed_after_cancel appointment=%s", appointment.id)
+        return
     if appointment.hospital_state != HospitalState.CONFIRMED:
         return
     appointment.hospital_state = HospitalState.COMPLETED
@@ -353,3 +392,37 @@ def video_join(user_id: str, appointment_id: str) -> Dict[str, Any]:
         raise AppointmentError("You can join from 30 minutes before the visit.")
     patient = _patient(user_id)
     return jitsi.join_details(room, patient["name"], moderator=False, closes_at=closes)
+
+
+#: A booking the hospital never answered is refunded this long after its start.
+UNANSWERED_AFTER = timedelta(hours=2)
+
+
+def refund_unanswered() -> int:
+    """Refund bookings the hospital never confirmed or declined, a while after
+    their time (the hospital may have refused the request, or be offline).
+    The hospital is told, in case the booking reaches it later."""
+    cutoff = utcnow() - UNANSWERED_AFTER
+    with session_scope() as session:
+        ids = list(session.scalars(select(Appointment.id).where(
+            Appointment.hospital_state.in_([HospitalState.AWAITING_HOSPITAL, HospitalState.AWAITING_DOCTOR]),
+            Appointment.scheduled_at < cutoff,
+        ).limit(100)))
+    refunded = 0
+    for appointment_id in ids:
+        with session_scope() as session:
+            appointment = session.scalar(select(Appointment).where(Appointment.id == appointment_id).with_for_update())
+            if appointment is None or appointment.hospital_state not in (
+                    HospitalState.AWAITING_HOSPITAL, HospitalState.AWAITING_DOCTOR):
+                continue
+            amount = _refund(session, appointment, "Refund: the hospital did not answer")
+            _close(session, appointment, HospitalState.CANCELLED, "The hospital did not answer in time.")
+            eventbus.emit(session, "appointment.cancelled", {
+                "appointment_id": appointment.id, "hospital_id": appointment.hospital_id, "by": "patient"})
+            user_id = appointment.user_id
+        refunded += 1
+        logger.warning("booking_unanswered_refunded appointment=%s", appointment_id)
+        _quietly("inbox", _inbox, user_id, "appointment_cancelled", "Visit cancelled",
+                 f"The hospital did not answer. {wallet.birr(amount)} birr is back in your balance.",
+                 appointment_id)
+    return refunded

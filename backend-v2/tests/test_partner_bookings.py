@@ -32,6 +32,7 @@ class FakeChapa:
     def __init__(self):
         self.payments = {}  # tx_ref -> {"amount": "100.00", "status": "pending"}
         self.initialized = []
+        self.outage = None  # an HTTP status Chapa answers verify with (e.g. 503)
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "Bearer CHASECK_TEST-key"
@@ -42,6 +43,8 @@ class FakeChapa:
             return httpx.Response(200, json={"status": "success", "message": "Hosted Link",
                                              "data": {"checkout_url": f"https://checkout.chapa.co/{body['tx_ref']}"}})
         if "/transaction/verify/" in request.url.path:
+            if self.outage:
+                return httpx.Response(self.outage, json={"message": "unavailable"})
             tx_ref = request.url.path.rsplit("/", 1)[-1]
             payment = self.payments.get(tx_ref)
             if payment is None:
@@ -475,3 +478,223 @@ class TestEmergency:
         no_location = client.get("/users/me/care/emergency", headers=auth).json()
         assert no_location["location_used"] is False and no_location["hospitals"][0]["distance_km"] is None
         assert client.get("/users/me/care/emergency", headers=auth, params={"latitude": 9}).status_code == 400
+
+
+# --- review fixes --------------------------------------------------------------------
+
+def _age_deposit(deposit_id, hours):
+    from dedan_platform.db import session_scope
+    from dedan_platform.models import Deposit
+
+    with session_scope() as session:
+        deposit = session.get(Deposit, deposit_id)
+        deposit.created_at = deposit.created_at - timedelta(hours=hours)
+
+
+def _start_deposit(client, auth, chapa_api, birr="300.00"):
+    started = client.post("/users/me/wallet/deposits", headers=auth, json={"amount": birr}).json()
+    return started["deposit_id"], chapa_api.initialized[-1]["tx_ref"]
+
+
+def _deposit_status(client, auth, deposit_id):
+    return client.get(f"/users/me/wallet/deposits/{deposit_id}", headers=auth).json()["status"]
+
+
+def _user_id(email="a@example.com"):
+    from dedan_platform import identity
+
+    return identity.find_user_by_email(email).id
+
+
+class TestChapaHiccups:
+    def test_an_outage_never_closes_a_deposit_even_a_day_later(self, client, auth, chapa_api):
+        from dedan_platform import events_worker
+
+        deposit_id, tx_ref = _start_deposit(client, auth, chapa_api)
+        _age_deposit(deposit_id, 30)
+        chapa_api.pay(tx_ref)
+        for outage in (503, 429, 401):
+            chapa_api.outage = outage
+            assert _deposit_status(client, auth, deposit_id) == "pending"
+            events_worker.recheck_deposits()
+        chapa_api.outage = None
+        assert _deposit_status(client, auth, deposit_id) == "succeeded"
+        assert balance(client, auth) == 30000
+
+    def test_an_unknown_payment_closes_only_after_a_day(self, client, auth, chapa_api):
+        deposit_id, tx_ref = _start_deposit(client, auth, chapa_api)
+        del chapa_api.payments[tx_ref]  # Chapa has no record (checkout never finished)
+        assert _deposit_status(client, auth, deposit_id) == "pending"
+        _age_deposit(deposit_id, 30)
+        assert _deposit_status(client, auth, deposit_id) == "failed"
+
+    def test_a_failed_deposit_paid_later_is_still_credited_once(self, client, auth, chapa_api):
+        deposit_id, tx_ref = _start_deposit(client, auth, chapa_api)
+        chapa_api.payments[tx_ref]["status"] = "failed"
+        assert _deposit_status(client, auth, deposit_id) == "failed"
+        chapa_api.pay(tx_ref)
+        assert client.get(f"/payments/chapa/callback?trx_ref={tx_ref}").json()["status"] == "succeeded"
+        client.post("/payments/chapa/webhook", json={"tx_ref": tx_ref, "status": "success"})
+        assert balance(client, auth) == 30000
+
+    def test_a_different_transaction_in_the_answer_is_not_trusted(self, client, auth, chapa_api, monkeypatch):
+        from dedan_platform import chapa
+
+        deposit_id, tx_ref = _start_deposit(client, auth, chapa_api)
+        chapa_api.pay(tx_ref)
+
+        def swapped(request):
+            response = chapa_api.handler(request)
+            if "/transaction/verify/" in request.url.path:
+                body = response.json()
+                body["data"]["tx_ref"] = "endod-someone-else"
+                return httpx.Response(200, json=body)
+            return response
+
+        monkeypatch.setattr(chapa, "_transport", httpx.MockTransport(swapped))
+        assert _deposit_status(client, auth, deposit_id) == "pending"
+        assert balance(client, auth) == 0
+
+    def test_a_mismatched_amount_alerts_the_patient(self, client, auth, chapa_api):
+        deposit_id, tx_ref = _start_deposit(client, auth, chapa_api)
+        chapa_api.pay(tx_ref, amount="3.00")
+        assert _deposit_status(client, auth, deposit_id) == "failed"
+        items = client.get("/users/me/inbox", headers=auth).json()["items"]
+        assert any(i["title"] == "Deposit needs checking" for i in items)
+        assert balance(client, auth) == 0
+
+    def test_a_reversed_deposit_is_taken_back_once(self, client, auth, chapa_api, listed):
+        deposit_id = fund(client, auth, chapa_api)
+        tx_ref = chapa_api.initialized[-1]["tx_ref"]
+        assert book(client, auth).status_code == 201  # spends 158 birr of the 1000
+        chapa_api.payments[tx_ref]["status"] = "reversed"
+        # A plain notification does not re-open a settled deposit...
+        client.post("/payments/chapa/webhook", json={"tx_ref": tx_ref, "status": "success"})
+        assert balance(client, auth) == 100000 - 15800
+        # ...a refund or reversal notice does (and Chapa's verify confirms it).
+        for _ in range(2):
+            resp = client.post("/payments/chapa/webhook", json={"tx_ref": tx_ref, "event": "charge.refunded"})
+            assert resp.status_code == 200, resp.text
+        assert balance(client, auth) == -15800
+        kinds = [e["kind"] for e in client.get("/users/me/wallet", headers=auth).json()["entries"]]
+        assert kinds.count("reversal") == 1
+        assert _deposit_status(client, auth, deposit_id) == "reversed"
+
+    def test_rechecks_take_turns(self, client, auth, chapa_api, monkeypatch):
+        from dedan_platform import chapa, events_worker
+
+        deposit_id, _tx_ref = _start_deposit(client, auth, chapa_api)
+        _age_deposit(deposit_id, 1)
+        calls = []
+
+        def counting(request):
+            calls.append(request.url.path)
+            return chapa_api.handler(request)
+
+        monkeypatch.setattr(chapa, "_transport", httpx.MockTransport(counting))
+        events_worker.recheck_deposits()
+        events_worker.recheck_deposits()  # checked a moment ago: skipped this round
+        assert len(calls) == 1
+
+
+class TestBookingSafety:
+    def test_the_hospital_gets_a_normalised_phone_or_none(self, client, auth, monkeypatch):
+        from dedan_platform import hospital_bookings, identity
+
+        real = identity.get_profile_payload
+        phones = iter(["0911 22 33 44", "+44 20 7946 0958 ext. 1234567"])
+        monkeypatch.setattr(identity, "get_profile_payload", lambda uid: {**real(uid), "phone": next(phones)})
+        assert hospital_bookings._patient(_user_id())["phone"] == "+251911223344"
+        assert hospital_bookings._patient(_user_id())["phone"] is None
+
+    def test_completion_before_confirmation_waits_for_it(self, client, auth, bus, listed, chapa_api, monkeypatch):
+        from sqlalchemy import select
+
+        from dedan_platform import eventbus
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import HospitalPayout
+
+        monkeypatch.setattr(eventbus, "RETRY_AFTER_MS", 0)
+        fund(client, auth, chapa_api)
+        aid = book(client, auth).json()["appointment"]["appointment_id"]
+        decision = {"appointment_id": aid, "hospital_id": HOSPITAL}
+        from_hospital(bus, "appointment.completed", {**decision, "status": "completed"})
+        run_worker(bus)
+        assert client.get(f"/users/me/appointments/{aid}", headers=auth).json()["status"] != "COMPLETED"
+        from_hospital(bus, "appointment.confirmed", {**decision, "status": "confirmed"})
+        run_worker(bus, rounds=2)
+        assert client.get(f"/users/me/appointments/{aid}", headers=auth).json()["status"] == "COMPLETED"
+        with session_scope() as session:
+            assert session.scalar(select(HospitalPayout.status)) == "due"
+
+    def test_completion_racing_a_patient_cancel_is_flagged(self, client, auth, bus, listed, chapa_api):
+        from sqlalchemy import select
+
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import HospitalPayout
+
+        fund(client, auth, chapa_api)
+        aid = book(client, auth).json()["appointment"]["appointment_id"]
+        from_hospital(bus, "appointment.confirmed", {"appointment_id": aid, "hospital_id": HOSPITAL,
+                                                     "status": "confirmed"})
+        run_worker(bus)
+        assert client.patch(f"/users/me/appointments/{aid}/status", headers=auth,
+                            json={"status": "CANCELLED"}).status_code == 200
+        from_hospital(bus, "appointment.completed", {"appointment_id": aid, "hospital_id": HOSPITAL,
+                                                     "status": "completed"})
+        run_worker(bus)
+        assert balance(client, auth) == 100000
+        with session_scope() as session:
+            assert session.scalar(select(HospitalPayout.status)) == "disputed"
+
+    def test_an_unanswered_booking_is_refunded_after_its_time(self, client, auth, bus, listed, chapa_api):
+        from dedan_platform import hospital_bookings
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import Appointment
+
+        fund(client, auth, chapa_api)
+        waiting = book(client, auth).json()["appointment"]["appointment_id"]
+        future = book(client, auth, at=when(days=5)).json()["appointment"]["appointment_id"]
+        run_worker(bus)
+        with session_scope() as session:
+            session.get(Appointment, waiting).scheduled_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        assert hospital_bookings.refund_unanswered() == 1
+        assert hospital_bookings.refund_unanswered() == 0
+        assert balance(client, auth) == 100000 - 15800
+        assert client.get(f"/users/me/appointments/{waiting}", headers=auth).json()["status"] == "CANCELLED"
+        assert client.get(f"/users/me/appointments/{future}", headers=auth).json()["status"] != "CANCELLED"
+        run_worker(bus)
+        assert sent(bus)[-1] == ("appointment.cancelled", {"appointment_id": waiting, "hospital_id": HOSPITAL,
+                                                            "by": "patient"})
+
+    def test_video_reminders_wait_for_the_doctor(self, client, auth, bus, listed, chapa_api):
+        from sqlalchemy import func, select
+
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import Notification
+
+        fund(client, auth, chapa_api)
+        resp = book(client, auth, mode="telehealth")
+        aid = resp.json()["appointment"]["appointment_id"]
+        assert resp.json()["reminders"]["queued"] == 0
+        with session_scope() as session:
+            before = session.scalar(select(func.count()).select_from(Notification)
+                                    .where(Notification.appointment_id == aid))
+        assert before == 0
+        from_hospital(bus, "appointment.confirmed", {"appointment_id": aid, "hospital_id": HOSPITAL,
+                                                     "status": "confirmed", "meeting_room": "endod-x1"})
+        run_worker(bus)
+        with session_scope() as session:
+            after = session.scalar(select(func.count()).select_from(Notification)
+                                   .where(Notification.appointment_id == aid))
+        assert after >= 1
+
+    def test_old_sample_facilities_keep_their_names_but_cannot_be_booked(self, client, auth, monkeypatch):
+        from dedan_platform.care_navigation import get_facility
+
+        monkeypatch.setenv("CARE_DEMO_DIRECTORY", "false")
+        assert get_facility("et-addis-black-lion").name
+        resp = client.post("/users/me/appointments", headers=auth, json={
+            "scheduled_at": when().isoformat(), "timezone": "Africa/Addis_Ababa",
+            "facility_id": "et-addis-black-lion"})
+        assert resp.status_code == 400

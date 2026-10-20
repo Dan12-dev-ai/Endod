@@ -259,7 +259,18 @@ DIRECTORY: Sequence[Facility] = (
 
 
 def get_facility(facility_id: str) -> Optional[Facility]:
-    for facility in directory():
+    """A facility by id: a listed partner hospital, or a built-in sample one.
+
+    Looked up directly (one query, not the whole directory). Sample
+    facilities are found here even in production, so older appointments
+    keep their names; browsing and booking only offer them outside it.
+    """
+    from dedan_platform import partners
+
+    partner = partners.get(facility_id)
+    if partner is not None:
+        return _from_partner(partner)
+    for facility in DIRECTORY:
         if facility.id == facility_id:
             return facility
     return None

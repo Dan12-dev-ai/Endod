@@ -91,16 +91,28 @@ def initialize(tx_ref: str, amount: int, first_name: str, last_name: str, phone:
 
 
 def verify(tx_ref: str) -> Dict[str, Any]:
-    """Chapa's record of the payment: {"paid": bool, "amount": santim, "currency", "reference"}."""
+    """Chapa's record of the payment.
+
+    Returns {"paid", "failed", "reversed", "known", "amount" (santim), "currency",
+    "reference", "status"}. Raises ChapaError when Chapa could not give an
+    answer (unreachable, overloaded, or our key refused): a deposit is never
+    judged on a non-answer.
+    """
     try:
         with _client() as client:
-            response = client.get(f"/transaction/verify/{tx_ref}")
+            response = client.get(f"/transaction/verify/{tx_ref}", timeout=10.0)
     except httpx.HTTPError as exc:
         raise ChapaError("Chapa could not be reached.") from exc
+    if response.status_code >= 500 or response.status_code in (401, 403, 429):
+        raise ChapaError(f"Chapa could not answer (HTTP {response.status_code}).")
     data = _json(response)
     record = data.get("data") or {}
     if response.status_code >= 400 or not record:
-        return {"paid": False, "amount": None, "currency": None, "reference": None, "status": "unknown"}
+        # Chapa has no such payment (never started or abandoned before paying).
+        return {"paid": False, "failed": response.status_code == 404, "reversed": False, "known": False,
+                "amount": None, "currency": None, "reference": None, "status": "not_found"}
+    if record.get("tx_ref") and record.get("tx_ref") != tx_ref:
+        raise ChapaError("Chapa returned a different transaction.")
     status = str(record.get("status") or "").lower()
     try:
         amount = int((Decimal(str(record.get("amount"))) * 100).to_integral_value())
@@ -109,6 +121,8 @@ def verify(tx_ref: str) -> Dict[str, Any]:
     return {
         "paid": status == "success",
         "failed": status in ("failed", "cancelled", "canceled"),
+        "reversed": status in ("refunded", "reversed"),
+        "known": True,
         "amount": amount,
         "currency": record.get("currency"),
         "reference": record.get("reference"),
