@@ -68,8 +68,8 @@ joins (`Hospital-service/deploy`). Events wait in each database while Redis
 is unavailable, so nothing is lost.
 
 Set in `deploy/.env` (see `.env.example`): `REDIS_PASSWORD`, the Chapa keys,
-`PUBLIC_APP_URL`, the service fee, `JITSI_APP_SECRET`, and later
-`GOOGLE_MAPS_BROWSER_KEY`.
+`PUBLIC_APP_URL`, the service fee and `JITSI_APP_SECRET`. Maps use
+OpenStreetMap (no key); directions open the phone's maps app.
 
 ```sh
 docker compose logs -f events-worker
