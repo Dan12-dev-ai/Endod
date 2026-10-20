@@ -15,7 +15,7 @@ name: endod-meet
 
 services:
   web:
-    image: jitsi/web:${JITSI_IMAGE_VERSION:-stable-11248}
+    image: jitsi/web:${JITSI_IMAGE_VERSION:-stable-11031}
     restart: unless-stopped
     environment: &common
       PUBLIC_URL: https://meet.endod-health.com
@@ -53,7 +53,7 @@ services:
     depends_on: [jvb]
 
   prosody:
-    image: jitsi/prosody:${JITSI_IMAGE_VERSION:-stable-11248}
+    image: jitsi/prosody:${JITSI_IMAGE_VERSION:-stable-11031}
     restart: unless-stopped
     expose: ["5222", "5280"]
     environment: *common
@@ -65,7 +65,7 @@ services:
         aliases: [xmpp.meet.jitsi]
 
   jicofo:
-    image: jitsi/jicofo:${JITSI_IMAGE_VERSION:-stable-11248}
+    image: jitsi/jicofo:${JITSI_IMAGE_VERSION:-stable-11031}
     restart: unless-stopped
     environment: *common
     volumes:
@@ -74,7 +74,7 @@ services:
     depends_on: [prosody]
 
   jvb:
-    image: jitsi/jvb:${JITSI_IMAGE_VERSION:-stable-11248}
+    image: jitsi/jvb:${JITSI_IMAGE_VERSION:-stable-11031}
     restart: unless-stopped
     ports:
       - "10000:10000/udp"
