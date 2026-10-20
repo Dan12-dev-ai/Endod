@@ -66,13 +66,14 @@ services:
   redis-1:
     image: redis:7.4-alpine
     restart: unless-stopped
-    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --masterauth \"$$REDIS_PASSWORD\" --appendonly yes --replica-announce-ip endod-redis-1"]
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --masterauth \"$$REDIS_PASSWORD\" --appendonly yes --replica-announce-ip 172.30.77.11"]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in deploy/.env}
     volumes:
       - redis1:/data
     networks:
       bus:
+        ipv4_address: 172.30.77.11
         aliases: [endod-redis-1]
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
@@ -83,13 +84,14 @@ services:
   redis-2:
     image: redis:7.4-alpine
     restart: unless-stopped
-    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --masterauth \"$$REDIS_PASSWORD\" --appendonly yes --replica-announce-ip endod-redis-2 --replicaof endod-redis-1 6379"]
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --masterauth \"$$REDIS_PASSWORD\" --appendonly yes --replica-announce-ip 172.30.77.12 --replicaof 172.30.77.11 6379"]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
       - redis2:/data
     networks:
       bus:
+        ipv4_address: 172.30.77.12
         aliases: [endod-redis-2]
     depends_on:
       redis-1:
@@ -100,7 +102,7 @@ services:
     restart: unless-stopped
     entrypoint: ["sh", "/sentinel.sh"]
     environment: &sentinel-env
-      SENTINEL_NAME: endod-sentinel-1
+      SENTINEL_IP: 172.30.77.21
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
     volumes:
@@ -108,6 +110,7 @@ services:
       - sentinel1:/data
     networks:
       bus:
+        ipv4_address: 172.30.77.21
         aliases: [endod-sentinel-1]
     depends_on:
       redis-1:
@@ -117,24 +120,26 @@ services:
     <<: *sentinel
     environment:
       <<: *sentinel-env
-      SENTINEL_NAME: endod-sentinel-2
+      SENTINEL_IP: 172.30.77.22
     volumes:
       - ./redis/sentinel.sh:/sentinel.sh:ro
       - sentinel2:/data
     networks:
       bus:
+        ipv4_address: 172.30.77.22
         aliases: [endod-sentinel-2]
 
   sentinel-3:
     <<: *sentinel
     environment:
       <<: *sentinel-env
-      SENTINEL_NAME: endod-sentinel-3
+      SENTINEL_IP: 172.30.77.23
     volumes:
       - ./redis/sentinel.sh:/sentinel.sh:ro
       - sentinel3:/data
     networks:
       bus:
+        ipv4_address: 172.30.77.23
         aliases: [endod-sentinel-3]
 
   # Sends Endod's events to the hospital service and applies its replies
@@ -187,6 +192,14 @@ volumes:
 networks:
   # Shared with the hospital service's Compose project (by this name). No
   # internet access from it; each service keeps its own network for that.
+  # Redis and the Sentinels have fixed addresses: a stopped container's name
+  # disappears from Docker's DNS, and Sentinels that cannot resolve the
+  # failed master never elect a new one. Other containers get addresses from
+  # the upper half.
   bus:
     name: endod-bus
     internal: true
+    ipam:
+      config:
+        - subnet: 172.30.77.0/24
+          ip_range: 172.30.77.128/25

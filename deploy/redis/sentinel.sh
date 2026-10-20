@@ -4,17 +4,15 @@
 # here only the first time and kept across restarts.
 set -eu
 
-: "${SENTINEL_NAME:?}" "${REDIS_PASSWORD:?}"
+: "${SENTINEL_IP:?}" "${REDIS_PASSWORD:?}"
 CONF=/data/sentinel.conf
 
 if [ ! -s "$CONF" ]; then
     cat > "$CONF" <<EOF
 port 26379
 dir /data
-sentinel resolve-hostnames yes
-sentinel announce-hostnames yes
-sentinel announce-ip ${SENTINEL_NAME}
-sentinel monitor endod endod-redis-1 6379 2
+sentinel announce-ip ${SENTINEL_IP}
+sentinel monitor endod 172.30.77.11 6379 2
 sentinel auth-pass endod ${REDIS_PASSWORD}
 sentinel down-after-milliseconds endod 5000
 sentinel failover-timeout endod 30000
