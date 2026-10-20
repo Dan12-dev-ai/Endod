@@ -303,9 +303,10 @@ def on_confirmed(session: Session, payload: Dict[str, Any]) -> None:
         def approved() -> None:
             from dedan_platform import scheduler
 
-            _inbox(user_id, "appointment_confirmed", "Video visit approved", body, appointment_id)
             # Reminders only once the visit is certain (none were set while it waited).
-            scheduler.schedule_all_channels(user_id=user_id, appointment_id=appointment_id)
+            _quietly("reminders", scheduler.schedule_all_channels, user_id=user_id, appointment_id=appointment_id)
+            _quietly("inbox", _inbox, user_id, "appointment_confirmed", "Video visit approved", body,
+                     appointment_id)
 
         eventbus.after_commit(session, approved)
 
@@ -339,9 +340,9 @@ def on_cancelled(session: Session, payload: Dict[str, Any]) -> None:
 
 def on_completed(session: Session, payload: Dict[str, Any]) -> None:
     decision, appointment = _decision(session, payload)
-    if appointment.hospital_state in (HospitalState.AWAITING_HOSPITAL, HospitalState.AWAITING_DOCTOR):
-        # The confirmation has not been applied yet (it is being retried).
-        raise eventbus.RetryLater(f"appointment {appointment.id} not confirmed here yet")
+    # A completion while still awaiting means the confirmation is late (or
+    # was lost): the visit happened, so it counts as confirmed and completed.
+    awaiting = appointment.hospital_state in (HospitalState.AWAITING_HOSPITAL, HospitalState.AWAITING_DOCTOR)
     if appointment.hospital_state == HospitalState.CANCELLED:
         # The patient cancelled (and was refunded) just as the hospital
         # completed the visit: flag the payout for a person to settle.
@@ -352,9 +353,13 @@ def on_completed(session: Session, payload: Dict[str, Any]) -> None:
             payout.updated_at = utcnow()
         logger.warning("ALERT completed_after_cancel appointment=%s", appointment.id)
         return
-    if appointment.hospital_state != HospitalState.CONFIRMED:
+    if appointment.hospital_state != HospitalState.CONFIRMED and not awaiting:
         return
     appointment.hospital_state = HospitalState.COMPLETED
+    if decision.doctor_name and not appointment.provider_name:
+        appointment.provider_name = decision.doctor_name[:200]
+    if appointment.status == EventStatus.SCHEDULED:
+        _transition(appointment, EventStatus.CONFIRMED)  # the confirmation that was late
     if appointment.status in (EventStatus.CONFIRMED, EventStatus.RESCHEDULED):
         _transition(appointment, EventStatus.COMPLETED)
     update_appointment_event(session, appointment.user_id, appointment.id, EventStatus.COMPLETED)
@@ -418,7 +423,7 @@ def refund_unanswered() -> int:
             amount = _refund(session, appointment, "Refund: the hospital did not answer")
             _close(session, appointment, HospitalState.CANCELLED, "The hospital did not answer in time.")
             eventbus.emit(session, "appointment.cancelled", {
-                "appointment_id": appointment.id, "hospital_id": appointment.hospital_id, "by": "patient"})
+                "appointment_id": appointment.id, "hospital_id": appointment.hospital_id, "by": "endod"})
             user_id = appointment.user_id
         refunded += 1
         logger.warning("booking_unanswered_refunded appointment=%s", appointment_id)

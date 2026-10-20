@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 #: A deposit still unpaid after this long is closed as failed.
 ABANDONED_AFTER = timedelta(hours=24)
+MISMATCH = "Amount did not match; contact Endod."
 
 
 class DepositError(RuntimeError):
@@ -111,14 +112,14 @@ def settle(tx_ref: str, recheck_settled: bool = False) -> Optional[Dict[str, Any
         elif record["paid"]:
             if record["amount"] != deposit.amount or (record.get("currency") or "ETB") != "ETB":
                 # Never credit an amount other than the one asked for; a person
-                # sorts it out (the patient was charged something).
-                logger.error("ALERT deposit_amount_mismatch tx_ref=%s expected=%s got=%s %s",
-                             tx_ref, deposit.amount, record["amount"], record.get("currency"))
-                deposit.status, deposit.failure = DepositStatus.FAILED, "Amount did not match; contact Endod."
-                deposit.completed_at = utcnow()
-                notify = (deposit.user_id, "Deposit needs checking",
-                          "Your payment did not match the amount requested. Endod will contact you; "
-                          "nothing is lost.")
+                # sorts it out (the patient was charged something). Alerted once.
+                if deposit.failure != MISMATCH:
+                    logger.error("ALERT deposit_amount_mismatch tx_ref=%s expected=%s got=%s %s",
+                                 tx_ref, deposit.amount, record["amount"], record.get("currency"))
+                    deposit.status, deposit.failure, deposit.completed_at = DepositStatus.FAILED, MISMATCH, utcnow()
+                    notify = (deposit.user_id, "Deposit needs checking",
+                              "Your payment did not match the amount requested. Endod will contact you; "
+                              "nothing is lost.")
             else:
                 wallet.post(session, deposit.user_id, WalletEntryKind.DEPOSIT, deposit.amount,
                             deposit_id=deposit.id, description="Deposit through Chapa")
@@ -128,10 +129,12 @@ def settle(tx_ref: str, recheck_settled: bool = False) -> Optional[Dict[str, Any
                           f"{wallet.birr(deposit.amount)} birr was added to your Endod balance.")
             result = _payload(deposit)
         else:
-            # Closed only on Chapa's definite word (failed, or no such payment
-            # a day later); a pending one stays pending.
+            # Closed when Chapa says it failed, or (abandoned checkout) a day on
+            # without payment. Only an answer from Chapa counts: an outage
+            # raised above. A payment that still arrives later is credited.
             stale = utcnow() - ensure_aware(deposit.created_at) > ABANDONED_AFTER
-            if deposit.status == DepositStatus.PENDING and (record.get("failed") and (record.get("known") or stale)):
+            failed = record.get("failed") and record.get("known")
+            if deposit.status == DepositStatus.PENDING and (failed or (stale and not record.get("reversed"))):
                 deposit.status, deposit.completed_at = DepositStatus.FAILED, utcnow()
                 deposit.failure = "Payment was not completed."
             result = _payload(deposit)

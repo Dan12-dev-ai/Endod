@@ -521,6 +521,15 @@ class TestChapaHiccups:
         assert _deposit_status(client, auth, deposit_id) == "succeeded"
         assert balance(client, auth) == 30000
 
+    def test_a_checkout_left_pending_closes_after_a_day_and_still_credits_if_paid(self, client, auth, chapa_api):
+        deposit_id, tx_ref = _start_deposit(client, auth, chapa_api)
+        assert _deposit_status(client, auth, deposit_id) == "pending"  # Chapa: pending
+        _age_deposit(deposit_id, 30)
+        assert _deposit_status(client, auth, deposit_id) == "failed"
+        chapa_api.pay(tx_ref)
+        assert _deposit_status(client, auth, deposit_id) == "succeeded"
+        assert balance(client, auth) == 30000
+
     def test_an_unknown_payment_closes_only_after_a_day(self, client, auth, chapa_api):
         deposit_id, tx_ref = _start_deposit(client, auth, chapa_api)
         del chapa_api.payments[tx_ref]  # Chapa has no record (checkout never finished)
@@ -558,9 +567,11 @@ class TestChapaHiccups:
     def test_a_mismatched_amount_alerts_the_patient(self, client, auth, chapa_api):
         deposit_id, tx_ref = _start_deposit(client, auth, chapa_api)
         chapa_api.pay(tx_ref, amount="3.00")
-        assert _deposit_status(client, auth, deposit_id) == "failed"
+        for _ in range(3):  # polled and notified again: alerted once
+            assert _deposit_status(client, auth, deposit_id) == "failed"
+            client.post("/payments/chapa/webhook", json={"tx_ref": tx_ref, "status": "success"})
         items = client.get("/users/me/inbox", headers=auth).json()["items"]
-        assert any(i["title"] == "Deposit needs checking" for i in items)
+        assert [i["title"] for i in items].count("Deposit needs checking") == 1
         assert balance(client, auth) == 0
 
     def test_a_reversed_deposit_is_taken_back_once(self, client, auth, chapa_api, listed):
@@ -607,23 +618,28 @@ class TestBookingSafety:
         assert hospital_bookings._patient(_user_id())["phone"] == "+251911223344"
         assert hospital_bookings._patient(_user_id())["phone"] is None
 
-    def test_completion_before_confirmation_waits_for_it(self, client, auth, bus, listed, chapa_api, monkeypatch):
+    def test_a_completion_before_or_without_its_confirmation_counts(self, client, auth, bus, listed, chapa_api):
         from sqlalchemy import select
 
-        from dedan_platform import eventbus
+        from dedan_platform import hospital_bookings
         from dedan_platform.db import session_scope
-        from dedan_platform.models import HospitalPayout
+        from dedan_platform.models import Appointment, HospitalPayout
 
-        monkeypatch.setattr(eventbus, "RETRY_AFTER_MS", 0)
         fund(client, auth, chapa_api)
         aid = book(client, auth).json()["appointment"]["appointment_id"]
         decision = {"appointment_id": aid, "hospital_id": HOSPITAL}
-        from_hospital(bus, "appointment.completed", {**decision, "status": "completed"})
+        from_hospital(bus, "appointment.completed", {**decision, "status": "completed", "doctor_name": "Dr. Abebe"})
         run_worker(bus)
-        assert client.get(f"/users/me/appointments/{aid}", headers=auth).json()["status"] != "COMPLETED"
+        appointment = client.get(f"/users/me/appointments/{aid}", headers=auth).json()
+        assert appointment["status"] == "COMPLETED" and appointment["provider_name"] == "Dr. Abebe"
+        # The late confirmation changes nothing, and the visit is never refunded as unanswered.
         from_hospital(bus, "appointment.confirmed", {**decision, "status": "confirmed"})
-        run_worker(bus, rounds=2)
+        run_worker(bus)
+        with session_scope() as session:
+            session.get(Appointment, aid).scheduled_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        assert hospital_bookings.refund_unanswered() == 0
         assert client.get(f"/users/me/appointments/{aid}", headers=auth).json()["status"] == "COMPLETED"
+        assert balance(client, auth) == 100000 - 15800
         with session_scope() as session:
             assert session.scalar(select(HospitalPayout.status)) == "due"
 
@@ -665,7 +681,7 @@ class TestBookingSafety:
         assert client.get(f"/users/me/appointments/{future}", headers=auth).json()["status"] != "CANCELLED"
         run_worker(bus)
         assert sent(bus)[-1] == ("appointment.cancelled", {"appointment_id": waiting, "hospital_id": HOSPITAL,
-                                                            "by": "patient"})
+                                                            "by": "endod"})
 
     def test_video_reminders_wait_for_the_doctor(self, client, auth, bus, listed, chapa_api):
         from sqlalchemy import func, select
