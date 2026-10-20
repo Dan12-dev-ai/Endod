@@ -102,6 +102,13 @@ _COLUMN_MIGRATIONS: Tuple[ColumnMigration, ...] = (
     ColumnMigration("appointments", "time_window", "VARCHAR(16)"),
     ColumnMigration("appointments", "facility_id", "VARCHAR(64)"),
     ColumnMigration("appointments", "provider_name", "VARCHAR(120)"),
+    # Booked at an Endod partner hospital.
+    ColumnMigration("appointments", "hospital_id", "VARCHAR(32)"),
+    ColumnMigration("appointments", "hospital_state", "VARCHAR(20)"),
+    ColumnMigration("appointments", "price", "INTEGER"),
+    ColumnMigration("appointments", "service_fee", "INTEGER"),
+    ColumnMigration("appointments", "meeting_room", "VARCHAR(64)"),
+    ColumnMigration("appointments", "hospital_reason", "VARCHAR(300)"),
 )
 
 #: (index name, table, columns). Created only if absent.
@@ -116,6 +123,7 @@ _INDEX_MIGRATIONS: Tuple[Tuple[str, str, Tuple[str, ...]], ...] = (
         "notifications",
         ("appointment_id", "status"),
     ),
+    ("ix_appointments_hospital_id", "appointments", ("hospital_id",)),
 )
 
 

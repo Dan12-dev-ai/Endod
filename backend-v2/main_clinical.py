@@ -359,6 +359,7 @@ def create_app(settings = None) -> FastAPI:
     # try/except so an import or schema failure stops the app from starting.
     from dedan_platform.api_auth import router as platform_auth_router
     from dedan_platform.api_cards import router as platform_cards_router
+    from dedan_platform.api_payments import router as platform_payments_router
     from dedan_platform.api_care import router as platform_care_router
     from dedan_platform.api_health import router as platform_health_router
     from dedan_platform.api_notifications import router as platform_notifications_router
@@ -375,6 +376,7 @@ def create_app(settings = None) -> FastAPI:
     app.include_router(platform_records_router)
     app.include_router(platform_inbox_router)
     app.include_router(platform_cards_router)
+    app.include_router(platform_payments_router)
 
     # Additive and idempotent; migrations remain required before schema
     # changes reach production.

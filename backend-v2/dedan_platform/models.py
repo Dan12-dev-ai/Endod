@@ -34,7 +34,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
+    Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -489,6 +489,19 @@ class Appointment(Base):
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     correlation_id: Mapped[Optional[str]] = mapped_column(String(64), index=True)
 
+    # --- Booked at an Endod partner hospital (hospital_bookings.py) ---
+    #: The partner hospital (its id in the hospital service). None for a
+    #: patient's own appointment entry.
+    hospital_id: Mapped[Optional[str]] = mapped_column(String(32), index=True)
+    #: Where the hospital is with it: see hospital_bookings.HospitalState.
+    hospital_state: Mapped[Optional[str]] = mapped_column(String(20))
+    #: What the patient paid, in santim: the hospital's price and Endod's fee.
+    price: Mapped[Optional[int]] = mapped_column(Integer)
+    service_fee: Mapped[Optional[int]] = mapped_column(Integer)
+    #: The video room on Endod's Jitsi server, once a doctor approved.
+    meeting_room: Mapped[Optional[str]] = mapped_column(String(64))
+    hospital_reason: Mapped[Optional[str]] = mapped_column(String(300))
+
     __table_args__ = (
         # Supports the "upcoming appointments" query, which is by far the most
         # frequent read on this table.
@@ -686,3 +699,175 @@ class InboxItem(Base):
     __table_args__ = (
         Index("ix_inbox_items_user_created", "user_id", "created_at"),
     )
+
+
+# ===========================================================================
+# Endod partner hospitals, payments and events with the hospital service
+# ===========================================================================
+
+
+class PartnerHospital(Base):
+    """A hospital that joined Endod through the hospital portal.
+
+    A copy of its listing, kept in step by ``hospital.listed`` /
+    ``hospital.unlisted`` events, so patients can browse and book even while
+    the hospital service is unreachable.
+    """
+
+    __tablename__ = "partner_hospitals"
+
+    #: The hospital's id in the hospital service.
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    code: Mapped[str] = mapped_column(String(12), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    name_am: Mapped[Optional[str]] = mapped_column(String(160))
+    #: "public" or "private".
+    ownership: Mapped[str] = mapped_column(String(8), nullable=False, default="public")
+    city: Mapped[Optional[str]] = mapped_column(String(100))
+    address: Mapped[Optional[str]] = mapped_column(String(200))
+    phone: Mapped[Optional[str]] = mapped_column(String(20))
+    ambulance_phone: Mapped[Optional[str]] = mapped_column(String(20))
+    emergency: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    latitude: Mapped[float] = mapped_column(Float, nullable=False)
+    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    #: Comma-separated care_navigation department keys.
+    services: Mapped[Optional[str]] = mapped_column(String(200))
+    open_hours: Mapped[Optional[str]] = mapped_column(String(80))
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="Africa/Addis_Ababa")
+    video_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: Santim.
+    price_in_person: Mapped[int] = mapped_column(Integer, nullable=False)
+    price_video: Mapped[Optional[int]] = mapped_column(Integer)
+    #: False once unlisted (kept for existing appointments' names and phones).
+    listed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    #: The hospital service's announcement version last applied.
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class WalletEntryKind:
+    DEPOSIT = "deposit"
+    PAYMENT = "payment"
+    SERVICE_FEE = "service_fee"
+    REFUND = "refund"
+    ALL = (DEPOSIT, PAYMENT, SERVICE_FEE, REFUND)
+
+
+class Wallet(Base):
+    """A patient's Endod balance: money deposited for health payments.
+
+    It cannot be withdrawn; it pays hospitals (through Endod) and comes back
+    as refunds. ``balance`` is the sum of the ledger, kept on the row so a
+    payment can lock it and check it in one step.
+    """
+
+    __tablename__ = "wallets"
+
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
+    )
+    #: Santim.
+    balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class WalletEntry(Base):
+    """One movement of money in a wallet (never edited or deleted)."""
+
+    __tablename__ = "wallet_entries"
+    __table_args__ = (
+        # A payment, fee or refund happens once per appointment, whatever retries.
+        UniqueConstraint("appointment_id", "kind", name="uq_wallet_entry_appointment_kind"),
+        UniqueConstraint("deposit_id", name="uq_wallet_entry_deposit"),
+        Index("ix_wallet_entries_user_created", "user_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(String(32), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: Santim; positive adds to the balance, negative takes from it.
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    appointment_id: Mapped[Optional[str]] = mapped_column(String(32))
+    deposit_id: Mapped[Optional[str]] = mapped_column(String(32))
+    description: Mapped[Optional[str]] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class DepositStatus:
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    ALL = (PENDING, SUCCEEDED, FAILED)
+
+
+class Deposit(Base):
+    """Money a patient is adding through Chapa."""
+
+    __tablename__ = "deposits"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False,
+    )
+    #: Our reference at Chapa (unique per attempt).
+    tx_ref: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default=DepositStatus.PENDING)
+    checkout_url: Mapped[Optional[str]] = mapped_column(String(500))
+    #: Chapa's own reference, once paid.
+    provider_reference: Mapped[Optional[str]] = mapped_column(String(100))
+    failure: Mapped[Optional[str]] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
+class PayoutStatus:
+    """What Endod owes a hospital for one appointment."""
+
+    #: Paid by the patient; the visit has not happened yet.
+    HELD = "held"
+    #: The visit took place: Endod owes the hospital.
+    DUE = "due"
+    #: Refunded to the patient: nothing is owed.
+    VOID = "void"
+    PAID = "paid"
+    ALL = (HELD, DUE, VOID, PAID)
+
+
+class HospitalPayout(Base):
+    """The hospital's share of one appointment payment (Endod pays it out)."""
+
+    __tablename__ = "hospital_payouts"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    hospital_id: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    appointment_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    #: Santim (the hospital's price; Endod's fee is not included).
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(8), nullable=False, default=PayoutStatus.HELD)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class OutboxEvent(Base):
+    """An event waiting to be sent to the hospital service (see eventbus.py)."""
+
+    __tablename__ = "outbox_events"
+    __table_args__ = (Index("ix_outbox_unpublished", "published_at", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    type: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
+class ProcessedEvent(Base):
+    """An event from the hospital service already handled."""
+
+    __tablename__ = "processed_events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    type: Mapped[str] = mapped_column(String(64), nullable=False)
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
