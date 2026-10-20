@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { healthCardFromProfile, type HealthCardInfo, type ProfileForCard } from "../health-card/health-card-data";
 import LanguageSwitcher from "../components/language-switcher";
 import AppointmentsView from "./appointments-view";
@@ -9,6 +9,8 @@ import HomeView from "./home-view";
 import NotificationsView from "./notifications-view";
 import RecordsView from "./records-view";
 import SettingsView from "./settings-view";
+import WalletView from "./wallet-view";
+import EmergencyPanel from "./emergency-panel";
 import { api, logout } from "../lib/api";
 import { isLanguage, useI18n, type TranslationKey } from "../lib/i18n";
 
@@ -18,12 +20,21 @@ export default function Interview() {
     if (saved !== language) setLanguage(saved);
   };
   const [activeNav, setActiveNav] = useState("home");
+  const [emergencyOpen, setEmergencyOpen] = useState(false);
+  const closeEmergency = useCallback(() => setEmergencyOpen(false), []);
+  // Back from a payment page: /interview?section=wallet&deposit=<id>.
+  useEffect(() => {
+    const section = new URLSearchParams(window.location.search).get("section");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read the address once, on arrival
+    if (section === "wallet") setActiveNav("wallet");
+  }, []);
   // Shared: which card/record a notification click should highlight on the target page
   const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
 
   const navItems: { id: string; labelKey: TranslationKey; icon: React.ReactNode }[] = [
     { id: "home", labelKey: "interview.nav.home", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "booking", labelKey: "interview.nav.booking", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
+    { id: "wallet", labelKey: "interview.nav.wallet", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h12a2 2 0 012 2v1h1a1 1 0 011 1v6a1 1 0 01-1 1h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm13 4h4v2h-4a1 1 0 010-2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "appointment", labelKey: "interview.nav.appointment", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "followup", labelKey: "interview.nav.medicalRecord", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "message", labelKey: "interview.nav.notification", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
@@ -168,6 +179,18 @@ export default function Interview() {
           </div>
         </div>
         <div className="flex items-center space-x-1.5 sm:space-x-3">
+          <button
+            aria-label={t("emergency.open")}
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white text-[13px] font-bold"
+            data-purpose="emergency-button"
+            onClick={() => setEmergencyOpen(true)}
+            type="button"
+          >
+            <svg aria-hidden className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M6.6 10.8a15.1 15.1 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11.4 11.4 0 003.6.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1 11.4 11.4 0 00.57 3.6 1 1 0 01-.25 1z" />
+            </svg>
+            <span className="hidden sm:inline">{t("emergency.button")}</span>
+          </button>
           <LanguageSwitcher tone="light" />
           <div className="flex items-center space-x-2 pl-1 sm:pl-2 py-1">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
@@ -195,6 +218,8 @@ export default function Interview() {
           </button>
         </div>
       </header>
+
+      {emergencyOpen && <EmergencyPanel onClose={closeEmergency} />}
 
       {/* ===== Drawer Backdrop ===== */}
       <div aria-hidden="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 hidden opacity-0 transition-opacity duration-300 lg:hidden" ref={backdropRef}></div>
@@ -261,7 +286,10 @@ export default function Interview() {
         {/* ===== Main Content Area ===== */}
         <main className="flex-1 min-h-0 flex flex-col overflow-hidden p-3 sm:p-4 md:p-6 gap-4 sm:gap-5">
           {/* ===== Booking View ===== */}
-          {activeNav === "booking" && <BookingView patientId={healthCard?.userId ?? ""} onToast={showToast} />}
+          {activeNav === "booking" && (
+            <BookingView onOpenWallet={() => setActiveNav("wallet")} onToast={showToast} patientId={healthCard?.userId ?? ""} />
+          )}
+          {activeNav === "wallet" && <WalletView onToast={showToast} />}
 
           {/* ===== Settings View ===== */}
           {activeNav === "setting" && (

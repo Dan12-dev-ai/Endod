@@ -47,9 +47,11 @@ export async function callBackend(
   path: string,
   options: {
     method?: string; body?: unknown; rawBody?: string; token?: string | null; search?: string; timeoutMs?: number;
+    /** Extra request headers (e.g. a payment provider's signature, passed through). */
+    extraHeaders?: Record<string, string>;
   } = {},
 ): Promise<BackendResult> {
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { ...options.extraHeaders, Accept: "application/json" };
   const body = options.rawBody ?? (options.body === undefined ? undefined : JSON.stringify(options.body));
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;

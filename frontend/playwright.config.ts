@@ -67,7 +67,20 @@ export default defineConfig({
         DEDAN_DATABASE_URL: `sqlite:///${e2eDatabase}`,
         TRUST_PROXY_HEADERS: 'true',
         RATE_LIMIT_REQUESTS: '1000',
+        // Payments go to tests/fake-chapa.mjs; video tokens are signed with a test secret.
+        CHAPA_SECRET_KEY: 'CHASECK_TEST-e2e',
+        CHAPA_BASE_URL: 'http://127.0.0.1:8012/v1',
+        PUBLIC_APP_URL: 'http://localhost:3100',
+        JITSI_APP_SECRET: 'e2e-jitsi-secret',
+        SERVICE_FEE_FLAT_SANTIM: '500',
+        SERVICE_FEE_PERCENT_BP: '0',
       },
+    },
+    {
+      command: 'node tests/fake-chapa.mjs',
+      url: 'http://127.0.0.1:8012/health',
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
     },
     {
       command: 'npm run dev -- -p 3100',

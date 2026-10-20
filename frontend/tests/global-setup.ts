@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { request, type FullConfig } from '@playwright/test';
+import { seed } from './helpers';
 
 // Registers a fresh test patient on the backend, signs in through the
 // Next.js login route (which sets the httpOnly session cookie) and saves the
@@ -12,6 +13,9 @@ export const PASSWORD = 'E2eTestPassword1';
 export default async function globalSetup(config: FullConfig) {
   const baseURL = config.projects[0].use.baseURL ?? 'http://localhost:3100';
   const email = `e2e-${Date.now()}@example.com`;
+
+  // A partner hospital, as if listed by the hospital service.
+  seed('partner');
 
   const backend = await request.newContext({ baseURL: BACKEND_URL });
   const registered = await backend.post('/auth/register', {
