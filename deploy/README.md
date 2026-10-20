@@ -54,3 +54,37 @@ docker compose exec -T postgres pg_dump -U endod endod | gzip > endod-$(date +%F
 
 Check out the previous commit in `/opt/endod` and run the deploy command again.
 Database changes are additive, so an older API runs on a newer schema.
+
+## Events, payments and video (with the hospital service)
+
+The same Compose project also runs the event bus between Endod and the
+hospital service: Redis (`redis-1` master, `redis-2` replica) with three
+Sentinels that promote the replica if the master fails, and
+`events-worker`, which sends Endod's events (bookings, cancellations) and
+applies the hospital service's (listings, decisions, refunds). They live on
+the private network `endod-bus`, which the hospital service's Compose project
+joins (`Hospital-service/deploy`). Events wait in each database while Redis
+is unavailable, so nothing is lost.
+
+Set in `deploy/.env` (see `.env.example`): `REDIS_PASSWORD`, the Chapa keys,
+`PUBLIC_APP_URL`, the service fee, `JITSI_APP_SECRET`, and later
+`GOOGLE_MAPS_BROWSER_KEY`.
+
+```sh
+docker compose logs -f events-worker
+docker compose exec sentinel-1 redis-cli -p 26379 sentinel get-master-addr-by-name endod
+```
+
+### Video (deploy/jitsi)
+
+Jitsi Meet at `meet.endod-health.com`, joined only with a token Endod signs
+for one visit. `cp jitsi/.env.example jitsi/.env`, fill it in (the JWT
+secret equals `JITSI_APP_SECRET`), open **UDP 10000** on the firewall, then
+`cd jitsi && docker compose --env-file .env up -d`.
+
+### Host names
+
+`shared-nginx/endod.conf` answers for `endod-health.com`,
+`hospital.endod-health.com` (the hospital portal) and
+`meet.endod-health.com` (video). Each needs a proxied DNS record in
+Cloudflare pointing at the server.
