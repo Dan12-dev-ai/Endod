@@ -1,4 +1,21 @@
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
+
+/** The test partner hospital listed by tests/seed.py. */
+export const PARTNER_ID = 'e2e0'.repeat(8);
+
+/** Run tests/seed.py against the test backend's database (see that file). */
+export function seed(...args: string[]) {
+  const python =
+    process.env.E2E_PYTHON ??
+    path.resolve(__dirname, '..', '..', '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+  execFileSync(python, [path.join(__dirname, 'seed.py'), ...args], {
+    cwd: path.join(__dirname, '..', '..', 'backend-v2'),
+    env: { ...process.env, DEDAN_DATABASE_URL: `sqlite:///${process.env.E2E_DB}`, ENVIRONMENT: 'development' },
+    stdio: 'inherit',
+  });
+}
 
 /** Open a sidebar section of /interview. */
 export async function openSection(page: Page, link: string, view: string) {

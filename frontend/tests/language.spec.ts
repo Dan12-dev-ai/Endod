@@ -98,7 +98,7 @@ test.describe('Phone tab bar', () => {
     await page.goto('/interview', { waitUntil: 'networkidle' });
     const bar = page.locator('[data-purpose="mobile-nav"]');
     await expect(bar.getByText('Live', { exact: true })).toHaveCount(0);
-    await expect(bar.locator('button')).toHaveCount(6);
+    await expect(bar.locator('button')).toHaveCount(7);
     await bar.locator('[data-purpose="mobile-nav-setting"]').click();
     await expect(page.locator('[data-purpose="digital-card-section"]')).toBeVisible();
     await expect(bar.locator('[data-purpose="mobile-nav-setting"]')).toHaveAttribute('aria-current', 'page');

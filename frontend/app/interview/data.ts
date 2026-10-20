@@ -21,6 +21,17 @@ export type Facility = {
   website: string | null;
   verified: boolean;
   distance_km: number | null;
+  latitude: number;
+  longitude: number;
+  /** An Endod partner hospital: booked and paid through Endod. */
+  partner?: boolean;
+  /** "public" or "private" (partners). */
+  ownership?: string | null;
+  ambulance_phone?: string | null;
+  video_enabled?: boolean;
+  /** Santim (partners). */
+  price_in_person?: number | null;
+  price_video?: number | null;
 };
 
 export type FacilityList = {
@@ -47,7 +58,41 @@ export type Appointment = {
   provider_name: string | null;
   notes: string | null;
   timezone: string;
+  /** Booked and paid at an Endod partner hospital; null for the patient's own entries. */
+  hospital_booking?: HospitalBooking | null;
 };
+
+export type HospitalBookingState =
+  | "awaiting_hospital" | "awaiting_doctor" | "confirmed" | "rejected" | "cancelled" | "completed";
+
+export type HospitalBooking = {
+  hospital_id: string;
+  state: HospitalBookingState;
+  /** Santim. */
+  price: number;
+  service_fee: number;
+  total: number;
+  reason: string | null;
+  video_ready: boolean;
+};
+
+/** GET /users/me/hospital-bookings/quote (santim). */
+export type Quote = {
+  hospital_id: string;
+  visit_mode: "in_person" | "telehealth";
+  price: number;
+  service_fee: number;
+  total: number;
+  balance: number;
+  enough: boolean;
+};
+
+/** Santim as birr for display, e.g. 15050 -> "150.50 ብር" / "ETB 150.50". */
+export function formatBirr(santim: number, locale: string): string {
+  const birr = santim / 100;
+  const number = birr.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return locale.startsWith("am") ? `${number} ብር` : `ETB ${number}`;
+}
 
 /** The arrival-window choices, with the key their label comes from. */
 export const TIME_WINDOWS: { value: "exact" | "morning" | "afternoon" | "evening"; labelKey: TranslationKey }[] = [
@@ -122,7 +167,11 @@ export function appointmentTitle(appointment: Appointment, t: Translate): string
 }
 
 export function appointmentPlace(appointment: Appointment, t: Translate): string {
-  if (appointment.visit_mode === "telehealth") return t("appointments.visitMode.video");
+  if (appointment.visit_mode === "telehealth") {
+    // A video visit with a partner hospital still says which hospital.
+    const video = t("appointments.visitMode.video");
+    return appointment.facility?.name ? `${video} · ${appointment.facility.name}` : video;
+  }
   return appointment.facility?.name && appointment.provider_name
     ? appointment.facility.name
     : appointment.location || t("appointments.visitMode.placeNotSet");

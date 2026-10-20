@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../lib/api";
-import { useI18n } from "../lib/i18n";
+import { useI18n, type TranslationKey } from "../lib/i18n";
 import {
   ACTIVE_STATUSES,
   type Appointment,
@@ -11,6 +11,7 @@ import {
   browserTimezone,
   departmentLabel,
   type FacilityList,
+  formatBirr,
   formatWhen,
   initials,
   localDateTimeToIso,
@@ -255,6 +256,9 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
     const telehealth = a.visit_mode === "telehealth";
     const cancelled = a.status === "CANCELLED";
     const timeWindowLabel = TIME_WINDOWS.find((w) => w.value === a.time_window);
+    // Booked and paid at an Endod partner hospital.
+    const hb = a.hospital_booking ?? null;
+    const refunded = hb && (hb.state === "rejected" || hb.state === "cancelled");
     return (
       <div
         key={a.appointment_id}
@@ -276,7 +280,34 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                 <span>{t("appointments.arriveIn", { window: t(timeWindowLabel.labelKey) })}</span>
               )}
             </div>
-            {telehealth && a.meeting_url && tabOf(a, now) === "upcoming" && (
+            {hb && (
+              <div className="flex flex-wrap items-center gap-2 mt-1.5" data-purpose="hospital-booking">
+                <span
+                  className={`text-[11px] font-semibold rounded px-1.5 py-0.5 ${
+                    hb.state === "confirmed" || hb.state === "completed" ? "bg-emerald-50 text-emerald-700"
+                      : refunded ? "bg-rose-50 text-rose-700" : "bg-sky-50 text-sky-700"
+                  }`}
+                  data-purpose="hospital-state"
+                >
+                  {t(`appointments.hospital.${hb.state}` as TranslationKey)}
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  {refunded ? t("appointments.refunded", { amount: formatBirr(hb.total, locale) })
+                    : t("appointments.paid", { amount: formatBirr(hb.total, locale) })}
+                </span>
+                {hb.reason && refunded && <span className="text-[11px] text-slate-500">· {hb.reason}</span>}
+              </div>
+            )}
+            {hb?.video_ready && tabOf(a, now) === "upcoming" && (
+              <a
+                className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold"
+                data-purpose="join-video"
+                href={`/visit/${a.appointment_id}`}
+              >
+                {t("appointments.joinVideo")}
+              </a>
+            )}
+            {!hb && telehealth && a.meeting_url && tabOf(a, now) === "upcoming" && (
               <a href={a.meeting_url} target="_blank" rel="noopener noreferrer" className="inline-block mt-1 text-xs font-semibold text-teal-700 hover:underline">
                 {t("appointments.joinVideo")}
               </a>
@@ -286,7 +317,9 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
         {tabOf(a, now) === "upcoming" ? (
           confirmCancelId === a.appointment_id ? (
             <div className="flex items-center gap-2 flex-shrink-0" data-purpose="cancel-confirm">
-              <span className="text-xs text-slate-600">{t("appointments.cancelThis")}</span>
+              <span className="text-xs text-slate-600">
+                {hb ? t("appointments.cancelRefund", { amount: formatBirr(hb.total, locale) }) : t("appointments.cancelThis")}
+              </span>
               <button type="button" disabled={busyId === a.appointment_id} onClick={() => cancelAppointment(a)} className="px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition">
                 {t("appointments.yesCancel")}
               </button>
@@ -296,9 +329,12 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
             </div>
           ) : (
             <div className="flex items-center gap-2 flex-shrink-0">
-              <button type="button" onClick={() => openReschedule(a)} className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition">
-                {t("appointments.reschedule")}
-              </button>
+              {/* A paid hospital visit is changed by cancelling (refunded) and booking again. */}
+              {!hb && (
+                <button type="button" onClick={() => openReschedule(a)} className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition">
+                  {t("appointments.reschedule")}
+                </button>
+              )}
               <button type="button" onClick={() => setConfirmCancelId(a.appointment_id)} className="px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg transition">
                 {t("appointments.cancel")}
               </button>

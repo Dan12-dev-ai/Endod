@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import {
@@ -10,16 +10,21 @@ import {
   DEPARTMENT_KEYS,
   type Facility,
   type FacilityList,
+  formatBirr,
   formatWhen,
   initials,
   localDateTimeToIso,
+  type Quote,
   TIME_WINDOWS,
 } from "./data";
+import HospitalMap, { type MapPoint } from "./hospital-map";
 import { RowBones, Skeleton } from "../components/skeleton";
 
 type Props = {
   patientId: string;
   onToast: (title: string, message: string) => void;
+  /** Open the Wallet section (to add money). */
+  onOpenWallet?: () => void;
 };
 
 type Coords = { latitude: number; longitude: number };
@@ -32,7 +37,7 @@ function todayLocal(offsetDays = 0): string {
 }
 
 /** Hospital directory and in-person booking (GET /users/me/care/facilities, POST /users/me/appointments). */
-export default function BookingView({ patientId, onToast }: Props) {
+export default function BookingView({ patientId, onToast, onOpenWallet }: Props) {
   const { t, locale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [department, setDepartment] = useState("");
@@ -51,6 +56,11 @@ export default function BookingView({ patientId, onToast }: Props) {
   const [bookingNote, setBookingNote] = useState("");
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Partner hospitals: in person or video, and what it costs.
+  const [visitMode, setVisitMode] = useState<"in_person" | "telehealth">("in_person");
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [needsMoney, setNeedsMoney] = useState(false);
+  const [paid, setPaid] = useState<{ total: number } | null>(null);
   // A new search is on its way: the current results are dimmed meanwhile.
   const [isFetching, setIsFetching] = useState(true);
 
@@ -119,9 +129,32 @@ export default function BookingView({ patientId, onToast }: Props) {
   const openBooking = (facility: Facility) => {
     setSelected(facility);
     setBooked(null);
+    setPaid(null);
     setFormError("");
-    setBookingDepartment(facility.departments[0] ? departmentLabel(facility.departments[0], t) : "");
+    setNeedsMoney(false);
+    setVisitMode("in_person");
+    setQuote(null);
+    // A partner hospital takes the service key; other listings the label.
+    const first = facility.departments[0];
+    setBookingDepartment(first ? (facility.partner ? first : departmentLabel(first, t)) : "");
   };
+
+  // What the visit costs at a partner hospital, for the mode chosen.
+  useEffect(() => {
+    if (!selected?.partner) return;
+    let cancelled = false;
+    api<Quote>("users/me/hospital-bookings/quote", { query: { hospital_id: selected.id, visit_mode: visitMode } })
+      .then((q) => {
+        if (!cancelled) {
+          setQuote(q);
+          setNeedsMoney(!q.enough);
+        }
+      })
+      .catch(() => !cancelled && setQuote(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, visitMode]);
 
   const closeBooking = () => {
     setSelected(null);
@@ -148,7 +181,7 @@ export default function BookingView({ patientId, onToast }: Props) {
         body: {
           scheduled_at: scheduledAt,
           timezone: browserTimezone(),
-          visit_mode: "in_person",
+          visit_mode: selected.partner ? visitMode : "in_person",
           facility_id: selected.id,
           department: bookingDepartment || null,
           time_window: timeWindow,
@@ -156,15 +189,23 @@ export default function BookingView({ patientId, onToast }: Props) {
         },
       });
       setBooked(result.appointment);
+      setPaid(result.appointment.hospital_booking ? { total: result.appointment.hospital_booking.total } : null);
       setBookingNote("");
     } catch (error) {
+      // 402: the balance does not cover the visit.
+      if (error instanceof ApiError && error.status === 402) setNeedsMoney(true);
       setFormError(error instanceof ApiError ? error.message : t("booking.error.generic"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const facilities = directory?.facilities ?? [];
+  const facilities = useMemo(() => directory?.facilities ?? [], [directory]);
+  const mapPoints: MapPoint[] = useMemo(
+    () => facilities.map((f) => ({ id: f.id, latitude: f.latitude, longitude: f.longitude, label: f.name })),
+    [facilities],
+  );
+  const here = useMemo(() => coords, [coords]);
 
   return (
     <>
@@ -248,6 +289,17 @@ export default function BookingView({ patientId, onToast }: Props) {
             <p data-purpose="hospital-empty" className="text-xs text-slate-500 px-1">{t("booking.noMatch")}</p>
           )}
 
+          <div className="mb-4">
+            <HospitalMap
+              here={here}
+              onSelect={(id) => {
+                const facility = facilities.find((f) => f.id === id);
+                if (facility) openBooking(facility);
+              }}
+              points={mapPoints}
+            />
+          </div>
+
           {/* Hospital Grid: placeholders on the first load; later searches dim the current results. */}
           <div
             aria-busy={isFetching}
@@ -279,6 +331,21 @@ export default function BookingView({ patientId, onToast }: Props) {
                       {facility.emergency && <span className="text-rose-600 font-medium">{t("booking.emergencyCare")}</span>}
                       {!facility.verified && <span className="text-amber-600">{t("booking.unconfirmed")}</span>}
                     </div>
+                    {facility.partner && (
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5" data-purpose="partner-details">
+                        {facility.price_in_person != null && (
+                          <span className="text-[11px] font-semibold text-slate-800">
+                            {t("booking.price", { price: formatBirr(facility.price_in_person, locale) })}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-slate-100 text-slate-600">
+                          {facility.ownership === "private" ? t("booking.private") : t("booking.public")}
+                        </span>
+                        {facility.video_enabled && (
+                          <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-sky-50 text-sky-700">{t("booking.videoAvailable")}</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <button
@@ -325,6 +392,39 @@ export default function BookingView({ patientId, onToast }: Props) {
                 </div>
               </div>
 
+              {selected.partner && (
+                <fieldset data-purpose="visit-mode">
+                  <legend className="block text-xs font-semibold text-slate-700 mb-1">{t("booking.visitMode")}</legend>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["in_person", "telehealth"] as const).map((mode) => {
+                      const disabled = mode === "telehealth" && !selected.video_enabled;
+                      return (
+                        <label
+                          className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                            visitMode === mode ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600"
+                          } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                          key={mode}
+                        >
+                          <input
+                            checked={visitMode === mode}
+                            className="sr-only"
+                            disabled={disabled}
+                            name="visit-mode"
+                            onChange={() => setVisitMode(mode)}
+                            type="radio"
+                            value={mode}
+                          />
+                          {mode === "in_person" ? t("booking.inPerson") : t("booking.video")}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {visitMode === "telehealth" && (
+                    <p className="text-[11px] text-slate-500 mt-1">{t("booking.videoNeedsApproval")}</p>
+                  )}
+                </fieldset>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-date">{t("booking.selectDate")}</label>
                 <input type="date" id="booking-date" required min={todayLocal()} value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
@@ -347,7 +447,7 @@ export default function BookingView({ patientId, onToast }: Props) {
                 <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-department">{t("booking.departmentClinic")}</label>
                 <select id="booking-department" value={bookingDepartment} onChange={(e) => setBookingDepartment(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
                   {selected.departments.map((d) => (
-                    <option key={d} value={departmentLabel(d, t)}>{departmentLabel(d, t)}</option>
+                    <option key={d} value={selected.partner ? d : departmentLabel(d, t)}>{departmentLabel(d, t)}</option>
                   ))}
                   <option value="">{t("booking.notSure")}</option>
                 </select>
@@ -357,6 +457,26 @@ export default function BookingView({ patientId, onToast }: Props) {
                 <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-note">{t("booking.reasonLabel")}</label>
                 <textarea id="booking-note" rows={2} maxLength={1000} value={bookingNote} onChange={(e) => setBookingNote(e.target.value)} placeholder={t("booking.reasonPlaceholder")} className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
               </div>
+
+              {selected.partner && quote && (
+                <dl className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-xs space-y-1" data-purpose="booking-quote">
+                  <div className="flex justify-between"><dt className="text-slate-500">{t("booking.quote.price")}</dt><dd className="font-semibold">{formatBirr(quote.price, locale)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-slate-500">{t("booking.quote.fee")}</dt><dd className="font-semibold">{formatBirr(quote.service_fee, locale)}</dd></div>
+                  <div className="flex justify-between border-t border-slate-200 pt-1"><dt className="font-bold text-slate-800">{t("booking.quote.total")}</dt><dd className="font-bold" data-purpose="quote-total">{formatBirr(quote.total, locale)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-slate-500">{t("booking.quote.balance")}</dt><dd className={quote.enough ? "text-emerald-700 font-semibold" : "text-red-600 font-semibold"}>{formatBirr(quote.balance, locale)}</dd></div>
+                </dl>
+              )}
+
+              {needsMoney && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-center justify-between gap-3" data-purpose="needs-money">
+                  <p className="text-xs text-amber-900">{t("booking.needsMoney")}</p>
+                  {onOpenWallet && (
+                    <button className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold whitespace-nowrap" onClick={onOpenWallet} type="button">
+                      {t("booking.addMoney")}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {formError && (
                 <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" data-purpose="booking-error" role="alert">{formError}</p>
@@ -405,7 +525,18 @@ export default function BookingView({ patientId, onToast }: Props) {
                 <span className="text-slate-400">{t("booking.reference")}</span>
                 <span className="font-mono font-bold text-slate-800">{booked.appointment_id.slice(0, 8).toUpperCase()}</span>
               </div>
+              {paid && (
+                <div className="flex justify-between gap-3" data-purpose="booked-paid">
+                  <span className="text-slate-400">{t("booking.paid")}</span>
+                  <span className="font-bold text-slate-800">{formatBirr(paid.total, locale)}</span>
+                </div>
+              )}
             </div>
+            {booked.hospital_booking?.state === "awaiting_doctor" && (
+              <p className="text-xs text-sky-800 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2 mb-4" data-purpose="booked-awaiting-doctor">
+                {t("booking.awaitingDoctor")}
+              </p>
+            )}
 
             <button type="button" onClick={closeBooking} className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition">
               {t("common.done")}
