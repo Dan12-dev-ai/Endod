@@ -7,6 +7,9 @@ import { createAppointment, futureSlot, openSection, PARTNER_ID, seed } from './
 // stubbed). The tests build on each other, so they run in order.
 
 test.describe.configure({ mode: 'serial' });
+// Patients and partner hospitals are in Ethiopia: times are entered in Addis Ababa time
+// (CI machines run in UTC, where 09:30 would be 12:30 at the hospital).
+test.use({ timezoneId: 'Africa/Addis_Ababa' });
 
 const PARTNER = `[data-purpose="hospital-${PARTNER_ID}"]`;
 
@@ -197,5 +200,49 @@ test.describe('Emergency', () => {
     await expect.poll(() => page.evaluate(() => (window as unknown as { __markers: string[] }).__markers)).toContain(
       'Endod Test General Hospital',
     );
+  });
+});
+
+test.describe('Emergency dialog keyboard use', () => {
+  test('Tab stays inside, and closing returns focus to the Emergency button', async ({ page }) => {
+    await page.goto('/interview', { waitUntil: 'networkidle' });
+    const button = page.locator('[data-purpose="emergency-button"]');
+    await button.focus();
+    await page.keyboard.press('Enter');
+    const panel = page.locator('[data-purpose="emergency-panel"]');
+    await expect(panel.locator(`[data-purpose="emergency-hospital-${PARTNER_ID}"]`)).toBeVisible();
+    for (let i = 0; i < 15; i++) {
+      await page.keyboard.press('Tab');
+      expect(await panel.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    }
+    await page.keyboard.press('Shift+Tab');
+    expect(await panel.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(button).toBeFocused();
+  });
+});
+
+test.describe('Chapa notifications (public routes)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('the webhook refuses oversized bodies and tells callers nothing more', async ({ request }) => {
+    const big = await request.post('/api/payments/chapa/webhook', {
+      data: 'x'.repeat(70_000), headers: { 'Content-Type': 'text/plain' },
+    });
+    expect(big.status()).toBe(413);
+    const unknown = await request.post('/api/payments/chapa/webhook', { data: { tx_ref: 'endod-unknown' } });
+    expect(unknown.status()).toBe(400);
+    expect(await unknown.json()).toEqual({ ok: false });
+  });
+
+  test('the callback takes the reference from a POST body too', async ({ request }) => {
+    const json = await request.post('/api/payments/chapa/callback', { data: { trx_ref: 'endod-unknown' } });
+    const form = await request.post('/api/payments/chapa/callback', { form: { tx_ref: 'endod-unknown' } });
+    const none = await request.post('/api/payments/chapa/callback', { data: {} });
+    // Unknown here: found and checked, but not ours (the backend says 404), never "missing".
+    expect(json.status()).toBe(404);
+    expect(form.status()).toBe(404);
+    expect(none.status()).toBe(400);
   });
 });

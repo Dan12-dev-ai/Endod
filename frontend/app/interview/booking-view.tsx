@@ -143,6 +143,9 @@ export default function BookingView({ patientId, onToast, onOpenWallet }: Props)
   useEffect(() => {
     if (!selected?.partner) return;
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the old quote must not show for the new choice
+    setQuote(null);
+    setNeedsMoney(false);
     api<Quote>("users/me/hospital-bookings/quote", { query: { hospital_id: selected.id, visit_mode: visitMode } })
       .then((q) => {
         if (!cancelled) {
@@ -150,7 +153,9 @@ export default function BookingView({ patientId, onToast, onOpenWallet }: Props)
           setNeedsMoney(!q.enough);
         }
       })
-      .catch(() => !cancelled && setQuote(null));
+      .catch(() => {
+        if (!cancelled) setQuote(null);
+      });
     return () => {
       cancelled = true;
     };
@@ -402,7 +407,7 @@ export default function BookingView({ patientId, onToast, onOpenWallet }: Props)
                         <label
                           className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
                             visitMode === mode ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600"
-                          } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                          } has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-emerald-500 ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                           key={mode}
                         >
                           <input

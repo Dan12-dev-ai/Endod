@@ -56,6 +56,17 @@ export default function HospitalMap({
   const markers = useRef<any[]>([]);
   const [ready, setReady] = useState(false);
   const [available, setAvailable] = useState(false);
+  // The latest click handler, without redrawing the markers when it changes.
+  const select = useRef(onSelect);
+  useEffect(() => {
+    select.current = onSelect;
+  });
+  // What the map shows: markers are redrawn (and the view refitted) only
+  // when this changes, so a patient's own panning and zooming is kept.
+  const shown = JSON.stringify([
+    points.map((p) => [p.id, p.latitude, p.longitude, p.label]),
+    here ? [here.latitude, here.longitude] : null,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,7 +105,7 @@ export default function HospitalMap({
     for (const point of points) {
       const position = { lat: point.latitude, lng: point.longitude };
       const marker = new google.maps.Marker({ map: map.current, position, title: point.label });
-      if (onSelect) marker.addListener("click", () => onSelect(point.id));
+      marker.addListener("click", () => select.current?.(point.id));
       markers.current.push(marker);
       bounds.extend(position);
     }
@@ -115,8 +126,8 @@ export default function HospitalMap({
         map.current.fitBounds(bounds, 48);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- t only labels the marker
-  }, [ready, points, here, onSelect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `shown` stands for points and here; t only labels the marker
+  }, [ready, shown]);
 
   if (!available) return null;
   return (

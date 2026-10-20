@@ -4,7 +4,7 @@
 // one. Everything here is a phone call or a directions link, so it works on
 // any phone, with or without the map.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
@@ -36,12 +36,18 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
   const [locating, setLocating] = useState(false);
   const [here, setHere] = useState<{ latitude: number; longitude: number } | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const latest = useRef(0);
 
   const load = useCallback(async (coords?: { latitude: number; longitude: number }) => {
+    const request = ++latest.current;
     try {
-      setData(await api<Emergency>("users/me/care/emergency", { query: coords ?? {} }));
+      const result = await api<Emergency>("users/me/care/emergency", { query: coords ?? {} });
+      if (request !== latest.current) return; // a newer request (with a location) is under way
+      setData(result);
       setError("");
     } catch (err) {
+      if (request !== latest.current) return;
       setError(err instanceof ApiError ? err.message : t("emergency.error"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable per language
@@ -50,9 +56,26 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch
     void load();
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      // Keep Tab inside the dialog.
+      const items = Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+      ));
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const inside = dialogRef.current.contains(document.activeElement);
+      if (event.shiftKey && (document.activeElement === first || !inside)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !inside)) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -60,6 +83,7 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = overflow;
+      opener?.focus(); // back to the Emergency button
     };
   }, [load, onClose]);
 
@@ -85,9 +109,9 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
   };
 
   const ambulance = data?.national.find((n) => n.service === "ambulance");
-  const points: MapPoint[] = (data?.hospitals ?? []).map((h) => ({
+  const points: MapPoint[] = useMemo(() => (data?.hospitals ?? []).map((h) => ({
     id: h.hospital_id, latitude: h.latitude, longitude: h.longitude, label: h.name,
-  }));
+  })), [data]);
 
   return createPortal(
     <div
@@ -101,6 +125,7 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
       <div
         className="bg-white w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-5"
         onClick={(event) => event.stopPropagation()}
+        ref={dialogRef}
       >
         <div className="flex items-start justify-between gap-3">
           <div>

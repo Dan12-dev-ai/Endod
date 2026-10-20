@@ -35,7 +35,12 @@ http
       let raw = '';
       req.on('data', (chunk) => (raw += chunk));
       req.on('end', () => {
-        const body = JSON.parse(raw || '{}');
+        let body;
+        try {
+          body = JSON.parse(raw || '{}');
+        } catch {
+          return send(res, 400, { message: 'Invalid JSON' });
+        }
         payments.set(body.tx_ref, { ...body, status: 'pending' });
         send(res, 200, {
           status: 'success',

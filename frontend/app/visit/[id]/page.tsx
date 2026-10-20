@@ -60,6 +60,7 @@ export default function VisitPage() {
         call.current.addListener?.("readyToClose", () => {
           setState("ended");
           call.current?.dispose?.();
+          call.current = null;
         });
       } catch (err) {
         if (!cancelled) setError(err instanceof ApiError || err instanceof Error ? err.message : t("visit.error"));

@@ -23,6 +23,10 @@ type Wallet = { balance: number; currency: string; entries: Entry[] };
 
 type Deposit = { deposit_id: string; status: "pending" | "succeeded" | "failed" | "reversed"; checkout_url: string | null; amount: number };
 
+/** How often, and how many times, a payment is checked on the way back from Chapa. */
+const CHECK_EVERY_MS = 2000;
+const CHECKS = 10;
+
 /** Quick amounts, in birr. */
 const PRESETS = [100, 250, 500, 1000];
 
@@ -67,27 +71,32 @@ export default function WalletView({ onToast }: { onToast: (title: string, messa
     let cancelled = false;
     const poll = async () => {
       setChecking(true);
-      for (let attempt = 0; attempt < 10 && !cancelled; attempt++) {
+      let settled = false;
+      for (let attempt = 0; attempt < CHECKS && !cancelled && !settled; attempt++) {
         try {
           const deposit = await api<Deposit>(`users/me/wallet/deposits/${depositId}`);
+          if (cancelled) return;
           if (deposit.status === "succeeded") {
             onToast(t("wallet.toast.addedTitle"), t("wallet.toast.added", { amount: formatBirr(deposit.amount, locale) }));
-            break;
-          }
-          if (deposit.status === "failed") {
+            settled = true;
+          } else if (deposit.status === "failed") {
             onToast(t("wallet.toast.failedTitle"), t("wallet.toast.failed"));
-            break;
+            settled = true;
+          } else if (deposit.status === "reversed") {
+            settled = true;
           }
         } catch {
           // keep trying a few times
         }
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        if (!settled) await new Promise((resolve) => setTimeout(resolve, CHECK_EVERY_MS));
       }
-      if (!cancelled) {
-        setChecking(false);
-        window.history.replaceState(null, "", window.location.pathname);
-        void load();
-      }
+      if (cancelled) return;
+      // Still pending: the backend keeps checking with Chapa and adds the
+      // money when it is confirmed; the patient is told so.
+      if (!settled) onToast(t("wallet.toast.pendingTitle"), t("wallet.toast.pending"));
+      setChecking(false);
+      window.history.replaceState(null, "", window.location.pathname);
+      void load();
     };
     void poll();
     return () => {
@@ -109,12 +118,23 @@ export default function WalletView({ onToast }: { onToast: (title: string, messa
       const deposit = await api<Deposit>("users/me/wallet/deposits", {
         method: "POST", body: { amount: value.toFixed(2) },
       });
-      if (deposit.checkout_url) window.location.assign(deposit.checkout_url);
+      if (!deposit.checkout_url) throw new Error(t("wallet.error.start"));
+      window.location.assign(deposit.checkout_url);
     } catch (error) {
-      setFormError(error instanceof ApiError ? error.message : t("wallet.error.start"));
+      setFormError(error instanceof ApiError || error instanceof Error ? error.message : t("wallet.error.start"));
       setIsStarting(false);
     }
   };
+
+  // Back from Chapa with the browser's Back button (page restored from
+  // cache): the Continue button works again.
+  useEffect(() => {
+    const onShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setIsStarting(false);
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, []);
 
   return (
     <div data-purpose="wallet-view" className="flex-1 min-h-0 overflow-y-auto">
