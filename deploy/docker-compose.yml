@@ -1,10 +1,11 @@
-# Endod Health: Postgres, the API, the patient web app and a Cloudflare Tunnel.
+# Endod Health: Postgres, the API, the patient web app, the event bus (Redis
+# with Sentinel) and its worker, and a Cloudflare Tunnel.
 #
 # Nothing is published on the host: the only way in is the tunnel, which
 # reaches the web app, and the web app reaches the API on the private
 # network. See deploy/README.md.
 #
-#   cd deploy && docker compose --env-file .env up -d --build
+#   cd deploy && docker compose -f docker-compose.yml -f shared-nginx/docker-compose.override.yml --env-file .env up -d --build
 
 name: endod
 
@@ -52,9 +53,124 @@ services:
       DEDAN_API_URL: http://backend:8000
       # Cloudflare appends the client address it saw: one hop from the right.
       TRUSTED_PROXY_HOPS: "1"
+      # Read per request, so the key can be added without a rebuild.
+      GOOGLE_MAPS_BROWSER_KEY: ${GOOGLE_MAPS_BROWSER_KEY:-}
     depends_on:
       backend:
         condition: service_healthy
+
+  # --- Events between Endod and the hospital service (Redis Streams) ---------
+  # A master, a replica and three Sentinels that elect a new master if it
+  # fails. Only on the private "bus" network, which the hospital service's
+  # own Compose project joins (see Hospital-service/deploy).
+  redis-1:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    # Starts as master or replica, whichever the Sentinels say (redis/redis.sh).
+    entrypoint: ["sh", "/redis.sh"]
+    environment:
+      MY_IP: 172.30.77.11
+      DEFAULT_MASTER_IP: 172.30.77.11
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in deploy/.env}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
+    volumes:
+      - ./redis/redis.sh:/redis.sh:ro
+      - redis1:/data
+    networks:
+      bus:
+        ipv4_address: 172.30.77.11
+        aliases: [endod-redis-1]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis-2:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    entrypoint: ["sh", "/redis.sh"]
+    environment:
+      MY_IP: 172.30.77.12
+      DEFAULT_MASTER_IP: 172.30.77.11
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
+    volumes:
+      - ./redis/redis.sh:/redis.sh:ro
+      - redis2:/data
+    networks:
+      bus:
+        ipv4_address: 172.30.77.12
+        aliases: [endod-redis-2]
+
+  sentinel-1: &sentinel
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    entrypoint: ["sh", "/sentinel.sh"]
+    environment: &sentinel-env
+      SENTINEL_IP: 172.30.77.21
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_SENTINEL_PASSWORD: ${REDIS_SENTINEL_PASSWORD:-}
+    volumes:
+      - ./redis/sentinel.sh:/sentinel.sh:ro
+      - sentinel1:/data
+    networks:
+      bus:
+        ipv4_address: 172.30.77.21
+        aliases: [endod-sentinel-1]
+
+  sentinel-2:
+    <<: *sentinel
+    environment:
+      <<: *sentinel-env
+      SENTINEL_IP: 172.30.77.22
+    volumes:
+      - ./redis/sentinel.sh:/sentinel.sh:ro
+      - sentinel2:/data
+    networks:
+      bus:
+        ipv4_address: 172.30.77.22
+        aliases: [endod-sentinel-2]
+
+  sentinel-3:
+    <<: *sentinel
+    environment:
+      <<: *sentinel-env
+      SENTINEL_IP: 172.30.77.23
+    volumes:
+      - ./redis/sentinel.sh:/sentinel.sh:ro
+      - sentinel3:/data
+    networks:
+      bus:
+        ipv4_address: 172.30.77.23
+        aliases: [endod-sentinel-3]
+
+  # Sends Endod's events to the hospital service and applies its replies
+  # (listings, decisions on bookings, refunds); re-checks Chapa deposits.
+  events-worker:
+    build:
+      context: ..
+      dockerfile: backend-v2/Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "dedan_platform.events_worker"]
+    env_file: .env
+    environment:
+      DEDAN_DATABASE_URL: postgresql+psycopg://endod:${POSTGRES_PASSWORD}@postgres:5432/endod
+      REDIS_SENTINELS: endod-sentinel-1:26379,endod-sentinel-2:26379,endod-sentinel-3:26379
+      REDIS_SENTINEL_MASTER: endod
+      REDIS_MIN_REPLICAS: "1"
+    healthcheck:
+      disable: true
+    networks:
+      default: {}
+      bus: {}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      sentinel-1:
+        condition: service_started
 
   # Only with the tunnel: `docker compose --profile tunnel up -d`.
   # (Alternatively an existing nginx fronts the app: see shared-nginx/.)
@@ -70,3 +186,23 @@ services:
 
 volumes:
   pgdata:
+  redis1:
+  redis2:
+  sentinel1:
+  sentinel2:
+  sentinel3:
+
+networks:
+  # Shared with the hospital service's Compose project (by this name). No
+  # internet access from it; each service keeps its own network for that.
+  # Redis and the Sentinels have fixed addresses: a stopped container's name
+  # disappears from Docker's DNS, and Sentinels that cannot resolve the
+  # failed master never elect a new one. Other containers get addresses from
+  # the upper half.
+  bus:
+    name: endod-bus
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.77.0/24
+          ip_range: 172.30.77.128/25

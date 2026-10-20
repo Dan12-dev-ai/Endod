@@ -14,11 +14,12 @@ TLS_DIR="$HERE/tls"
 docker inspect "$CONTAINER" >/dev/null 2>&1 || exit 0
 
 # Endod's own origin certificate (self-signed; Cloudflare "Full" accepts it).
-if [ ! -s "$TLS_DIR/origin.crt" ]; then
+# Made again when it lacks a host name added since (hospital., meet.).
+if ! openssl x509 -in "$TLS_DIR/origin.crt" -noout -text 2>/dev/null | grep -q "DNS:meet.endod-health.com"; then
     mkdir -p "$TLS_DIR"
     openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
         -subj "/CN=endod-health.com" \
-        -addext "subjectAltName=DNS:endod-health.com,DNS:www.endod-health.com" \
+        -addext "subjectAltName=DNS:endod-health.com,DNS:www.endod-health.com,DNS:hospital.endod-health.com,DNS:meet.endod-health.com" \
         -keyout "$TLS_DIR/origin.key" -out "$TLS_DIR/origin.crt" 2>/dev/null
     chmod 600 "$TLS_DIR/origin.key"
 fi
