@@ -30,6 +30,9 @@ services:
       # Moderators come from the token (doctors), not from joining first.
       ENABLE_AUTO_OWNER: "0"
       XMPP_MUC_MODULES: token_affiliation
+      # Prosody checks every token. Jicofo's own sign-in check would make
+      # every signed-in user a moderator (patients too), so it is off.
+      JICOFO_ENABLE_AUTH: "0"
       JICOFO_AUTH_PASSWORD: ${JICOFO_AUTH_PASSWORD:?set JICOFO_AUTH_PASSWORD}
       JVB_AUTH_PASSWORD: ${JVB_AUTH_PASSWORD:?set JVB_AUTH_PASSWORD}
       # TLS ends at Cloudflare and the shared nginx.
