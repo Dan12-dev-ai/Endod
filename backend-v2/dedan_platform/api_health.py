@@ -135,6 +135,31 @@ def create_appointment(
     notification worker. Doing it synchronously would make a mail outage block
     a patient's booking.
     """
+    from dedan_platform import hospital_bookings, partners, wallet
+
+    if body.facility_id and partners.get(body.facility_id) is not None:
+        # An Endod partner hospital: booked with the hospital and paid from
+        # the patient's balance (hospital_bookings.py).
+        try:
+            result = hospital_bookings.book(
+                user_id=user_id, hospital_id=body.facility_id, scheduled_at=body.scheduled_at,
+                visit_mode=body.visit_mode, service=body.department, time_window=body.time_window,
+                notes=body.notes, timezone_name=body.timezone if body.timezone != "UTC" else None,
+                duration_minutes=body.duration_minutes,
+                correlation_id=request.headers.get("X-Correlation-ID"),
+            )
+        except wallet.InsufficientFunds as exc:
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc)) from exc
+        except appt.AppointmentError as exc:
+            raise _error(exc) from exc
+        # A video visit gets its reminders once a doctor approves it.
+        queued = {"queued": 0, "job_ids": [], "skipped": [], "offsets": [], "channels": {}} if result["appointment"]["hospital_booking"]["state"] == "awaiting_doctor" else \
+            scheduler.schedule_all_channels(
+                user_id=user_id, appointment_id=result["appointment"]["appointment_id"],
+                correlation_id=request.headers.get("X-Correlation-ID"),
+            )
+        return {**result, "reminders": queued}
+
     try:
         result = appt.create_appointment(
             user_id=user_id,

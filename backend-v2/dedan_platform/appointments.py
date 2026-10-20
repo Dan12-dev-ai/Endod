@@ -117,6 +117,16 @@ def _to_payload(appointment: Appointment) -> Dict[str, Any]:
         "timezone": appointment.timezone,
         "created_at": appointment.created_at.isoformat(),
         "updated_at": appointment.updated_at.isoformat(),
+        # Booked and paid at an Endod partner hospital (None for the patient's own entries).
+        "hospital_booking": {
+            "hospital_id": appointment.hospital_id,
+            "state": appointment.hospital_state,
+            "price": appointment.price or 0,
+            "service_fee": appointment.service_fee or 0,
+            "total": (appointment.price or 0) + (appointment.service_fee or 0),
+            "reason": appointment.hospital_reason,
+            "video_ready": bool(appointment.meeting_room),
+        } if appointment.hospital_id else None,
     }
 
 
@@ -304,10 +314,11 @@ def _validate_visit(
         raise AppointmentError("meeting_url is only for telehealth visits.")
     location = _short_text(location, "location", 200)
     if facility_id:
+        from dedan_platform import partner_config
         from dedan_platform.care_navigation import get_facility
 
         facility = get_facility(facility_id)
-        if facility is None:
+        if facility is None or (not facility.partner and not partner_config.demo_directory()):
             raise AppointmentError("Unknown facility_id.")
         if mode == "telehealth":
             raise AppointmentError("A telehealth visit is not at a facility; leave facility_id empty.")
@@ -447,6 +458,13 @@ def _transition(appointment: Appointment, target: str) -> None:
         appointment.cancelled_at = utcnow()
 
 
+def _hospital_booking(user_id: str, appointment_id: str) -> bool:
+    with session_scope() as session:
+        hospital_id = session.scalar(select(Appointment.hospital_id).where(
+            Appointment.id == appointment_id, Appointment.user_id == user_id))
+    return bool(hospital_id)
+
+
 def update_status(
     user_id: str,
     appointment_id: str,
@@ -467,6 +485,14 @@ def update_status(
     if target_status == EventStatus.RESCHEDULED:
         # Needs a new time and fresh reminders; only `reschedule` does both.
         raise AppointmentError("To reschedule, use the reschedule endpoint with the new time.")
+    if _hospital_booking(user_id, appointment_id):
+        # A paid hospital visit: the patient may cancel (and is refunded);
+        # confirming and completing are the hospital's.
+        if target_status != EventStatus.CANCELLED:
+            raise AppointmentError("The hospital confirms and completes this visit; you can cancel it.")
+        from dedan_platform import hospital_bookings
+
+        return hospital_bookings.cancel_by_patient(user_id, appointment_id, correlation_id=correlation_id)
 
     with session_scope() as session:
         appointment = session.scalar(
@@ -541,6 +567,8 @@ def reschedule(
     """
     if new_time.tzinfo is None:
         raise AppointmentError("new_time must include a timezone offset.")
+    if _hospital_booking(user_id, appointment_id):
+        raise AppointmentError("To change a hospital visit, cancel it (you are refunded) and book again.")
     new_time = ensure_utc(new_time)
     _require_future(new_time)
     from dedan_platform import notifications

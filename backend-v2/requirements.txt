@@ -58,9 +58,12 @@ psycopg[binary]>=3.2            # PostgreSQL driver for DEDAN_DATABASE_URL=postg
 tzdata>=2024.1                  # IANA timezones for zoneinfo; Windows ships none,
                                 # so "Africa/Addis_Ababa" is otherwise unknown there.
 
+redis>=5.2,<7                   # events with the hospital service (Redis Streams, Sentinel)
+httpx>=0.27                     # Chapa payments API (and fastapi.testclient's transport)
+
 # --- Test suite -------------------------------------------------------------
-httpx>=0.27                     # fastapi.testclient transport
 pytest>=8.0
+fakeredis>=2.26,<3              # Redis Streams in memory for the event tests
 
 # ---------------------------------------------------------------------------
 # NOT listed here, and why

@@ -41,7 +41,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -89,12 +89,49 @@ class Facility:
     verified: bool = True
     source: str = FACILITY_SOURCE
     notes: str = ""
+    # --- Endod partner hospitals (bookable and paid through Endod) ---
+    #: True for a hospital that joined Endod; only these take bookings with payment.
+    partner: bool = False
+    #: "public" or "private" (partners only).
+    ownership: Optional[str] = None
+    ambulance_phone: Optional[str] = None
+    video_enabled: bool = False
+    #: Visit prices in santim (partners only).
+    price_in_person: Optional[int] = None
+    price_video: Optional[int] = None
+    timezone: str = "Africa/Addis_Ababa"
 
     def to_payload(self) -> Dict[str, Any]:
         data = asdict(self)
         data["departments"] = list(self.departments)
         data["availability_source"] = "not_integrated"
         return data
+
+
+PARTNER_SOURCE = "endod-partner"
+
+
+def _from_partner(row) -> "Facility":
+    return Facility(
+        id=row.id, name=row.name, kind="hospital", address=row.address or "", city=row.city or "",
+        country="ET", latitude=row.latitude, longitude=row.longitude,
+        departments=tuple(s for s in (row.services or "").split(",") if s),
+        phone=row.phone, emergency=row.emergency, open_hours=row.open_hours, verified=True,
+        source=PARTNER_SOURCE, partner=True, ownership=row.ownership, ambulance_phone=row.ambulance_phone,
+        video_enabled=row.video_enabled, price_in_person=row.price_in_person, price_video=row.price_video,
+        timezone=row.timezone,
+    )
+
+
+def directory() -> Tuple["Facility", ...]:
+    """Every facility a patient can see: the partner hospitals, plus the
+    built-in sample directory outside production."""
+    from dedan_platform import partner_config, partners
+
+    found = tuple(_from_partner(row) for row in partners.listed())
+    if partner_config.demo_directory():
+        found += tuple(DIRECTORY)
+    return found
 
 
 #: Departments used for matching. Kept coarse on purpose: a fine-grained
@@ -222,6 +259,17 @@ DIRECTORY: Sequence[Facility] = (
 
 
 def get_facility(facility_id: str) -> Optional[Facility]:
+    """A facility by id: a listed partner hospital, or a built-in sample one.
+
+    Looked up directly (one query, not the whole directory). Sample
+    facilities are found here even in production, so older appointments
+    keep their names; browsing and booking only offer them outside it.
+    """
+    from dedan_platform import partners
+
+    partner = partners.get(facility_id)
+    if partner is not None:
+        return _from_partner(partner)
     for facility in DIRECTORY:
         if facility.id == facility_id:
             return facility
@@ -381,7 +429,7 @@ def rank_facilities(
     needed = required_departments(context)
     ranked: List[RankedFacility] = []
 
-    for facility in DIRECTORY:
+    for facility in directory():
         matched = [dept for dept in needed if dept in facility.departments]
         # Facility fit: proportion of required departments it can serve.
         fit = len(matched) / len(needed)
@@ -548,7 +596,7 @@ def browse(
     city = (city or "").strip().lower()
 
     rows = []
-    for facility in DIRECTORY:
+    for facility in directory():
         if country and facility.country != country.upper():
             continue
         if city and facility.city.lower() != city:
@@ -599,7 +647,7 @@ def search(
     # Rank everything, filter, then cut to `limit`: filtering after the cut
     # dropped matches that ranked just below it.
     ranked = rank_facilities(
-        context, latitude=latitude, longitude=longitude, limit=len(DIRECTORY),
+        context, latitude=latitude, longitude=longitude, limit=len(directory()),
     )
     if country:
         ranked = [item for item in ranked if item.facility.country == country.upper()]

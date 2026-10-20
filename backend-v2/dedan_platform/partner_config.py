@@ -1,0 +1,117 @@
+"""Settings for partner hospitals, payments, video and events.
+
+Read from the process environment on every call (as the notification
+settings are), so a deployment changes them in ``deploy/.env`` and tests set
+them with ``monkeypatch.setenv``.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import List, Optional
+
+
+def _get(name: str, default: Optional[str] = None) -> Optional[str]:
+    value = os.getenv(name)
+    return value.strip() if value and value.strip() else default
+
+
+def _int(name: str, default: int) -> int:
+    try:
+        return int(_get(name) or default)
+    except ValueError:
+        return default
+
+
+def environment() -> str:
+    return (_get("ENVIRONMENT", "development") or "development").lower()
+
+
+# --- events (Redis Streams; Sentinel in production) ---
+
+def redis_url() -> Optional[str]:
+    return _get("REDIS_URL")
+
+
+def redis_sentinels() -> List[str]:
+    return [part.strip() for part in (_get("REDIS_SENTINELS") or "").split(",") if part.strip()]
+
+
+def redis_sentinel_master() -> str:
+    return _get("REDIS_SENTINEL_MASTER", "endod") or "endod"
+
+
+def redis_password() -> Optional[str]:
+    return _get("REDIS_PASSWORD")
+
+
+def redis_sentinel_password() -> Optional[str]:
+    return _get("REDIS_SENTINEL_PASSWORD")
+
+
+def redis_min_replicas() -> int:
+    """Replicas that must hold an event before it counts as sent (0: single Redis)."""
+    return max(0, _int("REDIS_MIN_REPLICAS", 0))
+
+
+# --- the care directory ---
+
+def demo_directory() -> bool:
+    """The built-in sample facilities: on in development and tests, off in production
+    (where every listed hospital is a real partner)."""
+    value = _get("CARE_DEMO_DIRECTORY")
+    if value is None:
+        return environment() != "production"
+    return value.lower() in ("1", "true", "yes", "on")
+
+
+# --- payments ---
+
+def service_fee_flat() -> int:
+    """Endod's fee per payment, in santim (default 5 birr)."""
+    return max(0, _int("SERVICE_FEE_FLAT_SANTIM", 500))
+
+
+def service_fee_percent_hundredths() -> int:
+    """Endod's fee as a share of the price, in hundredths of a percent (150 = 1.5%)."""
+    return max(0, _int("SERVICE_FEE_PERCENT_BP", 0))
+
+
+def chapa_secret_key() -> Optional[str]:
+    return _get("CHAPA_SECRET_KEY")
+
+
+def chapa_webhook_secret() -> Optional[str]:
+    return _get("CHAPA_WEBHOOK_SECRET")
+
+
+def chapa_base_url() -> str:
+    return (_get("CHAPA_BASE_URL", "https://api.chapa.co/v1") or "").rstrip("/")
+
+
+def public_app_url() -> str:
+    """Where patients use Endod (for Chapa's return and callback links)."""
+    return (_get("PUBLIC_APP_URL", "http://localhost:3000") or "").rstrip("/")
+
+
+#: Deposit limits, in santim.
+DEPOSIT_MIN = 1_000  # 10 birr
+DEPOSIT_MAX = 10_000_000  # 100,000 birr
+
+
+# --- video visits ---
+
+def jitsi_domain() -> str:
+    return _get("JITSI_DOMAIN", "meet.endod-health.com") or "meet.endod-health.com"
+
+
+def jitsi_app_id() -> str:
+    return _get("JITSI_APP_ID", "endod") or "endod"
+
+
+def jitsi_app_secret() -> Optional[str]:
+    return _get("JITSI_APP_SECRET")
+
+
+def jitsi_jwt_sub() -> str:
+    return _get("JITSI_JWT_SUB", "meet.jitsi") or "meet.jitsi"
