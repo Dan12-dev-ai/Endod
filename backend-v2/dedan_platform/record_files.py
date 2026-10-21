@@ -215,11 +215,25 @@ def _failed(job: dict, exc: BaseException) -> str:
     return "failed" if failed else "retry"
 
 
+_warned_at = 0.0
+
+
+def _warn_unconfigured() -> None:
+    """Files cannot be fetched without the hospital service's address and key:
+    say so (once an hour), rather than leave records waiting in silence."""
+    global _warned_at
+    if time.monotonic() - _warned_at >= 3600 or not _warned_at:
+        _warned_at = time.monotonic()
+        logger.warning("record_files_not_configured: set HOSPITAL_API_URL and PLATFORM_ADMIN_KEY; "
+                       "record files are not being downloaded")
+
+
 def download_one() -> Optional[str]:
     """Fetch one due file. Returns its outcome ("stored", "retry", "failed"),
     or None if none was due. A download's own failure never raises: it is
     recorded on its file."""
     if not (config.hospital_api_url() and config.platform_admin_key()):
+        _warn_unconfigured()
         return None
     job = _claim()
     if job is None:

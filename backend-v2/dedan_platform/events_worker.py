@@ -102,6 +102,10 @@ def main() -> int:
     from dedan_platform.db import create_all
 
     create_all()
+    from dedan_platform import partner_config
+
+    logger.info("events_worker_started record_file_downloads=%s",
+                "on" if partner_config.hospital_api_url() and partner_config.platform_admin_key() else "OFF")
     # Record files are fetched on a thread of their own, so a slow hospital
     # API never holds up events.
     import threading
