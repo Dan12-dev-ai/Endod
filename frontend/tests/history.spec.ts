@@ -110,6 +110,23 @@ test.describe('History', () => {
     expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
   });
 
+  test('a file still arriving shows up by itself', async ({ page }) => {
+    test.setTimeout(60_000);
+    const tag = Date.now().toString(36);
+    seed('records-arriving', await dedanId(page), tag);
+    await openSection(page, 'Medical Record', 'medical-record-view');
+    const lab = item(page, `Complete blood count ${tag}`);
+    await lab.getByRole('button', { expanded: false }).click();
+    const file = lab.locator('[data-purpose="record-file"]');
+    await expect(file.locator('[data-purpose="file-state"]')).toHaveText('Still arriving');
+    await expect(file.locator('[data-purpose="file-download"]')).toHaveCount(0);
+
+    // The platform downloads it; the page asks again every 10 seconds.
+    seed('download');
+    await expect(file.locator('[data-purpose="file-download"]')).toBeVisible({ timeout: 25_000 });
+    await expect(file.locator('[data-purpose="file-state"]')).toHaveCount(0);
+  });
+
   test('records are shared with a partner hospital until a date, and sharing stops', async ({ page }) => {
     const tag = Date.now().toString(36);
     seed('records', await dedanId(page), tag);

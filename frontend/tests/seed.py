@@ -4,11 +4,16 @@
     python seed.py confirm <id> [room]             the hospital confirms a booking (a video one with a room)
     python seed.py records <dedan_id> <tag>        the hospital publishes records (titles end with <tag>),
                                                    then their files are downloaded from tests/fake-hospital.mjs
+    python seed.py records-arriving <dedan_id> <tag>
+                                                   the same, without downloading the files yet
+    python seed.py download                        download the files that are due (the events worker's job)
     python seed.py follow-up <dedan_id> <date>     the hospital sets a follow-up on <date> (YYYY-MM-DD)
     python seed.py queue <dedan_id> <entry> <seq> <ahead> <status>
                                                    the patient's place in today's queue (Africa/Addis_Ababa)
 
-Uses the same handlers as the event worker, against DEDAN_DATABASE_URL.
+Uses the same handlers as the event worker, against DEDAN_DATABASE_URL. The
+patient is linked to the test hospital first (the platform accepts nothing
+about a patient from a hospital that has not linked them).
 """
 
 import base64
@@ -77,18 +82,28 @@ def _records(dedan, tag):
     ]
 
 
+def _link(session, dedan):
+    user = patient_history._user_by_dedan(session, dedan)
+    if user is not None:
+        patient_history.link_booking(session, user.id, PARTNER_ID)
+
+
 def main(argv):
     create_all()
     deferred = []
     with session_scope() as session:
-        if argv[0] == "partner":
+        if argv[0] in ("records", "records-arriving", "follow-up", "queue"):
+            _link(session, argv[1])
+        if argv[0] == "download":
+            pass
+        elif argv[0] == "partner":
             partners.on_listed(session, LISTING)
         elif argv[0] == "confirm":
             hospital_bookings.on_confirmed(session, {
                 "appointment_id": argv[1], "hospital_id": PARTNER_ID, "status": "confirmed",
                 "meeting_room": argv[2] if len(argv) > 2 else None, "doctor_name": "Dr. Hiwot Bekele",
             })
-        elif argv[0] == "records":
+        elif argv[0] in ("records", "records-arriving"):
             for payload in _records(argv[1], argv[2]):
                 patient_history.on_record_published(session, payload)
         elif argv[0] == "follow-up":
@@ -110,7 +125,7 @@ def main(argv):
         deferred = list(session.info.get("after_commit", []))
     for action in deferred:
         action()
-    if argv[0] == "records":
+    if argv[0] in ("records", "download"):
         # What the events worker's download thread does.
         record_files.download_due()
 

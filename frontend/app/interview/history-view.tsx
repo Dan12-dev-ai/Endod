@@ -12,6 +12,11 @@ import {
 } from "./history-data";
 import { AddVisitModal, ShareModal, SharesList } from "./history-modals";
 
+/** While a record file is still arriving, the page asks again this often... */
+const ARRIVING_POLL_MS = 10_000;
+/** ...for at most this long. */
+const ARRIVING_POLL_FOR_MS = 5 * 60_000;
+
 type Props = {
   highlightTarget: string | null;
   onToast: (title: string, message: string) => void;
@@ -73,6 +78,41 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
   }, [highlightTarget]);
 
   const items = useMemo(() => data?.items ?? [], [data]);
+
+  // A file still arriving shows up by itself: ask again every 10 s while any
+  // is, for at most 5 minutes, and only while the page is visible.
+  const arriving = useMemo(() => items.some((i) => i.files?.some((f) => f.state === "arriving")), [items]);
+  useEffect(() => {
+    if (!arriving) return;
+    const until = Date.now() + ARRIVING_POLL_FOR_MS;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => {
+      if (timer !== null) clearInterval(timer);
+      timer = null;
+    };
+    const tick = () => {
+      if (Date.now() > until) stop();
+      else void load();
+    };
+    const start = () => {
+      if (timer === null && Date.now() <= until) timer = setInterval(tick, ARRIVING_POLL_MS);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        if (Date.now() <= until) void load();
+        start();
+      } else {
+        stop();
+      }
+    };
+    if (document.visibilityState === "visible") start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [arriving, load]);
+
   const shown = useMemo(() => filterItems(items, tab, query, from, to), [items, tab, query, from, to]);
   const summary = data?.summary;
   const filtering = Boolean(query || from || to || tab !== "all");
