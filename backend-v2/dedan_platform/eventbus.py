@@ -37,8 +37,12 @@ import time
 from datetime import timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import redis
-from redis.sentinel import Sentinel
+try:
+    import redis
+    from redis.sentinel import Sentinel
+except ImportError:  # redis is optional for offline/dev runs without a broker
+    redis = None  # type: ignore[assignment]
+    Sentinel = None  # type: ignore[assignment]
 from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -79,6 +83,8 @@ class RetryLater(RuntimeError):
 
 def connect() -> Optional[redis.Redis]:
     """A client for the current Redis master, or None when no Redis is configured."""
+    if redis is None:
+        return None
     common = {"decode_responses": True, "socket_timeout": 5, "socket_connect_timeout": 5,
               "health_check_interval": 30}
     if config.redis_sentinels():

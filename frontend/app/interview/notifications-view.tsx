@@ -183,7 +183,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
 
   return (
     <div data-purpose="notification-view" className="flex-1 min-h-0 overflow-y-auto">
-      <div className="max-w-5xl mx-auto w-full space-y-6 pb-6">
+      <div className="w-full space-y-6 pb-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-200/80 gap-4">
           <div>
