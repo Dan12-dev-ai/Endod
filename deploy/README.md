@@ -84,16 +84,18 @@ places; patients see all of it in the app, get SMS (follow-ups, "your turn
 is near", booking decisions, refunds) and can share records with a partner
 hospital.
 
-- The API (`backend`) also joins `endod-bus`, with the alias
-  `endod-platform-api` and an address from the network's dynamic range (no
-  fixed IP). The hospital service uses only `/internal/...` there, with
-  `X-Platform-Key`; the web app never forwards `/internal`.
+- `internal-api` (the same image, `main_internal:app`) serves only
+  `/internal/...` (with `X-Platform-Key`) and `/health`. It joins `endod-bus`
+  with the alias `endod-platform-api` and an address from the network's
+  dynamic range (no fixed IP), reads the `records` volume read-only and
+  trusts no forwarded-address header. The patient API (`backend`) is not on
+  `endod-bus` and does not serve `/internal`.
 - Set `HOSPITAL_API_URL` (default `http://endod-hospital-api:8000`) and
   `PLATFORM_ADMIN_KEY` (the same value as the hospital service's) in
   `deploy/.env`. Without the key, file downloads stop and `/internal`
   refuses every request.
 - Record files are kept in the `records` volume (`/data/records`, mounted in
-  `backend` and `events-worker`). The events worker downloads them (checking
+  `backend` and `events-worker`, and read-only in `internal-api`). The events worker downloads them (checking
   size, SHA-256 and type) and retries failures with backoff; a record shows
   in the app while its file is still arriving. Back the volume up with the
   database.

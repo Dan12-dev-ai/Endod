@@ -8,8 +8,8 @@ hospital service's internal file endpoint.
   queue places.
 * ``/users/me/shares``: share records with a partner hospital, list, revoke.
 * ``/internal/shares/{share_id}/files/{file_id}``: for the hospital service
-  only, over the private network, with ``X-Platform-Key``. The web app's
-  proxy never forwards ``/internal`` (it only forwards ``/users/me``).
+  only, with ``X-Platform-Key``. Served by main_internal alone (its own
+  service on the private network); the patient API does not mount it.
 """
 
 from __future__ import annotations
