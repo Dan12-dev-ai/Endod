@@ -33,8 +33,11 @@ services:
     env_file: .env
     environment:
       DEDAN_DATABASE_URL: postgresql+psycopg://endod:${POSTGRES_PASSWORD}@postgres:5432/endod
-      # Reached only by the web app, by this name.
-      ALLOWED_HOSTS: backend,localhost,127.0.0.1
+      # Reached by the web app (as "backend") and, over endod-bus, by the
+      # hospital service (as "endod-platform-api", for /internal only).
+      ALLOWED_HOSTS: backend,endod-platform-api,localhost,127.0.0.1
+      # The platform's copies of hospital record files (a volume).
+      RECORD_FILES_DIR: /data/records
       # The web app forwards the patient's address; per-patient rate limits.
       TRUST_PROXY_HEADERS: "true"
       # General API limit per address. Opening the dashboard alone makes about
@@ -42,6 +45,15 @@ services:
       # sign-in and SMS codes keep their own, much stricter limits.
       RATE_LIMIT_REQUESTS: "240"
       DEBUG: "false"
+    volumes:
+      - records:/data/records
+    networks:
+      default: {}
+      # The hospital service fetches shared record files from /internal here.
+      # An address from the dynamic range (no fixed IP: only Redis and the
+      # Sentinels have those).
+      bus:
+        aliases: [endod-platform-api]
     depends_on:
       postgres:
         condition: service_healthy
@@ -144,7 +156,9 @@ services:
         aliases: [endod-sentinel-3]
 
   # Sends Endod's events to the hospital service and applies its replies
-  # (listings, decisions on bookings, refunds); re-checks Chapa deposits.
+  # (listings, decisions on bookings, refunds, links, records, follow-ups,
+  # queues); re-checks Chapa deposits; downloads hospital record files from
+  # the hospital API (endod-hospital-api on endod-bus); ends expired shares.
   events-worker:
     build:
       context: ..
@@ -157,6 +171,10 @@ services:
       REDIS_SENTINELS: endod-sentinel-1:26379,endod-sentinel-2:26379,endod-sentinel-3:26379
       REDIS_SENTINEL_MASTER: endod
       REDIS_MIN_REPLICAS: "1"
+      # Downloads hospital record files here; the API serves them from the same volume.
+      RECORD_FILES_DIR: /data/records
+    volumes:
+      - records:/data/records
     healthcheck:
       disable: true
     networks:
@@ -184,6 +202,8 @@ services:
 
 volumes:
   pgdata:
+  # Hospital record files (PDF and images), shared by the API and the events worker.
+  records:
   redis1:
   redis2:
   sentinel1:

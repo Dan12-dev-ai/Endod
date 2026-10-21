@@ -26,10 +26,12 @@ COPY backend-v2/ ./
 # Served at / by main_clinical (it looks for ../web-portal).
 COPY web-portal/ /app/web-portal/
 
-# Never run as root.
+# Never run as root. /data/records holds hospital record files (a volume in
+# deploy/docker-compose.yml; made here so the volume starts owned by the app user).
 RUN useradd --create-home --uid 10001 dedan \
-    && mkdir -p /tmp/dedan_images \
-    && chown -R dedan /app /tmp/dedan_images
+    && mkdir -p /tmp/dedan_images /data/records \
+    && chown -R dedan /app /tmp/dedan_images /data/records \
+    && chmod 700 /data/records
 USER dedan
 
 EXPOSE 8000

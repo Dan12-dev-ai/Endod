@@ -76,6 +76,35 @@ docker compose logs -f events-worker
 docker compose exec sentinel-1 redis-cli -p 26379 sentinel get-master-addr-by-name endod
 ```
 
+### Patient history, follow-ups, queues and sharing
+
+The contract is `docs/history-events.md`. Hospitals link their patients to
+Endod accounts, publish clinical records, set follow-ups and send queue
+places; patients see all of it in the app, get SMS (follow-ups, "your turn
+is near", booking decisions, refunds) and can share records with a partner
+hospital.
+
+- The API (`backend`) also joins `endod-bus`, with the alias
+  `endod-platform-api` and an address from the network's dynamic range (no
+  fixed IP). The hospital service uses only `/internal/...` there, with
+  `X-Platform-Key`; the web app never forwards `/internal`.
+- Set `HOSPITAL_API_URL` (default `http://endod-hospital-api:8000`) and
+  `PLATFORM_ADMIN_KEY` (the same value as the hospital service's) in
+  `deploy/.env`. Without the key, file downloads stop and `/internal`
+  refuses every request.
+- Record files are kept in the `records` volume (`/data/records`, mounted in
+  `backend` and `events-worker`). The events worker downloads them (checking
+  size, SHA-256 and type) and retries failures with backoff; a record shows
+  in the app while its file is still arriving. Back the volume up with the
+  database.
+- Texts go through the notification worker: turn it on
+  (`NOTIFICATION_WORKER_ENABLED=true`) together with `SMSETHIOPIA_API_KEY`.
+
+```sh
+docker compose exec backend ls /data/records | head
+docker compose logs events-worker | grep record_file
+```
+
 ### Video (deploy/jitsi)
 
 Jitsi Meet at `meet.endod-health.com`, joined only with a token Endod signs
