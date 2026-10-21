@@ -101,7 +101,8 @@ def _claim() -> Optional[dict]:
         for row in candidates:
             # The same condition again: the loser of a race updates nothing.
             claimed = session.execute(update(RecordFile).where(RecordFile.id == row.id, due).values(
-                status=RecordFileStatus.DOWNLOADING, updated_at=now)).rowcount
+                status=RecordFileStatus.DOWNLOADING, updated_at=now)
+                .execution_options(synchronize_session=False)).rowcount
             if claimed == 1:
                 return {"id": row.id, "record_id": row.record_id, "file_id": row.file_id, "size": row.size,
                         "sha256": row.sha256, "content_type": row.content_type, "attempts": row.attempts}
@@ -158,7 +159,8 @@ def download_one() -> Optional[str]:
             session.execute(update(RecordFile).where(
                 RecordFile.id == job["id"], RecordFile.status == RecordFileStatus.DOWNLOADING,
             ).values(status=RecordFileStatus.FAILED if failed else RecordFileStatus.PENDING, attempts=attempts,
-                     last_error=error, next_attempt_at=utcnow() + _backoff(attempts), updated_at=utcnow()))
+                     last_error=error, next_attempt_at=utcnow() + _backoff(attempts), updated_at=utcnow())
+                .execution_options(synchronize_session=False))
         logger.warning("record_file_download_failed record=%s file=%s attempt=%d %s",
                        job["record_id"], job["file_id"], attempts, error)
         return "failed" if failed else "retry"
@@ -169,7 +171,7 @@ def download_one() -> Optional[str]:
             RecordFile.id == job["id"], RecordFile.status == RecordFileStatus.DOWNLOADING,
             RecordFile.sha256 == job["sha256"],
         ).values(status=RecordFileStatus.STORED, attempts=attempts, last_error=None, stored_at=utcnow(),
-                 updated_at=utcnow())).rowcount
+                 updated_at=utcnow()).execution_options(synchronize_session=False)).rowcount
         if done:
             os.replace(temp, path_for(job["record_id"], job["file_id"]))
     if not done:

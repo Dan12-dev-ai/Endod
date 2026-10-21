@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from dedan_platform import history, partner_config, shares
+from dedan_platform import history, partner_config, partners, shares
 from dedan_platform.api_profile import current_user_id
 
 router = APIRouter(tags=["history"])
@@ -38,7 +38,7 @@ def _file_response(path, content_type: str, filename: str, download: bool) -> Fi
     ascii_name = re.sub(r"[^A-Za-z0-9._ -]", "_", filename)[:120] or "file"
     disposition = "attachment" if download else "inline"
     headers = {
-        "Content-Disposition": f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}",
+        "Content-Disposition": f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename, safe='')}",
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, no-store",
     }
@@ -79,6 +79,13 @@ class ShareRequest(BaseModel):
     hospital_id: str = Field(min_length=1, max_length=32)
     record_ids: List[str] = Field(min_length=1, max_length=shares.MAX_RECORDS)
     expires_at: Optional[datetime] = None
+
+
+@router.get("/users/me/shares/hospitals")
+def share_hospitals(user_id: str = Depends(current_user_id)) -> Dict[str, Any]:
+    """The partner hospitals records can be shared with."""
+    return {"hospitals": sorted(({"hospital_id": h.id, "name": h.name, "name_am": h.name_am, "city": h.city}
+                                 for h in partners.listed()), key=lambda h: h["name"].lower())}
 
 
 @router.get("/users/me/shares")
