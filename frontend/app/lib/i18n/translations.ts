@@ -74,6 +74,8 @@ export const en = {
     "Endod Health OS connects patients and hospitals through one trusted system. Talk to Endod AI about how you feel, discover nearby hospitals with live crowd levels, book in seconds, and arrive with a clear, consent-based record of your health.",
   "hero.cta": "Get Started",
   "hero.ctaSignedIn": "Go to your dashboard",
+  "hero.facilityPrompt": "Run a clinic or hospital? Register your facility on Endod.",
+  "hero.facilityCta": "Register your clinic or hospital",
   "hero.imageAlt": "ENDOD Health hero background",
 
   "bottleneck.title": "Care is fragmented — and it slows everyone down",
@@ -922,6 +924,8 @@ export const am: Dictionary = {
     "እንዶድ ሄልዝ ኦኤስ ታካሚዎችንና ሆስፒታሎችን በአንድ የታመነ ሥርዓት ያገናኛል። ስለሚሰማዎት ስሜት ከእንዶድ AI ጋር ይነጋገሩ፣ በቀጥታ የሰው መጠን ሁኔታ ያላቸውን በአቅራቢያዎ ያሉ ሆስፒታሎች ያግኙ፣ በሰከንዶች ውስጥ ቀጠሮ ያስይዙ፣ እና በፍቃድዎ ላይ የተመሠረተ ግልጽ የጤና መዝገብ ይዘው ይድረሱ።",
   "hero.cta": "ይጀምሩ",
   "hero.ctaSignedIn": "ወደ ዳሽቦርድዎ ይሂዱ",
+  "hero.facilityPrompt": "ክሊኒክ ወይም ሆስፒታል ያስተዳድራሉ? ተቋምዎን በEndod ላይ ያስመዝግቡ።",
+  "hero.facilityCta": "ክሊኒክዎን ወይም ሆስፒታልዎን ያስመዝግቡ",
   "hero.imageAlt": "የENDOD Health የጀርባ ምስል",
 
   "bottleneck.title": "ሕክምና ተበጣጥሷል — ይህም ሁሉንም ሰው ያዘገያል",

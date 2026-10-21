@@ -15,6 +15,10 @@ Rules for the text itself:
   phone, and a hospital's name can reveal the kind of care. The app shows
   the details after sign-in.
 
+One exception, not to a patient: a clinic's contact who booked an Endod demo
+(``DEMO_BOOKED``/``DEMO_MOVED``, see hospital_onboarding) is texted the
+facility's own name, like a walk-in (no account; Amharic, then English).
+
 Who gets one: an account's phone only when it is verified and the patient
 allows SMS (the same rule as appointment reminders, checked again just
 before sending); a walk-in at the number the hospital took at check-in.
@@ -51,6 +55,8 @@ FOLLOW_UP_SET = "sms_follow_up_set"
 FOLLOW_UP_REMINDER = "sms_follow_up_reminder"
 QUEUE_NEAR = "sms_queue_near"
 QUEUE_TURN = "sms_queue_turn"
+DEMO_BOOKED = "sms_demo_booked"
+DEMO_MOVED = "sms_demo_moved"
 
 _TEXTS: Dict[str, Dict[str, str]] = {
     BOOKING_CONFIRMED: {
@@ -89,6 +95,14 @@ _TEXTS: Dict[str, Dict[str, str]] = {
         "en": "{brand}: it is your turn now (ticket {ticket}). Please go in.",
         "am": "{brand}፦ ተራዎ ደርሷል (ቁጥር {ticket})። እባክዎ ይግቡ።",
     },
+    DEMO_BOOKED: {
+        "en": "{brand}: your demo for {hospital} is booked for {when}. We will call you then.",
+        "am": "{brand}፦ ለ{hospital} የማሳያ ቀጠሮዎ ለ{when} ተይዟል። በዚያ ሰዓት እንደውልልዎታለን።",
+    },
+    DEMO_MOVED: {
+        "en": "{brand}: your demo for {hospital} has moved to {when}. We will call you then.",
+        "am": "{brand}፦ ለ{hospital} የማሳያ ቀጠሮዎ ወደ {when} ተዛውሯል። በዚያ ሰዓት እንደውልልዎታለን።",
+    },
 }
 
 TEMPLATES = frozenset(_TEXTS)
@@ -123,7 +137,11 @@ def _ahead_text(ahead: Any, language: str) -> str:
 
 
 def _render_one(template: str, params: Dict[str, Any], language: str) -> str:
-    values = {"brand": BRAND, "when": params.get("when", ""), "date": params.get("date", ""),
+    when = params.get("when", "")
+    if isinstance(when, dict):  # per language (a demo's time)
+        when = when.get(language) or when.get("en", "")
+    values = {"brand": BRAND, "when": when, "date": params.get("date", ""),
+              "hospital": params.get("hospital", ""),
               "ticket": params.get("ticket", ""),
               "refund": _refund_text(params.get("amount"), language),
               "ahead_text": _ahead_text(params.get("ahead"), language)}

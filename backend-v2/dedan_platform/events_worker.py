@@ -2,7 +2,7 @@
 
 Sends this platform's queued events (bookings, cancellations, shared records)
 to the hospital service and applies the hospital service's (listings,
-decisions on bookings, links, records, follow-ups, queues). It also re-checks
+decisions on bookings, links, records, follow-ups, queues, demo bookings). It also re-checks
 pending Chapa deposits now and then, in case a webhook was missed, ends
 expired record shares, and (on a thread of its own) downloads record files.
 Survives Redis being down or failing over: it waits and reconnects
@@ -20,7 +20,9 @@ from datetime import timedelta
 import redis
 from sqlalchemy import or_, select
 
-from dedan_platform import chapa, deposits, eventbus, hospital_bookings, patient_history, record_files, shares
+from dedan_platform import (
+    chapa, deposits, eventbus, hospital_bookings, hospital_onboarding, patient_history, record_files, shares,
+)
 from dedan_platform.db import session_scope
 from dedan_platform.models import Deposit, DepositStatus, utcnow
 
@@ -33,8 +35,9 @@ SHARES_EVERY = 60
 HOUSEKEEPING_EVERY = 3600
 _last = {"deposits": 0.0, "stale": 0.0, "shares": 0.0, "housekeeping": 0.0}
 
-#: Every event this worker handles: bookings and listings, and patient history.
-HANDLERS = {**hospital_bookings.HANDLERS, **patient_history.HANDLERS}
+#: Every event this worker handles: bookings and listings, patient history,
+#: and texts to facilities signing up.
+HANDLERS = {**hospital_bookings.HANDLERS, **patient_history.HANDLERS, **hospital_onboarding.HANDLERS}
 
 
 def _stop(*_args) -> None:
