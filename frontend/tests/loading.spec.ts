@@ -41,7 +41,7 @@ test.describe('Loading placeholders', () => {
 
   for (const [nav, endpoint, done] of [
     ['Appointment', '**/api/backend/users/me/appointments**', '[data-purpose^="appointment-card-"], [data-purpose="appointment-empty"]'],
-    ['Medical Record', '**/api/backend/users/me/records**', '[data-purpose="record-source"], [data-purpose="records-empty"]'],
+    ['Medical Record', '**/api/backend/users/me/history', '[data-purpose="history-item"], [data-purpose="history-empty"]'],
     ['Notification', '**/api/backend/users/me/inbox**', '[data-purpose^="notif-group-"], [data-purpose="notif-empty"]'],
     ['Booking', '**/api/backend/users/me/care/facilities**', '[data-purpose="hospital-grid"]'],
     ['Setting', '**/api/backend/users/me', '[data-purpose="digital-card-section"]'],
@@ -71,7 +71,7 @@ test.describe('Loading placeholders', () => {
 
   test('a failed load shows the error, not an endless placeholder', async ({ page }) => {
     await page.goto('/interview', { waitUntil: 'networkidle' });
-    await page.route('**/api/backend/users/me/records**', (route) =>
+    await page.route('**/api/backend/users/me/history', (route) =>
       route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"Records are unavailable."}' }));
     await page.locator('aside').getByRole('link', { name: 'Medical Record' }).click();
     await expect(page.locator('main').getByRole('alert')).toContainText('Records are unavailable.');
@@ -93,10 +93,10 @@ test.describe('Loading placeholders', () => {
 
   test('records totals wait for the data instead of showing 0', async ({ page }) => {
     await page.goto('/interview', { waitUntil: 'networkidle' });
-    await page.route('**/api/backend/users/me/records**', () => new Promise(() => undefined));
+    await page.route('**/api/backend/users/me/history', () => new Promise(() => undefined));
     await page.locator('aside').getByRole('link', { name: 'Medical Record' }).click();
-    await expect(page.locator('[data-purpose="stat-total-visits"] [aria-hidden]')).toBeVisible();
-    await expect(page.locator('[data-purpose="stat-total-visits"]')).not.toContainText('0');
+    await expect(page.locator('[data-purpose="stat-total"] [aria-hidden]')).toBeVisible();
+    await expect(page.locator('[data-purpose="stat-total"]')).not.toContainText('0');
   });
 
   test('a booking search dims the current results and a failure clears them', async ({ page }) => {

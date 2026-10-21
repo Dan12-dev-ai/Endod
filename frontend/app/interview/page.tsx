@@ -7,7 +7,8 @@ import AppointmentsView from "./appointments-view";
 import BookingView from "./booking-view";
 import HomeView from "./home-view";
 import NotificationsView from "./notifications-view";
-import RecordsView from "./records-view";
+import HistoryView from "./history-view";
+import type { BookingPreset } from "./history-data";
 import SettingsView from "./settings-view";
 import WalletView from "./wallet-view";
 import EmergencyPanel from "./emergency-panel";
@@ -32,6 +33,13 @@ export default function Interview() {
   }, []);
   // Shared: which card/record a notification click should highlight on the target page
   const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
+  // "Book now" on a follow-up: booking opens at that hospital on that day.
+  const [bookingPreset, setBookingPreset] = useState<BookingPreset | null>(null);
+  const bookFollowUp = (preset: BookingPreset) => {
+    setHighlightTarget(null);
+    setBookingPreset(preset);
+    setActiveNav("booking");
+  };
 
   const navItems: { id: string; labelKey: TranslationKey; icon: React.ReactNode }[] = [
     { id: "home", labelKey: "interview.nav.home", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
@@ -267,7 +275,13 @@ export default function Interview() {
         <main className="flex-1 min-h-0 flex flex-col overflow-hidden p-3 sm:p-4 md:p-6 gap-4 sm:gap-5">
           {/* ===== Booking View ===== */}
           {activeNav === "booking" && (
-            <BookingView onOpenWallet={() => setActiveNav("wallet")} onToast={showToast} patientId={healthCard?.userId ?? ""} />
+            <BookingView
+              onOpenWallet={() => setActiveNav("wallet")}
+              onPresetUsed={() => setBookingPreset(null)}
+              onToast={showToast}
+              patientId={healthCard?.userId ?? ""}
+              preset={bookingPreset}
+            />
           )}
           {activeNav === "wallet" && <WalletView onToast={showToast} />}
 
@@ -295,8 +309,9 @@ export default function Interview() {
 
           {/* ===== Medical Record View ===== */}
           {activeNav === "followup" && (
-            <RecordsView
+            <HistoryView
               highlightTarget={highlightTarget}
+              onBook={bookFollowUp}
               onToast={showToast}
               onOpenSettings={() => {
                 setHighlightTarget(null);
@@ -312,6 +327,7 @@ export default function Interview() {
           {activeNav === "home" && (
             <HomeView
               firstName={healthCard?.firstName ?? ""}
+              onBook={bookFollowUp}
               onNavigate={(nav) => {
                 setHighlightTarget(null);
                 setActiveNav(nav);

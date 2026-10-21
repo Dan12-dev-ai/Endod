@@ -113,6 +113,21 @@ def after_commit(session: Session, action: Callable[[], None]) -> None:
     session.info.setdefault("after_commit", []).append(action)
 
 
+def event_time(session: Session):
+    """When the event being handled was sent (its envelope's ``occurred_at``,
+    aware UTC), or None outside the worker or for an unreadable time."""
+    from datetime import datetime
+
+    raw = (session.info.get("event") or {}).get("occurred_at")
+    try:
+        when = datetime.fromisoformat(raw) if raw else None
+    except (TypeError, ValueError):
+        return None
+    if when is None or when.tzinfo is None:
+        return None
+    return when.astimezone(timezone.utc)
+
+
 def emit(session: Session, event_type: str, payload: Dict[str, Any]) -> None:
     """Queue an event; it is sent once the caller's transaction commits."""
     session.add(OutboxEvent(type=event_type, payload=json.dumps(payload, default=str, ensure_ascii=False)))
@@ -249,6 +264,10 @@ def _handle(client: redis.Redis, message_id: str, fields: Dict[str, str], handle
         deferred: List[Callable[[], None]] = []
         with session_scope() as session:
             if session.get(ProcessedEvent, event_id) is None:
+                # The envelope, for handlers that order changes by when they
+                # were sent (see event_time).
+                session.info["event"] = {"id": event_id, "type": event_type,
+                                         "occurred_at": fields.get("occurred_at")}
                 handler(session, payload)
                 session.add(ProcessedEvent(id=event_id, type=event_type))
                 deferred = list(session.info.get("after_commit", []))

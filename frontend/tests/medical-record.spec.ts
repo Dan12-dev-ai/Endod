@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 import { openSection } from './helpers';
 
-// Medical records against the real backend (the shared test patient).
+// Visits the patient adds themselves, on the History page (the shared test patient).
 
 async function setHealthConsent(request: import('@playwright/test').APIRequestContext, value: boolean) {
   const response = await request.patch('/api/backend/users/me/consent', { data: { treatment_processing: value } });
@@ -13,9 +13,10 @@ test.describe('Interview — Medical Records', () => {
     await setHealthConsent(page.request, true);
     const facility = `Black Lion ${Date.now().toString(36)}`;
     await openSection(page, 'Medical Record', 'medical-record-view');
-    // The summary footer appears once the records have loaded.
-    await expect(page.locator('[data-purpose="active-follow-ups"]')).toBeVisible();
-    const visitsBefore = Number(await page.locator('[data-purpose="stat-total-visits"] p').last().textContent());
+    // The summary has numbers once the history has loaded.
+    await expect(page.locator('[data-purpose="stat-total"] p').last()).toHaveText(/^\d+$/);
+    const before = Number(await page.locator('[data-purpose="stat-total"] p').last().textContent());
+    const selfBefore = Number(await page.locator('[data-purpose="stat-self"] p').last().textContent());
 
     await page.locator('[data-purpose="add-record"]').click();
     const modal = page.locator('[data-purpose="record-modal"]');
@@ -27,12 +28,19 @@ test.describe('Interview — Medical Records', () => {
     await modal.getByRole('button', { name: 'Save visit' }).click();
     await expect(modal).toHaveCount(0);
 
-    const row = page.locator('[data-purpose^="record-"]', { hasText: facility });
+    const row = page.locator('[data-purpose="history-item"]', { hasText: facility });
+    await expect(row.locator('[data-purpose="record-source"]')).toHaveText('Self-reported');
+    await row.getByRole('button', { expanded: false }).click();
     await expect(row).toContainText('High blood pressure');
     await expect(row).toContainText('Amlodipine, Aspirin');
     await expect(row).toContainText('30 days');
-    await expect(row.locator('[data-purpose="record-source"]')).toHaveText('Self-reported');
-    await expect(page.locator('[data-purpose="stat-total-visits"] p').last()).toHaveText(String(visitsBefore + 1));
+    await expect(page.locator('[data-purpose="stat-total"] p').last()).toHaveText(String(before + 1));
+    await expect(page.locator('[data-purpose="stat-self"] p').last()).toHaveText(String(selfBefore + 1));
+
+    // The Self-reported tab keeps the patient's own entries.
+    await page.locator('[data-purpose="history-tab-self"]').click();
+    await expect(row).toBeVisible();
+    await expect(page.locator('[data-purpose="history-item"] [data-purpose="record-source"]', { hasText: 'Verified' })).toHaveCount(0);
   });
 
   test('without consent, adding a visit explains why and links to Settings', async ({ page }) => {

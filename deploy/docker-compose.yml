@@ -33,8 +33,11 @@ services:
     env_file: .env
     environment:
       DEDAN_DATABASE_URL: postgresql+psycopg://endod:${POSTGRES_PASSWORD}@postgres:5432/endod
-      # Reached only by the web app, by this name.
+      # Reached by the web app only (as "backend"). Never on endod-bus: the
+      # hospital service talks to internal-api instead.
       ALLOWED_HOSTS: backend,localhost,127.0.0.1
+      # The platform's copies of hospital record files (a volume).
+      RECORD_FILES_DIR: /data/records
       # The web app forwards the patient's address; per-patient rate limits.
       TRUST_PROXY_HEADERS: "true"
       # General API limit per address. Opening the dashboard alone makes about
@@ -42,8 +45,44 @@ services:
       # sign-in and SMS codes keep their own, much stricter limits.
       RATE_LIMIT_REQUESTS: "240"
       DEBUG: "false"
+    volumes:
+      - records:/data/records
     depends_on:
       postgres:
+        condition: service_healthy
+
+  # The platform's internal API (backend-v2/main_internal.py): /internal/...
+  # (X-Platform-Key) and /health, nothing else. The only platform service on
+  # endod-bus, where the hospital service fetches shared record files from
+  # it as "endod-platform-api"; the patient API is not reachable from there.
+  internal-api:
+    build:
+      context: ..
+      dockerfile: backend-v2/Dockerfile
+    restart: unless-stopped
+    command: ["uvicorn", "main_internal:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: .env
+    environment:
+      DEDAN_DATABASE_URL: postgresql+psycopg://endod:${POSTGRES_PASSWORD}@postgres:5432/endod
+      INTERNAL_ALLOWED_HOSTS: endod-platform-api,localhost,127.0.0.1
+      # Nothing in front of it: a client's forwarded address is never believed.
+      TRUST_PROXY_HEADERS: "false"
+      RECORD_FILES_DIR: /data/records
+    volumes:
+      # Serves files only; the events worker writes them.
+      - records:/data/records:ro
+    networks:
+      # The database, on the project's own network.
+      default: {}
+      # An address from the dynamic range (no fixed IP: only Redis and the
+      # Sentinels have those).
+      bus:
+        aliases: [endod-platform-api]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # The backend creates the tables.
+      backend:
         condition: service_healthy
 
   frontend:
@@ -144,7 +183,9 @@ services:
         aliases: [endod-sentinel-3]
 
   # Sends Endod's events to the hospital service and applies its replies
-  # (listings, decisions on bookings, refunds); re-checks Chapa deposits.
+  # (listings, decisions on bookings, refunds, links, records, follow-ups,
+  # queues); re-checks Chapa deposits; downloads hospital record files from
+  # the hospital API (endod-hospital-api on endod-bus); ends expired shares.
   events-worker:
     build:
       context: ..
@@ -157,6 +198,10 @@ services:
       REDIS_SENTINELS: endod-sentinel-1:26379,endod-sentinel-2:26379,endod-sentinel-3:26379
       REDIS_SENTINEL_MASTER: endod
       REDIS_MIN_REPLICAS: "1"
+      # Downloads hospital record files here; the API serves them from the same volume.
+      RECORD_FILES_DIR: /data/records
+    volumes:
+      - records:/data/records
     healthcheck:
       disable: true
     networks:
@@ -184,6 +229,8 @@ services:
 
 volumes:
   pgdata:
+  # Hospital record files (PDF and images), shared by the API and the events worker.
+  records:
   redis1:
   redis2:
   sentinel1:

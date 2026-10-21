@@ -66,8 +66,11 @@ function destination(item: InboxItem): { nav: string; target: string | null } | 
   if (item.link?.screen === "appointment") {
     return { nav: "appointment", target: item.link.id ? `appointment-card-${item.link.id}` : null };
   }
-  if (item.link?.screen === "record") {
+  if (item.link?.screen === "record" || item.link?.screen === "history") {
     return { nav: "followup", target: item.link.id ? `record-${item.link.id}` : null };
+  }
+  if (item.link?.screen === "follow_up") {
+    return { nav: "followup", target: item.link.id ? `follow-up-${item.link.id}` : null };
   }
   return null;
 }
