@@ -126,7 +126,7 @@ export default function RecordsView({ highlightTarget, onToast, onOpenSettings }
 
   return (
     <div data-purpose="medical-record-view" className="flex-1 min-h-0 overflow-y-auto">
-      <div className="max-w-5xl mx-auto space-y-6 pb-6">
+      <div className="w-full space-y-6 pb-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t("records.title")}</h1>
