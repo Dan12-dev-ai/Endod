@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useI18n } from "../lib/i18n";
+import { HOSPITAL_SIGNUP_URL } from "../lib/links";
 import { homeFor, useSession } from "../lib/session";
 
 export default function Hero() {
@@ -42,6 +43,23 @@ export default function Hero() {
                 </svg>
               </span>
             </Link>
+          </div>
+          {/* For clinics and hospitals: a quiet pointer to the hospital portal */}
+          <div
+            className="mt-10 pt-5 border-t border-white/15 max-w-xl flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5"
+            data-purpose="facility-signup"
+          >
+            <p className="text-sm text-neutral-300 leading-relaxed">{t("hero.facilityPrompt")}</p>
+            <a
+              className="self-start sm:self-auto shrink-0 inline-flex items-center gap-1.5 text-sm font-medium text-white border-b border-white/50 hover:border-white pb-0.5 transition-colors"
+              data-purpose="facility-signup-link"
+              href={HOSPITAL_SIGNUP_URL}
+            >
+              {t("hero.facilityCta")}
+              <svg aria-hidden="true" className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
+              </svg>
+            </a>
           </div>
         </div>
       </div>
