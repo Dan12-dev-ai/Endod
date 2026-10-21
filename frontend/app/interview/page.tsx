@@ -20,6 +20,8 @@ export default function Interview() {
     if (saved !== language) setLanguage(saved);
   };
   const [activeNav, setActiveNav] = useState("home");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [emergencyOpen, setEmergencyOpen] = useState(false);
   const closeEmergency = useCallback(() => setEmergencyOpen(false), []);
   // Back from a payment page: /interview?section=wallet&deposit=<id>.
@@ -101,58 +103,20 @@ export default function Interview() {
     prevActiveNavRef4.current = activeNav;
   }, [activeNav]);
 
-  // ===== Refs for DOM interactions (mobile drawer) =====
-  const mobileMenuBtnRef = useRef<HTMLButtonElement>(null);
-  const drawerCloseBtnRef = useRef<HTMLButtonElement>(null);
-  const sidebarRef = useRef<HTMLElement>(null);
-  const backdropRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    // --- Responsive drawer: open/close mobile sidebar ---
-    const mobileMenuBtn = mobileMenuBtnRef.current;
-    const drawerCloseBtn = drawerCloseBtnRef.current;
-    const sidebar = sidebarRef.current;
-    const backdrop = backdropRef.current;
-
-    function openDrawer() {
-      if (!sidebar || !backdrop) return;
-      sidebar.classList.remove("-translate-x-full");
-      sidebar.classList.add("translate-x-0");
-      backdrop.classList.remove("hidden");
-      setTimeout(() => {
-        backdrop.classList.remove("opacity-0");
-        backdrop.classList.add("opacity-100");
-      }, 10);
+    if (mobileSidebarOpen) {
       document.body.classList.add("overflow-hidden");
-    }
-
-    function closeDrawer() {
-      if (!sidebar || !backdrop) return;
-      sidebar.classList.remove("translate-x-0");
-      sidebar.classList.add("-translate-x-full");
-      backdrop.classList.remove("opacity-100");
-      backdrop.classList.add("opacity-0");
-      setTimeout(() => {
-        backdrop.classList.add("hidden");
-      }, 300);
+    } else {
       document.body.classList.remove("overflow-hidden");
     }
+  }, [mobileSidebarOpen]);
 
-    if (mobileMenuBtn) mobileMenuBtn.addEventListener("click", openDrawer);
-    if (drawerCloseBtn) drawerCloseBtn.addEventListener("click", closeDrawer);
-    if (backdrop) backdrop.addEventListener("click", closeDrawer);
-
+  useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 1024) closeDrawer();
+      if (window.innerWidth >= 1024) setMobileSidebarOpen(false);
     };
     window.addEventListener("resize", handleResize);
-
-    return () => {
-      if (mobileMenuBtn) mobileMenuBtn.removeEventListener("click", openDrawer);
-      if (drawerCloseBtn) drawerCloseBtn.removeEventListener("click", closeDrawer);
-      if (backdrop) backdrop.removeEventListener("click", closeDrawer);
-      window.removeEventListener("resize", handleResize);
-    };
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   return (
@@ -160,23 +124,34 @@ export default function Interview() {
       {/* ===== Main Header ===== */}
       <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center space-x-3 sm:space-x-6">
-          <button
+<button
             aria-label={t("interview.openMenu")}
             className="lg:hidden p-2 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none"
-            ref={mobileMenuBtnRef}
+            onClick={() => setMobileSidebarOpen(true)}
             type="button"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          <div className="flex items-center space-x-2.5 sm:space-x-3">
+          <button
+            type="button"
+            aria-label={t("interview.openMenu")}
+            onClick={() => {
+              if (typeof window !== "undefined" && window.innerWidth >= 1024) {
+                setDesktopSidebarOpen((prev) => !prev);
+              } else {
+                setMobileSidebarOpen((prev) => !prev);
+              }
+            }}
+            className="flex items-center space-x-2.5 sm:space-x-3 focus:outline-none"
+          >
             <img
               alt={t("nav.logoAlt")}
               className="h-12 sm:h-14 w-auto object-contain flex-shrink-0"
               src="/endod_logo.png"
             />
-          </div>
+          </button>
         </div>
         <div className="flex items-center space-x-1.5 sm:space-x-3">
           <button
@@ -221,13 +196,18 @@ export default function Interview() {
 
       {emergencyOpen && <EmergencyPanel onClose={closeEmergency} />}
 
-      {/* ===== Drawer Backdrop ===== */}
-      <div aria-hidden="true" className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 hidden opacity-0 transition-opacity duration-300 lg:hidden" ref={backdropRef}></div>
+{mobileSidebarOpen && (
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 opacity-100 transition-opacity duration-300 lg:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
 
       {/* ===== Body Content ===== */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* ===== Sidebar ===== */}
-        <aside ref={sidebarRef} className="fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col justify-between p-4 flex-shrink-0 lg:static lg:w-64 lg:translate-x-0 lg:flex shadow-2xl lg:shadow-none">
+<aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out flex flex-col justify-between p-4 flex-shrink-0 shadow-2xl ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"} ${desktopSidebarOpen ? "lg:static lg:w-64 lg:translate-x-0 lg:flex lg:shadow-none" : "lg:hidden"}`}>
           <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100 lg:hidden">
             <div className="flex items-center space-x-2.5">
               <div className="w-8 h-8 rounded-full bg-teal-500 flex items-center justify-center text-white shadow-sm">
@@ -243,7 +223,7 @@ export default function Interview() {
                 <span className="text-[10px] font-medium text-teal-700 block tracking-tight">{t("interview.yourAiDoctor")}</span>
               </div>
             </div>
-            <button ref={drawerCloseBtnRef} aria-label={t("interview.closeMenu")} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition" type="button">
+<button aria-label={t("interview.closeMenu")} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition" onClick={() => setMobileSidebarOpen(false)} type="button">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
