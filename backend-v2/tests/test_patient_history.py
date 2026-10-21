@@ -105,7 +105,18 @@ def client(tmp_path, monkeypatch):
     dbmod.reset_engine()
 
 
-def register(client, email="a@example.com", first="Almaz", last="Tefera", phone=PHONE, language="en"):
+def link(user_id, hospital=HOSPITAL, patient_id=None):
+    """The hospital linked this account (as a confirmed patient.link_requested does)."""
+    from dedan_platform.db import session_scope
+    from dedan_platform.models import HospitalLink
+
+    with session_scope() as session:
+        session.add(HospitalLink(user_id=user_id, hospital_id=hospital, patient_id=patient_id or hexid()))
+
+
+def register(client, email="a@example.com", first="Almaz", last="Tefera", phone=PHONE, language="en",
+             linked=True):
+    """A patient; ``linked``: already linked to HOSPITAL, which may then send about them."""
     from dedan_platform import identity
 
     resp = client.post("/auth/register", json={
@@ -119,6 +130,8 @@ def register(client, email="a@example.com", first="Almaz", last="Tefera", phone=
     identity.update_preferences(me["internal_user_id"], {"sms_notifications": bool(phone), "language": language})
     consent = client.patch("/users/me/consent", headers=auth, json={"treatment_processing": True})
     assert consent.status_code == 200, consent.text
+    if linked:
+        link(me["internal_user_id"])
     return {"auth": auth, "id": me["internal_user_id"], "dedan": me["dedan_user_id"]}
 
 
@@ -282,8 +295,15 @@ def file_rows():
 
     with session_scope() as session:
         return {r.file_id: {"status": r.status, "attempts": r.attempts, "error": r.last_error,
-                            "next": r.next_attempt_at}
+                            "next": r.next_attempt_at, "copy": r.copy_id}
                 for r in session.scalars(select(RecordFile))}
+
+
+def stored_copy(record_id, file_id):
+    """Where the file's current copy is (None while there is none)."""
+    from dedan_platform import record_files
+
+    return record_files.stored_path(record_id, file_id, file_rows()[file_id]["copy"])
 
 
 def make_due():
@@ -419,8 +439,9 @@ class TestRecordFiles:
         assert history(client, patient["auth"])["items"][0]["files"][0]["state"] == "arriving"
         assert record_files.download_due() == 1
         assert hospital_api.calls == [(f"/platform/records/{record['record_id']}/files/{meta['file_id']}", KEY)]
-        stored = tmp_path / "records" / record["record_id"] / meta["file_id"]
-        assert stored.read_bytes() == PDF
+        stored = stored_copy(record["record_id"], meta["file_id"])
+        assert stored.parent == (tmp_path / "records" / record["record_id"]).resolve()
+        assert stored.name.startswith(meta["file_id"] + ".") and stored.read_bytes() == PDF
         assert history(client, patient["auth"])["items"][0]["files"][0]["state"] == "ready"
         assert record_files.download_due() == 0  # nothing more to do
 
@@ -498,17 +519,22 @@ class TestRecordFiles:
         from_hospital(bus, "record.published", record)
         run_worker(bus)
         record_files.download_due()
+        old_kept, old_dropped = stored_copy(record["record_id"], kept["file_id"]), \
+            stored_copy(record["record_id"], dropped["file_id"])
+        assert old_kept.is_file() and old_dropped.is_file()
         new_png = PNG + b"\x01"
         hospital_api.files[(record["record_id"], kept["file_id"])] = new_png
         from_hospital(bus, "record.published", {**record, "version": 2,
                                                 "files": [{**kept, "size": len(new_png),
                                                            "sha256": hashlib.sha256(new_png).hexdigest()}]})
         run_worker(bus)
-        assert not (tmp_path / "records" / record["record_id"] / dropped["file_id"]).exists()
+        assert not old_dropped.exists() and not old_kept.exists()
         [item] = history(client, patient["auth"])["items"]
         assert [(f["file_id"], f["state"]) for f in item["files"]] == [(kept["file_id"], "arriving")]
         record_files.download_due()
-        assert (tmp_path / "records" / record["record_id"] / kept["file_id"]).read_bytes() == new_png
+        new_copy = stored_copy(record["record_id"], kept["file_id"])
+        assert new_copy != old_kept and new_copy.read_bytes() == new_png
+        assert sorted(p.name for p in new_copy.parent.iterdir()) == [new_copy.name]
 
     def test_paths_never_leave_the_records_directory(self, tmp_path, monkeypatch):
         from dedan_platform import record_files
@@ -519,6 +545,10 @@ class TestRecordFiles:
                 record_files.path_for(bad, "a" * 32)
             with pytest.raises(ValueError):
                 record_files.path_for("a" * 32, bad)
+        for bad_copy in ("..", "../" + "a" * 13, "A" * 16, "a" * 15, "a" * 17, "/" + "a" * 15):
+            with pytest.raises(ValueError):
+                record_files.path_for("a" * 32, "a" * 32, bad_copy)
+            assert record_files.stored_path("a" * 32, "a" * 32, bad_copy) is None
 
 
 # --- 3. follow-ups ----------------------------------------------------------------------------
@@ -886,3 +916,370 @@ class TestSharing:
         assert sent(bus, "records.unshared") == [{"share_id": share["share_id"], "hospital_id": HOSPITAL}]
         assert shares.expire_due() == 0  # told once
         assert client.get("/users/me/shares", headers=patient["auth"]).json()["shares"][0]["status"] == "expired"
+
+
+# --- review fixes -------------------------------------------------------------------------------
+
+def set_unverified_phone(user_id, phone):
+    from dedan_platform.db import session_scope
+    from dedan_platform.models import Profile
+
+    with session_scope() as session:
+        session.execute(update(Profile).where(Profile.user_id == user_id).values(phone=phone, phone_verified_at=None))
+
+
+class TestLinkNeedsAVerifiedPhone:
+    def test_an_unverified_phone_never_links(self, client, bus):
+        unverified = register(client, email="u@example.com", phone=None, linked=False)
+        set_unverified_phone(unverified["id"], PHONE)
+        request = link_request(unverified["dedan"], phone=PHONE)
+        from_hospital(bus, "patient.link_requested", request)
+        run_worker(bus)
+        assert sent(bus, "patient.linked") == []
+        assert [p["reason"] for p in sent(bus, "patient.link_refused")] == ["not_verified"]
+
+    def test_a_card_link_gives_the_phone_only_when_verified(self, client, bus):
+        from dedan_platform import cards
+
+        unverified = register(client, email="u@example.com", phone=None, linked=False)
+        set_unverified_phone(unverified["id"], PHONE)
+        verified = register(client, email="v@example.com", phone="+251911000555", linked=False)
+        for who in (unverified, verified):
+            from_hospital(bus, "patient.link_requested",
+                          link_request(who["dedan"], patient_id=f"MRN-{who['dedan']}",
+                                       card_signature=cards.card_signature(who["dedan"])))
+        run_worker(bus)
+        phones = {p["dedan_id"]: p["phone"] for p in sent(bus, "patient.linked")}
+        assert phones == {unverified["dedan"]: None, verified["dedan"]: "+251911000555"}
+
+
+class TestOnlyLinkedHospitalsSendData:
+    def test_records_and_follow_ups_without_a_link_are_dead_lettered_and_never_stored(self, client, bus):
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import FollowUp, HospitalRecord
+
+        stranger = register(client, email="s@example.com", linked=False)
+        linked_elsewhere = register(client, email="e@example.com", phone="+251911000444")  # HOSPITAL only
+        from_hospital(bus, "record.published", lab_record(stranger["dedan"]))
+        from_hospital(bus, "visit.follow_up", follow_up(stranger["dedan"], hexid()))
+        from_hospital(bus, "record.published", lab_record(linked_elsewhere["dedan"], hospital_id=OTHER_HOSPITAL))
+        from_hospital(bus, "visit.follow_up", follow_up(linked_elsewhere["dedan"], hexid(),
+                                                        hospital_id=OTHER_HOSPITAL))
+        run_worker(bus)
+        assert len(dead_letters(bus)) == 4
+        with session_scope() as session:
+            assert session.scalar(select(HospitalRecord)) is None and session.scalar(select(FollowUp)) is None
+        for who in (stranger, linked_elsewhere):
+            assert history(client, who["auth"])["items"] == []
+            assert not [i for i in inbox(client, who["auth"]) if i["category"] == "records"]
+        assert texts() == []
+
+    def test_a_link_lets_the_hospital_send_and_tells_the_patient(self, client, bus, listed):
+        from dedan_platform import cards
+
+        newcomer = register(client, email="n@example.com", linked=False)
+        from_hospital(bus, "patient.link_requested",
+                      link_request(newcomer["dedan"], card_signature=cards.card_signature(newcomer["dedan"])))
+        run_worker(bus)
+        from_hospital(bus, "record.published", lab_record(newcomer["dedan"]))
+        run_worker(bus)
+        assert dead_letters(bus) == [] and len(history(client, newcomer["auth"])["items"]) == 1
+        assert "hospital_linked" in [i["kind"] for i in inbox(client, newcomer["auth"])]
+
+    def test_a_booking_links_the_patient_to_that_hospital(self, client, bus, listed):
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import HospitalLink
+
+        booker = register(client, email="b@example.com", linked=False)
+        TestBookingTexts().book(client, booker)
+        with session_scope() as session:
+            links = session.scalars(select(HospitalLink).where(HospitalLink.user_id == booker["id"])).all()
+            assert [(l.hospital_id, l.patient_id) for l in links] == [(HOSPITAL, f"endod:{booker['dedan']}")]
+        from dedan_platform import patient_history
+
+        with session_scope() as session:  # another booking there: still one link
+            patient_history.link_booking(session, booker["id"], HOSPITAL)
+        from_hospital(bus, "record.published", lab_record(booker["dedan"]))
+        from_hospital(bus, "visit.follow_up", follow_up(booker["dedan"], hexid()))
+        run_worker(bus)
+        assert dead_letters(bus) == []
+        assert len(history(client, booker["auth"])["items"]) == 1
+        assert len(client.get("/users/me/follow-ups", headers=booker["auth"]).json()["follow_ups"]) == 1
+        with session_scope() as session:
+            assert len(session.scalars(select(HospitalLink).where(HospitalLink.user_id == booker["id"])).all()) == 1
+
+    def test_an_endod_booking_there_is_enough_without_a_link_row(self, client, bus, listed):
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import HospitalLink
+
+        booker = register(client, email="b@example.com", linked=False)
+        TestBookingTexts().book(client, booker)
+        with session_scope() as session:  # a booking made before links were recorded
+            session.execute(HospitalLink.__table__.delete())
+        from_hospital(bus, "record.published", lab_record(booker["dedan"]))
+        run_worker(bus)
+        assert dead_letters(bus) == [] and len(history(client, booker["auth"])["items"]) == 1
+
+    def test_an_unlinked_queue_place_is_a_walk_in(self, client, bus):
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import QueueEntry
+
+        stranger = register(client, email="s@example.com", linked=False)
+        entry = hexid()
+        from_hospital(bus, "queue.updated", queue_update(entry, 1, stranger["dedan"], phone="0912345678",
+                                                         notify="near", ahead=1))
+        run_worker(bus)
+        assert dead_letters(bus) == []
+        assert client.get("/users/me/queue", headers=stranger["auth"]).json()["entries"] == []
+        with session_scope() as session:
+            assert session.get(QueueEntry, entry).user_id is None
+        [(phone, text)] = deliver_due()
+        assert phone == "+251912345678" and phone != PHONE
+        assert len(text.split("\n")) == 2  # Amharic then English: a walk-in, not the account
+        # Without a phone of its own, the account is never texted.
+        from_hospital(bus, "queue.updated", queue_update(hexid(), 1, stranger["dedan"], notify="turn",
+                                                         status="called", ahead=0))
+        run_worker(bus)
+        assert deliver_due() == []
+
+
+def all_paths(routes, prefix=""):
+    """Every route path of an app or router, through included routers."""
+    paths = set()
+    for route in routes:
+        if hasattr(route, "original_router"):
+            paths |= all_paths(route.original_router.routes)
+        elif hasattr(route, "path"):
+            paths.add(route.path)
+    return paths
+
+
+class TestInternalApi:
+    def internal(self):
+        import main_internal
+
+        return TestClient(main_internal.create_app(), base_url="http://endod-platform-api")
+
+    def test_it_serves_only_internal_routes_and_health(self, client):
+        from dedan_platform.api_auth import router as auth_router
+        from dedan_platform.api_history import router as history_router
+        from dedan_platform.api_profile import router as profile_router
+
+        import main_internal
+
+        assert all_paths(main_internal.create_app().routes) == {
+            "/health", "/internal/shares/{share_id}/files/{file_id}"}
+        internal = self.internal()
+        assert internal.get("/health").json()["status"] == "healthy"
+        for path in sorted(all_paths(auth_router.routes) | all_paths(profile_router.routes)
+                           | all_paths(history_router.routes) | {"/docs", "/openapi.json", "/api/health", "/"}):
+            concrete = path.replace("{", "").replace("}", "")
+            for method in ("GET", "POST"):
+                assert internal.request(method, concrete, headers={"X-Platform-Key": KEY}).status_code in (404, 405), \
+                    (method, path)
+        # Only the names it is reached by.
+        assert TestClient(main_internal.create_app(), base_url="http://backend").get("/health").status_code == 400
+
+    def test_it_serves_a_shared_file_with_the_key_only(self, client, bus, patient, listed, hospital_api):
+        sharing = TestSharing()
+        record, meta, _own = sharing.setup_records(client, bus, patient, hospital_api)
+        share = sharing.share(client, patient, [record["record_id"]]).json()
+        url = f"/internal/shares/{share['share_id']}/files/{meta['file_id']}"
+        internal = self.internal()
+        ok = internal.get(url, headers={"X-Platform-Key": KEY})
+        assert ok.status_code == 200 and ok.content == PNG
+        assert internal.get(url).status_code == 401
+        assert internal.get(url, headers={"X-Platform-Key": "nope", "X-Forwarded-For": "127.0.0.1"}).status_code == 401
+
+    def test_the_patient_app_does_not_serve_internal(self, app_module):
+        assert not [p for p in all_paths(app_module.app.routes) if p.startswith("/internal")]
+        patient_app = TestClient(app_module.app)
+        response = patient_app.get(f"/internal/shares/{'a' * 32}/files/{'a' * 32}", headers={"X-Platform-Key": KEY})
+        assert response.status_code == 404
+
+
+class TestDownloadsNeverEscape:
+    publish_with = TestRecordFiles.publish_with
+
+    def leftovers(self, tmp_path, record):
+        directory = tmp_path / "records" / record["record_id"]
+        return sorted(p.name for p in directory.iterdir()) if directory.exists() else []
+
+    def test_an_invalid_hospital_api_url_fails_the_attempt(self, client, bus, patient, hospital_api, tmp_path,
+                                                            monkeypatch):
+        from dedan_platform import record_files
+
+        monkeypatch.setattr(record_files, "_transport", None)
+        record, meta = self.publish_with(bus, patient, hospital_api)
+        for bad in ("http://exa mple:abc", "ftp://endod-hospital-api", "not a url at all"):
+            monkeypatch.setenv("HOSPITAL_API_URL", bad)
+            make_due()
+            assert record_files.download_due() == 1
+            row = file_rows()[meta["file_id"]]
+            assert row["status"] == "pending" and row["error"]
+        assert file_rows()[meta["file_id"]]["attempts"] == 3
+        assert self.leftovers(tmp_path, record) == []
+
+    def test_any_error_fails_only_that_attempt_and_leaves_no_part_file(self, client, bus, patient, hospital_api,
+                                                                        tmp_path, monkeypatch):
+        from dedan_platform import record_files
+
+        record, meta = self.publish_with(bus, patient, hospital_api)
+
+        def broken(*_args):
+            raise PermissionError("disk says no")
+
+        monkeypatch.setattr(record_files.os, "replace", broken)
+        assert record_files.download_due() == 1
+        row = file_rows()[meta["file_id"]]
+        assert row["status"] == "pending" and "PermissionError" in row["error"]
+        assert self.leftovers(tmp_path, record) == []
+
+        def exploding(request):
+            raise RuntimeError("unexpected")
+
+        monkeypatch.setattr(record_files, "_transport", httpx.MockTransport(exploding))
+        make_due()
+        assert record_files.download_due() == 1
+        assert "RuntimeError" in file_rows()[meta["file_id"]]["error"]
+        assert self.leftovers(tmp_path, record) == []
+
+    def test_a_download_has_a_deadline_inside_the_stale_window(self, client, bus, patient, hospital_api, tmp_path,
+                                                               monkeypatch):
+        from dedan_platform import record_files
+
+        read_timeout = record_files.TIMEOUT.read + record_files.TIMEOUT.connect
+        assert record_files.DOWNLOAD_DEADLINE_SECONDS <= 300
+        assert record_files.STALE_DOWNLOAD.total_seconds() >= 2 * (record_files.DOWNLOAD_DEADLINE_SECONDS
+                                                                   + read_timeout)
+        record, meta = self.publish_with(bus, patient, hospital_api)
+        monkeypatch.setattr(record_files, "DOWNLOAD_DEADLINE_SECONDS", 0.0)
+        record_files.download_due()
+        assert "took longer than" in file_rows()[meta["file_id"]]["error"]
+        assert self.leftovers(tmp_path, record) == []
+
+    def test_a_claim_counts_as_an_attempt_even_if_its_worker_dies(self, client, bus, patient, hospital_api,
+                                                                  monkeypatch):
+        from dedan_platform import record_files
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import RecordFile
+
+        def make_stale():
+            with session_scope() as session:
+                session.execute(update(RecordFile).values(
+                    updated_at=datetime.now(timezone.utc) - record_files.STALE_DOWNLOAD - timedelta(seconds=1)))
+
+        record, meta = self.publish_with(bus, patient, hospital_api)
+        assert record_files._claim()["attempts"] == 1  # then the worker dies
+        assert file_rows()[meta["file_id"]]["status"] == "downloading"
+        assert record_files.download_due() == 0  # not stale yet: nobody else takes it
+        make_stale()
+        assert record_files.download_due() == 1
+        row = file_rows()[meta["file_id"]]
+        assert (row["status"], row["attempts"]) == ("stored", 2)
+
+        # Out of attempts: a reclaim gives up without fetching.
+        monkeypatch.setattr(record_files, "MAX_ATTEMPTS", 1)
+        other, other_meta = self.publish_with(bus, patient, hospital_api)
+        record_files._claim()
+        make_stale()
+        calls = len(hospital_api.calls)
+        record_files.download_due()
+        assert file_rows()[other_meta["file_id"]]["status"] == "failed" and len(hospital_api.calls) == calls
+
+    def test_a_download_whose_claim_was_taken_over_keeps_nothing(self, client, bus, patient, hospital_api,
+                                                                 tmp_path, monkeypatch):
+        from dedan_platform import record_files
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import RecordFile
+
+        record, meta = self.publish_with(bus, patient, hospital_api)
+        serve = hospital_api.handler
+
+        def taken_over(request):
+            with session_scope() as session:  # another worker claimed it meanwhile
+                session.execute(update(RecordFile).values(attempts=RecordFile.attempts + 1))
+            return serve(request)
+
+        monkeypatch.setattr(record_files, "_transport", httpx.MockTransport(taken_over))
+        assert record_files.download_one() == "retry"
+        assert file_rows()[meta["file_id"]]["status"] == "downloading"  # the other worker's
+        assert self.leftovers(tmp_path, record) == []
+
+
+class TestCorrectionsKeepTheNewCopy:
+    def test_an_old_copy_removed_late_never_takes_the_new_one(self, client, bus, patient, hospital_api, monkeypatch):
+        from dedan_platform import eventbus, record_files
+
+        meta = file_meta(PNG)
+        record = lab_record(patient["dedan"], files=[meta])
+        hospital_api.files[(record["record_id"], meta["file_id"])] = PNG
+        from_hospital(bus, "record.published", record)
+        run_worker(bus)
+        record_files.download_due()
+        old = stored_copy(record["record_id"], meta["file_id"])
+
+        # The correction commits; its clean-up runs only after the new copy arrived.
+        late = []
+        monkeypatch.setattr(eventbus, "after_commit", lambda session, action: late.append(action))
+        new_png = PNG + b"\x02"
+        hospital_api.files[(record["record_id"], meta["file_id"])] = new_png
+        from_hospital(bus, "record.published", {**record, "version": 2, "files": [
+            {**meta, "size": len(new_png), "sha256": hashlib.sha256(new_png).hexdigest()}]})
+        run_worker(bus)
+        record_files.download_due()
+        new = stored_copy(record["record_id"], meta["file_id"])
+        for action in late:
+            action()
+        assert new != old and new.read_bytes() == new_png and not old.exists()
+        url = f"/users/me/history/records/{record['record_id']}/files/{meta['file_id']}"
+        assert client.get(url, headers=patient["auth"]).content == new_png
+
+    def test_the_current_copy_is_never_forgotten(self, client, bus, patient, hospital_api):
+        from dedan_platform import record_files
+
+        meta = file_meta(PNG)
+        record = lab_record(patient["dedan"], files=[meta])
+        hospital_api.files[(record["record_id"], meta["file_id"])] = PNG
+        from_hospital(bus, "record.published", record)
+        run_worker(bus)
+        record_files.download_due()
+        current = stored_copy(record["record_id"], meta["file_id"])
+        record_files.forget_copy(record["record_id"], meta["file_id"], file_rows()[meta["file_id"]]["copy"])
+        assert current.read_bytes() == PNG
+
+
+class TestFollowUpMovedToAnotherPatient:
+    def test_it_leaves_the_first_account_with_its_texts(self, client, bus, patient):
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import FollowUp
+
+        other = register(client, email="b@example.com", phone="+251911000888")
+        visit = hexid()
+        now = datetime.now(timezone.utc)
+        from_hospital(bus, "visit.follow_up", follow_up(patient["dedan"], visit), occurred_at=now)
+        run_worker(bus)
+        assert len(deliver_due()) == 1  # the first patient was told
+        from_hospital(bus, "visit.follow_up", follow_up(other["dedan"], visit),
+                      occurred_at=now + timedelta(seconds=1))
+        run_worker(bus)
+        assert client.get("/users/me/follow-ups", headers=patient["auth"]).json()["follow_ups"] == []
+        assert timeline_follow_ups(patient["id"]) == []
+        [(status, _when)] = timeline_follow_ups(other["id"])
+        assert status == "SCHEDULED"
+        assert len(client.get("/users/me/follow-ups", headers=other["auth"]).json()["follow_ups"]) == 1
+        mine = [t for t in texts() if t["user_id"] == patient["id"]]
+        assert {t["template"]: t["status"] for t in mine} == {
+            "sms_follow_up_set": "SENT", "sms_follow_up_reminder": "CANCELLED"}
+        theirs = [t for t in texts() if t["user_id"] == other["id"]]
+        assert sorted(t["template"] for t in theirs) == ["sms_follow_up_reminder", "sms_follow_up_set"]
+        [(phone, _text)] = deliver_due()
+        assert phone == "+251911000888"
+        assert "follow_up_set" in [i["kind"] for i in inbox(client, other["auth"])]
+        # The same change again: nothing new for either.
+        from_hospital(bus, "visit.follow_up", follow_up(other["dedan"], visit),
+                      occurred_at=now + timedelta(seconds=2))
+        run_worker(bus)
+        assert len(timeline_follow_ups(other["id"])) == 1 and deliver_due() == []
+        with session_scope() as session:
+            assert session.scalar(select(FollowUp)).user_id == other["id"]

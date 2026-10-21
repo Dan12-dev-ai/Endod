@@ -25,10 +25,12 @@ hospital -> platform `patient.link_requested`
 
 Platform: the account exists and is active, and EITHER `card_signature`
 verifies (`cards.verify_card`) OR `phone` equals the account's phone (both
-normalised to E.164). Replies:
+normalised to E.164) and that phone is verified (the patient confirmed it
+with an SMS code); an unverified phone never links. Replies:
 
 platform -> hospital `patient.linked`
 `{"request_id", "hospital_id", "patient_id", "dedan_id", "name", "phone": str|null}`
+(`phone`: the account's verified phone, else null)
 
 platform -> hospital `patient.link_refused`
 `{"request_id", "hospital_id", "patient_id", "dedan_id", "reason": "not_found"|"not_verified"}`
@@ -38,7 +40,14 @@ The hospital stores `dedan_id` on its patient only on `patient.linked`; the
 patient gets an inbox item "<Hospital> linked your records to Endod". A
 patient arriving through an Endod booking (`appointment.requested` carries
 `patient.dedan_id`) is already identified: checking that booking in links
-the hospital patient without a request.
+the hospital patient without a request (the platform links the account to
+that hospital when the booking is made).
+
+The platform accepts records and follow-ups about a patient only from a
+hospital linked to them (a confirmed link, or an Endod booking there);
+anything else is dead-lettered and never stored. A `queue.updated` for an
+account not linked to that hospital is handled as a walk-in (its `dedan_id`
+is ignored: nothing shows in the account, the text goes to `phone`).
 
 ## 2. Clinical records (hospital -> patient)
 
@@ -101,8 +110,9 @@ hospital -> platform `queue.updated`
 - `"near"` is sent once per entry when `ahead` first reaches
   `queue_notify_ahead`; `"turn"` once when the entry is called. The platform
   sends exactly one SMS per notify (dedupe on entry_id + notify), to the
-  account's phone if `dedan_id` is set, else to `phone`. Walk-ins without an
-  account get the SMS too (no account is created).
+  account's phone if `dedan_id` is set and linked to the hospital (section
+  1), else to `phone`. Walk-ins without an account get the SMS too (no
+  account is created).
 - `seq` increases per entry; the platform ignores an older `seq`.
 - SMS language: the account's language; walk-ins get Amharic then English.
 
@@ -139,8 +149,9 @@ why) before anything is saved. Imported records are published like any other.
 ## 7. Networking and configuration
 
 - The hospital API joins `endod-bus` with alias `endod-hospital-api`; the
-  platform API (backend) joins it with alias `endod-platform-api`. Both keep
-  their own networks.
+  platform's internal API (`internal-api`, serving only `/internal/...` and
+  `/health`) joins it with alias `endod-platform-api`. Both keep their own
+  networks; the platform's patient API is not on `endod-bus`.
 - Platform env: `HOSPITAL_API_URL=http://endod-hospital-api:8000`,
   `PLATFORM_ADMIN_KEY` (same value as the hospital's), `RECORD_FILES_DIR`
   (a volume, default `/data/records`).

@@ -243,9 +243,9 @@ def file_for_hospital(share_id: str, file_id: str) -> Tuple[Path, str, str]:
             raise ShareAccessError(404, "Not found.")
         if row.status != RecordFileStatus.STORED:
             raise ShareAccessError(503, "The file has not reached Endod yet.")
-        record_id, content_type, filename = row.record_id, row.content_type, row.filename
-    path = record_files.path_for(record_id, file_id)
-    if not path.is_file():
+        record_id, content_type, filename, copy_id = row.record_id, row.content_type, row.filename, row.copy_id
+    path = record_files.stored_path(record_id, file_id, copy_id)
+    if path is None or not path.is_file():
         raise ShareAccessError(503, "The file has not reached Endod yet.")
     return path, content_type, filename
 

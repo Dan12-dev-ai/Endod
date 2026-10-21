@@ -194,6 +194,7 @@ def enqueue(
         if existing.status != NotificationStatus.CANCELLED:
             return False
         existing.status = NotificationStatus.PENDING
+        existing.user_id = user_id
         existing.scheduled_for = when
         existing.attempts = 0
         existing.last_error = None
@@ -250,6 +251,8 @@ def stale_reason(job: Dict[str, Any]) -> Optional[str]:
                 return "follow_up_cancelled"
             if follow_up.follow_up_on != params.get("day"):
                 return "follow_up_moved"
+            if follow_up.user_id != job.get("user_id"):
+                return "follow_up_moved_to_another_patient"
     if template in (QUEUE_NEAR, QUEUE_TURN):
         with session_scope() as session:
             entry = session.get(QueueEntry, params.get("entry_id") or "")

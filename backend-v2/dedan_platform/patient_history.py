@@ -24,15 +24,16 @@ from typing import Any, Dict, List, Literal, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from dedan_platform import eventbus, identity, patient_sms
 from dedan_platform.db import ensure_aware, ensure_utc
 from dedan_platform.eventbus import PermanentEventError, RetryLater
 from dedan_platform.models import (
-    EventStatus, FollowUp, HealthEvent, HealthEventType, HospitalLink, HospitalRecord, PartnerHospital,
-    Profile, QueueEntry, RecordFile, RecordFileStatus, User, utcnow,
+    Appointment, EventStatus, FollowUp, HealthEvent, HealthEventType, HospitalLink, HospitalRecord,
+    PartnerHospital, Profile, QueueEntry, RecordFile, RecordFileStatus, User, utcnow,
 )
 from dedan_platform.phone import normalise_ethiopian_mobile
 
@@ -127,11 +128,13 @@ def on_link_requested(session: Session, payload: Dict[str, Any]) -> None:
         eventbus.emit(session, "patient.link_refused", {**echo, "dedan_id": request.dedan_id, "reason": "not_found"})
         return
     profile = session.scalar(select(Profile).where(Profile.user_id == user.id))
-    account_phone = normalise_ethiopian_mobile(profile.phone if profile else None)
+    # Only a phone the patient proved they hold (an SMS code) identifies them,
+    # and only such a phone is given to the hospital.
+    verified_phone = profile is not None and profile.phone_verified_at is not None
+    account_phone = normalise_ethiopian_mobile(profile.phone) if verified_phone else None
     verified = _card_verifies(user.dedan_user_id, request.card_signature)
-    if not verified and request.phone:
-        given = normalise_ethiopian_mobile(request.phone)
-        verified = given is not None and given == account_phone
+    if not verified and request.phone and account_phone is not None:
+        verified = normalise_ethiopian_mobile(request.phone) == account_phone
     if not verified:
         eventbus.emit(session, "patient.link_refused",
                       {**echo, "dedan_id": user.dedan_user_id, "reason": "not_verified"})
@@ -156,6 +159,44 @@ def on_link_requested(session: Session, payload: Dict[str, Any]) -> None:
         name = hospital.name if hospital is not None else "A hospital"
         _inbox_later(session, user.id, "hospital_linked", f"{name} linked your records to Endod",
                      "New records from this hospital will appear in your history.", "history", None)
+
+
+def may_act_for(session: Session, hospital_id: str, user_id: str) -> bool:
+    """Whether a hospital may send anything about this patient: it linked
+    them (section 1), or they booked it through Endod."""
+    if session.scalar(select(HospitalLink.id).where(
+            HospitalLink.hospital_id == hospital_id, HospitalLink.user_id == user_id).limit(1)) is not None:
+        return True
+    return session.scalar(select(Appointment.id).where(
+        Appointment.hospital_id == hospital_id, Appointment.user_id == user_id).limit(1)) is not None
+
+
+def booking_patient_id(dedan_id: str) -> str:
+    """The link's patient id for a patient who came through an Endod booking
+    (the hospital's own id is not known to Endod yet)."""
+    return f"endod:{dedan_id}"
+
+
+def link_booking(session: Session, user_id: str, hospital_id: str) -> None:
+    """Link a patient to a hospital they booked through Endod (contract section
+    1: an Endod booking already identifies the patient). Idempotent; no notice."""
+    if session.scalar(select(HospitalLink.id).where(
+            HospitalLink.hospital_id == hospital_id, HospitalLink.user_id == user_id).limit(1)) is not None:
+        return
+    user = session.get(User, user_id)
+    if user is None:
+        return
+    try:
+        with session.begin_nested():
+            session.add(HospitalLink(user_id=user_id, hospital_id=hospital_id,
+                                     patient_id=booking_patient_id(user.dedan_user_id)))
+    except IntegrityError:
+        pass  # a concurrent booking linked them first
+
+
+def _require_link(session: Session, hospital_id: str, user: User, what: str) -> None:
+    if not may_act_for(session, hospital_id, user.id):
+        raise PermanentEventError(f"{what} for {user.dedan_user_id}, who is not linked to hospital {hospital_id}")
 
 
 # --- 2. clinical records --------------------------------------------------------------------
@@ -264,11 +305,17 @@ def clean_details(category: str, details: Dict[str, Any]) -> Dict[str, Any]:
     return {"description": _text(d.get("description"), long)}
 
 
-def _forget_file_later(session: Session, record_id: str, file_id: str) -> None:
+def _forget_file_later(session: Session, file: RecordFile) -> None:
+    """Delete the stored copy ``file`` points to now, once this change commits.
+
+    Each stored copy has its own path (``copy_id``), so this removes exactly
+    the old one, never a newer copy downloaded meanwhile."""
+    record_id, file_id, copy_id = file.record_id, file.file_id, file.copy_id
+
     def remove() -> None:
         from dedan_platform import record_files
 
-        record_files.delete_copy(record_id, file_id)
+        record_files.forget_copy(record_id, file_id, copy_id)
 
     eventbus.after_commit(session, remove)
 
@@ -278,6 +325,7 @@ def on_record_published(session: Session, payload: Dict[str, Any]) -> None:
     user = _user_by_dedan(session, published.dedan_id)
     if user is None:
         raise PermanentEventError(f"no Endod account {published.dedan_id}")
+    _require_link(session, published.hospital_id, user, "a record")
     row = session.get(HospitalRecord, published.record_id, with_for_update=True)
     if row is not None and row.hospital_id != published.hospital_id:
         raise PermanentEventError("record_id belongs to another hospital")
@@ -314,8 +362,9 @@ def on_record_published(session: Session, payload: Dict[str, Any]) -> None:
         changed = (current.sha256, current.size, current.content_type) != (meta.sha256, meta.size, meta.content_type)
         if changed or current.status == RecordFileStatus.REMOVED:
             if current.status == RecordFileStatus.STORED:
-                _forget_file_later(session, published.record_id, meta.file_id)
+                _forget_file_later(session, current)
             current.sha256, current.size, current.content_type = meta.sha256, meta.size, meta.content_type
+            current.copy_id = None
             current.status = RecordFileStatus.PENDING
             current.attempts = 0
             current.next_attempt_at = utcnow()
@@ -325,7 +374,8 @@ def on_record_published(session: Session, payload: Dict[str, Any]) -> None:
     for dropped in existing.values():
         if dropped.status != RecordFileStatus.REMOVED:
             if dropped.status == RecordFileStatus.STORED:
-                _forget_file_later(session, published.record_id, dropped.file_id)
+                _forget_file_later(session, dropped)
+            dropped.copy_id = None
             dropped.status = RecordFileStatus.REMOVED
             dropped.updated_at = utcnow()
 
@@ -390,11 +440,23 @@ class FollowUpEvent(BaseModel):
 REMINDER_HOUR = 9
 
 
+def _follow_up_marker(follow_up: FollowUp) -> str:
+    return json.dumps({"follow_up_id": follow_up.id})[1:-1]
+
+
+def _drop_follow_up_from(session: Session, follow_up: FollowUp, user_id: str) -> None:
+    """The hospital moved this follow-up to another patient (it was set on the
+    wrong one): it leaves the first account entirely, with its texts."""
+    session.execute(delete(HealthEvent).where(
+        HealthEvent.user_id == user_id, HealthEvent.event_type == HealthEventType.FOLLOW_UP,
+        HealthEvent.metadata_json.contains(_follow_up_marker(follow_up))).execution_options(synchronize_session=False))
+    patient_sms.cancel_prefix(session, f"sms:followup:{follow_up.id}:")
+
+
 def _follow_up_timeline(session: Session, follow_up: FollowUp, zone: ZoneInfo, cancelled: bool) -> None:
-    marker = json.dumps({"follow_up_id": follow_up.id})[1:-1]
     event = session.scalar(select(HealthEvent).where(
         HealthEvent.user_id == follow_up.user_id, HealthEvent.event_type == HealthEventType.FOLLOW_UP,
-        HealthEvent.metadata_json.contains(marker)))
+        HealthEvent.metadata_json.contains(_follow_up_marker(follow_up))))
     when = datetime.combine(date.fromisoformat(follow_up.follow_up_on), time(REMINDER_HOUR), zone)
     if cancelled:
         if event is not None:
@@ -420,6 +482,7 @@ def on_follow_up(session: Session, payload: Dict[str, Any]) -> None:
     user = _user_by_dedan(session, event.dedan_id)
     if user is None:
         raise PermanentEventError(f"no Endod account {event.dedan_id}")
+    _require_link(session, event.hospital_id, user, "a follow-up")
     sent_at = eventbus.event_time(session)
     row = session.scalar(select(FollowUp).where(
         FollowUp.hospital_id == event.hospital_id, FollowUp.visit_id == event.visit_id).with_for_update())
@@ -434,13 +497,18 @@ def on_follow_up(session: Session, payload: Dict[str, Any]) -> None:
         session.add(row)
         session.flush()
         was_active, old_day = False, None
+    elif row.user_id != user.id:
+        _drop_follow_up_from(session, row, row.user_id)
+        was_active, old_day = False, None  # new to this patient: told and reminded afresh
     else:
         was_active, old_day = row.cancelled_at is None, row.follow_up_on
     row.user_id = user.id
     row.hospital_name = event.hospital_name
     row.event_at = sent_at or row.event_at
     row.updated_at = utcnow()
-    prefix = f"sms:followup:{row.id}:"
+    # Per patient too, so texts already sent to someone else never stop this
+    # patient's (a follow-up moved to another patient).
+    prefix = f"sms:followup:{row.id}:{user.id}:"
 
     if event.cancelled:
         if row.cancelled_at is None:
@@ -498,6 +566,10 @@ class QueueUpdate(BaseModel):
 def on_queue_updated(session: Session, payload: Dict[str, Any]) -> None:
     update = _parse(QueueUpdate, payload)
     user = _user_by_dedan(session, update.dedan_id) if update.dedan_id else None
+    if user is not None and not may_act_for(session, update.hospital_id, user.id):
+        # Not linked to this hospital: a walk-in. Nothing shows in that
+        # account; a text goes only to the phone the hospital took.
+        user = None
     row = session.get(QueueEntry, update.entry_id, with_for_update=True)
     if row is not None and row.hospital_id != update.hospital_id:
         raise PermanentEventError("entry_id belongs to another hospital")

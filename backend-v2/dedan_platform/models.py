@@ -967,6 +967,9 @@ class RecordFile(Base):
     next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     last_error: Mapped[Optional[str]] = mapped_column(String(300))
     stored_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: The stored copy's own name (16 hex), so each copy has a path of its
+    #: own: removing an old copy can never remove a newer one. Set when STORED.
+    copy_id: Mapped[Optional[str]] = mapped_column(String(16))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

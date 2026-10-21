@@ -168,6 +168,11 @@ def book(
             wallet.post(session, user_id, WalletEntryKind.SERVICE_FEE, -fee, appointment_id=appointment.id,
                         description="Endod service fee")
         session.add(HospitalPayout(hospital_id=hospital.id, appointment_id=appointment.id, amount=price))
+        # The booking identifies the patient to this hospital (contract section 1):
+        # what it then sends about them (records, follow-ups, queue places) is accepted.
+        from dedan_platform import patient_history
+
+        patient_history.link_booking(session, user_id, hospital.id)
         eventbus.emit(session, "appointment.requested", {
             "appointment_id": appointment.id, "hospital_id": hospital.id, "patient": patient,
             "visit_mode": _EVENT_MODE[mode], "service": service,

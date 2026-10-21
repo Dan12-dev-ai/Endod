@@ -118,12 +118,9 @@ def file_for_patient(user_id: str, record_id: str, file_id: str) -> Optional[Tup
         if row is None:
             return None
         meta = row[0]
-        content_type, filename = meta.content_type, meta.filename
-    try:
-        path = record_files.path_for(record_id, file_id)
-    except ValueError:
-        return None
-    return (path, content_type, filename) if path.is_file() else None
+        content_type, filename, copy_id = meta.content_type, meta.filename, meta.copy_id
+    path = record_files.stored_path(record_id, file_id, copy_id)
+    return (path, content_type, filename) if path is not None and path.is_file() else None
 
 
 def today() -> str:
