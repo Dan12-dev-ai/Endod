@@ -12,7 +12,15 @@ export function seed(...args: string[]) {
     path.resolve(__dirname, '..', '..', '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
   execFileSync(python, [path.join(__dirname, 'seed.py'), ...args], {
     cwd: path.join(__dirname, '..', '..', 'backend-v2'),
-    env: { ...process.env, DEDAN_DATABASE_URL: `sqlite:///${process.env.E2E_DB}`, ENVIRONMENT: 'development' },
+    env: {
+      ...process.env,
+      DEDAN_DATABASE_URL: `sqlite:///${process.env.E2E_DB}`,
+      ENVIRONMENT: 'development',
+      // Where the backend keeps record files, and the fake hospital API they come from.
+      RECORD_FILES_DIR: process.env.E2E_RECORDS ?? '',
+      HOSPITAL_API_URL: 'http://127.0.0.1:8013',
+      PLATFORM_ADMIN_KEY: 'e2e-platform-key',
+    },
     stdio: 'inherit',
   });
 }

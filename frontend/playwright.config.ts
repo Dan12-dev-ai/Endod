@@ -17,11 +17,16 @@ const python =
 // earlier runs' files); test workers inherit it, so they never pick another.
 if (!process.env.E2E_DB) {
   for (const name of fs.readdirSync(os.tmpdir())) {
-    if (name.startsWith('dedan-e2e-')) fs.rmSync(path.join(os.tmpdir(), name), { force: true });
+    if (name.startsWith('dedan-e2e-')) fs.rmSync(path.join(os.tmpdir(), name), { force: true, recursive: true });
   }
   process.env.E2E_DB = path.join(os.tmpdir(), `dedan-e2e-${Date.now()}.db`).replace(/\\/g, '/');
+  // Hospital record files the backend downloads (cleared with the database above).
+  process.env.E2E_RECORDS = path.join(os.tmpdir(), `dedan-e2e-records-${Date.now()}`);
 }
 const e2eDatabase = process.env.E2E_DB;
+// Record files come from tests/fake-hospital.mjs, as the hospital API would serve them.
+export const E2E_PLATFORM_KEY = 'e2e-platform-key';
+export const FAKE_HOSPITAL_URL = 'http://127.0.0.1:8013';
 
 export default defineConfig({
   testDir: 'tests',
@@ -74,7 +79,17 @@ export default defineConfig({
         JITSI_APP_SECRET: 'e2e-jitsi-secret',
         SERVICE_FEE_FLAT_SANTIM: '500',
         SERVICE_FEE_PERCENT_BP: '0',
+        HOSPITAL_API_URL: FAKE_HOSPITAL_URL,
+        PLATFORM_ADMIN_KEY: E2E_PLATFORM_KEY,
+        RECORD_FILES_DIR: process.env.E2E_RECORDS ?? '',
       },
+    },
+    {
+      command: 'node tests/fake-hospital.mjs',
+      url: `${FAKE_HOSPITAL_URL}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      env: { PLATFORM_ADMIN_KEY: E2E_PLATFORM_KEY },
     },
     {
       command: 'node tests/fake-chapa.mjs',

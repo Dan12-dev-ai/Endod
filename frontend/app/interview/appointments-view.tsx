@@ -18,6 +18,7 @@ import {
   TIME_WINDOWS,
 } from "./data";
 import { RowBones, Skeleton } from "../components/skeleton";
+import { QueueCard } from "./care-cards";
 
 type Props = {
   /** data-purpose of a card to highlight (from a notification link). */
@@ -378,6 +379,8 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
               <span>{t("appointments.scheduleVisit")}</span>
             </button>
           </div>
+
+          <QueueCard />
 
           {/* Stat cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -8,11 +8,15 @@ import { useI18n, type TranslationKey } from "../lib/i18n";
 import { type Appointment, appointmentTitle, formatWhen } from "./data";
 import { Bone, HealthCardBones, InlineSkeleton, Skeleton } from "../components/skeleton";
 import HealthCardView from "../health-card/card-view";
+import { FollowUpCards, QueueCard } from "./care-cards";
+import type { BookingPreset } from "./history-data";
 import { invalidateHealthCard, loadHealthCard, type HealthCardInfo } from "../health-card/health-card-data";
 
 type Props = {
   firstName: string;
   onNavigate: (nav: string) => void;
+  /** "Book now" on a follow-up. */
+  onBook: (preset: BookingPreset) => void;
 };
 
 const SHORTCUTS: { nav: string; titleKey: TranslationKey; hintKey: TranslationKey }[] = [
@@ -23,7 +27,7 @@ const SHORTCUTS: { nav: string; titleKey: TranslationKey; hintKey: TranslationKe
 ];
 
 /** The landing screen: what is next, and where to go. */
-export default function HomeView({ firstName, onNavigate }: Props) {
+export default function HomeView({ firstName, onNavigate, onBook }: Props) {
   const { t, locale } = useI18n();
   const [next, setNext] = useState<Appointment | null | undefined>(undefined);
   // undefined while loading; null if it could not be loaded.
@@ -66,6 +70,10 @@ export default function HomeView({ firstName, onNavigate }: Props) {
           </h1>
           <p className="text-sm text-slate-500 mt-1">{t("home.subtitle")}</p>
         </div>
+
+        {/* Live: a place in today's queue, and follow-ups to book. */}
+        <QueueCard />
+        <FollowUpCards onBook={onBook} />
 
         {/* The card comes first: open the app, show the phone, get scanned. */}
         <section aria-labelledby="home-card-title" className="bg-white rounded-2xl border border-slate-200 card-shadow p-4 sm:p-6" data-purpose="home-card">

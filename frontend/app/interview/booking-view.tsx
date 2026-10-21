@@ -18,6 +18,7 @@ import {
   TIME_WINDOWS,
 } from "./data";
 import HospitalMap, { type MapPoint } from "./hospital-map";
+import type { BookingPreset } from "./history-data";
 import { RowBones, Skeleton } from "../components/skeleton";
 
 type Props = {
@@ -25,6 +26,10 @@ type Props = {
   onToast: (title: string, message: string) => void;
   /** Open the Wallet section (to add money). */
   onOpenWallet?: () => void;
+  /** From "Book now" on a follow-up: open booking at this hospital on this day. */
+  preset?: BookingPreset | null;
+  /** The preset was applied (so it is not applied again). */
+  onPresetUsed?: () => void;
 };
 
 type Coords = { latitude: number; longitude: number };
@@ -37,7 +42,7 @@ function todayLocal(offsetDays = 0): string {
 }
 
 /** Hospital directory and in-person booking (GET /users/me/care/facilities, POST /users/me/appointments). */
-export default function BookingView({ patientId, onToast, onOpenWallet }: Props) {
+export default function BookingView({ patientId, onToast, onOpenWallet, preset, onPresetUsed }: Props) {
   const { t, locale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [department, setDepartment] = useState("");
@@ -138,6 +143,25 @@ export default function BookingView({ patientId, onToast, onOpenWallet }: Props)
     const first = facility.departments[0];
     setBookingDepartment(first ? (facility.partner ? first : departmentLabel(first, t)) : "");
   };
+
+  // "Book now" on a follow-up: the hospital chosen, the follow-up day filled
+  // in (the patient may pick an earlier one).
+  useEffect(() => {
+    if (!preset) return;
+    let cancelled = false;
+    api<Facility>(`users/me/care/facilities/${encodeURIComponent(preset.hospitalId)}`)
+      .then((facility) => {
+        if (cancelled) return;
+        openBooking(facility);
+        setBookingDate(preset.date < todayLocal() ? todayLocal(1) : preset.date);
+      })
+      .catch(() => !cancelled && onToast(t("followUp.unavailableTitle"), t("followUp.unavailable")))
+      .finally(() => !cancelled && onPresetUsed?.());
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when a preset arrives
+  }, [preset]);
 
   // What the visit costs at a partner hospital, for the mode chosen.
   useEffect(() => {
