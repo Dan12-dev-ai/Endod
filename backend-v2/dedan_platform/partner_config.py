@@ -54,6 +54,25 @@ def redis_min_replicas() -> int:
     return max(0, _int("REDIS_MIN_REPLICAS", 0))
 
 
+# --- the hospital service's API and patient records (docs/history-events.md) ---
+
+def hospital_api_url() -> Optional[str]:
+    """The hospital service's private API (over endod-bus), e.g. http://endod-hospital-api:8000."""
+    value = _get("HOSPITAL_API_URL")
+    return value.rstrip("/") if value else None
+
+
+def platform_admin_key() -> Optional[str]:
+    """Shared with the hospital service: sent to its /platform API and required
+    on this API's /internal endpoints. Unset: both are refused."""
+    return _get("PLATFORM_ADMIN_KEY")
+
+
+def record_files_dir() -> str:
+    """Where the platform keeps its copies of hospital record files (a volume)."""
+    return _get("RECORD_FILES_DIR", "/data/records") or "/data/records"
+
+
 # --- the care directory ---
 
 def demo_directory() -> bool:

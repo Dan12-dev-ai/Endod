@@ -74,6 +74,11 @@ def _stale_reason(job: Dict[str, Any]) -> Optional[str]:
     from dedan_platform.models import Appointment
     from dedan_platform.appointments import TERMINAL_STATUSES
 
+    from dedan_platform import patient_sms
+
+    if patient_sms.handles(job):
+        # Booking decisions, refunds, follow-ups and queues: their own checks.
+        return patient_sms.stale_reason(job)
     payload = job.get("payload") or {}
     appointment_id = job.get("appointment_id") or payload.get("appointment_id")
     if appointment_id:
@@ -99,7 +104,10 @@ def _stale_reason(job: Dict[str, Any]) -> Optional[str]:
 def _deliver_sms(job: Dict[str, Any], provider) -> str:
     attempt = job.get("attempts", 0) + 1
     try:
-        message_id = provider.send(job["destination"], sms.render_sms_reminder(job.get("payload") or {}))
+        from dedan_platform import patient_sms
+
+        text = patient_sms.render(job) if patient_sms.handles(job) else sms.render_sms_reminder(job.get("payload") or {})
+        message_id = provider.send(job["destination"], text)
     except sms.SmsProviderError as exc:
         return notifications.mark_failed(job["id"], str(exc), attempt)
     except Exception as exc:

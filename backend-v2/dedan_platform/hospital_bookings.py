@@ -203,6 +203,21 @@ def _inbox(user_id: str, kind: str, title: str, body: str, appointment_id: Optio
                    link_id=appointment_id)
 
 
+def _sms(session: Session, appointment: Appointment, template: str, amount: Optional[int] = None) -> None:
+    """Text the patient about their booking (queued in this transaction, sent
+    once by the notification worker): when it is, never where or why."""
+    from dedan_platform import patient_sms
+
+    try:
+        local = ensure_aware(appointment.scheduled_at).astimezone(_zone(appointment.timezone or "UTC"))
+    except AppointmentError:
+        local = ensure_aware(appointment.scheduled_at)
+    exact = (appointment.time_window or "exact") == "exact"
+    when = f"{local:%d/%m/%Y %H:%M}" if exact else f"{local:%d/%m/%Y}"
+    patient_sms.to_account(session, appointment.user_id, template, f"sms:booking:{appointment.id}:{template}",
+                           {"booking_id": appointment.id, "when": when, "amount": amount})
+
+
 def _refund(session: Session, appointment: Appointment, why: str) -> int:
     """Pay back the price and fee (once, whatever retries) and void the hospital's share."""
     amount = (appointment.price or 0) + (appointment.service_fee or 0)
@@ -244,6 +259,10 @@ def cancel_by_patient(user_id: str, appointment_id: str, correlation_id: Optiona
         _close(session, appointment, HospitalState.CANCELLED, "Cancelled by you.")
         eventbus.emit(session, "appointment.cancelled", {
             "appointment_id": appointment.id, "hospital_id": appointment.hospital_id, "by": "patient"})
+        if refunded:
+            from dedan_platform import patient_sms
+
+            _sms(session, appointment, patient_sms.REFUND, refunded)
         session.flush()
     payload = _to_payload(appointment)
 
@@ -296,6 +315,9 @@ def on_confirmed(session: Session, payload: Dict[str, Any]) -> None:
     if decision.doctor_name:
         appointment.provider_name = decision.doctor_name
     update_appointment_event(session, appointment.user_id, appointment.id, EventStatus.CONFIRMED)
+    from dedan_platform import patient_sms
+
+    _sms(session, appointment, patient_sms.BOOKING_CONFIRMED)
     if was_video:
         user_id, appointment_id = appointment.user_id, appointment.id
         body = f"{decision.doctor_name or 'A doctor'} will see you. Join from Appointments at the visit time."
@@ -317,6 +339,11 @@ def _hospital_closed(session: Session, payload: Dict[str, Any], state: str, titl
         return
     refunded = _refund(session, appointment, f"Refund: {title.lower()}")
     _close(session, appointment, state, decision.reason)
+    from dedan_platform import patient_sms
+
+    # The hospital's reason stays in the app: it may say why, clinically.
+    _sms(session, appointment, patient_sms.BOOKING_DECLINED if state == HospitalState.REJECTED
+         else patient_sms.BOOKING_CANCELLED, refunded)
     user_id, appointment_id = appointment.user_id, appointment.id
     reason = f" Reason: {decision.reason}" if decision.reason else ""
     body = f"{wallet.birr(refunded)} birr is back in your balance.{reason}"
@@ -424,6 +451,9 @@ def refund_unanswered() -> int:
             _close(session, appointment, HospitalState.CANCELLED, "The hospital did not answer in time.")
             eventbus.emit(session, "appointment.cancelled", {
                 "appointment_id": appointment.id, "hospital_id": appointment.hospital_id, "by": "endod"})
+            from dedan_platform import patient_sms
+
+            _sms(session, appointment, patient_sms.BOOKING_UNANSWERED, amount)
             user_id = appointment.user_id
         refunded += 1
         logger.warning("booking_unanswered_refunded appointment=%s", appointment_id)

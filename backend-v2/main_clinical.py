@@ -364,6 +364,8 @@ def create_app(settings = None) -> FastAPI:
     from dedan_platform.api_health import router as platform_health_router
     from dedan_platform.api_notifications import router as platform_notifications_router
     from dedan_platform.api_records import router as platform_records_router
+    from dedan_platform.api_history import internal_router as platform_internal_router
+    from dedan_platform.api_history import router as platform_history_router
     from dedan_platform.api_inbox import router as platform_inbox_router
     from dedan_platform.api_profile import router as platform_profile_router
     from dedan_platform.db import create_all
@@ -377,6 +379,9 @@ def create_app(settings = None) -> FastAPI:
     app.include_router(platform_inbox_router)
     app.include_router(platform_cards_router)
     app.include_router(platform_payments_router)
+    app.include_router(platform_history_router)
+    # For the hospital service only (X-Platform-Key, private network).
+    app.include_router(platform_internal_router)
 
     # Additive and idempotent; migrations remain required before schema
     # changes reach production.

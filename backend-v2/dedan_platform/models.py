@@ -881,3 +881,165 @@ class ProcessedEvent(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     type: Mapped[str] = mapped_column(String(64), nullable=False)
     processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+# ===========================================================================
+# Patient history from partner hospitals (docs/history-events.md)
+# ===========================================================================
+
+class HospitalLink(Base):
+    """A hospital's patient record linked to an Endod account (contract section 1)."""
+
+    __tablename__ = "hospital_links"
+    __table_args__ = (UniqueConstraint("hospital_id", "patient_id", name="uq_hospital_links_patient"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: The hospital's own id for the patient.
+    patient_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class HospitalRecord(Base):
+    """A clinical record published by a partner hospital (contract section 2).
+
+    Only the highest ``version`` is kept. A retracted record stays (for the
+    audit trail) but is never shown or shared.
+    """
+
+    __tablename__ = "hospital_records"
+    __table_args__ = (Index("ix_hospital_records_user_occurred", "user_id", "occurred_at"),)
+
+    #: The hospital's record id (32 hex).
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    hospital_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    visit_id: Mapped[Optional[str]] = mapped_column(String(32))
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    details_json: Mapped[Optional[str]] = mapped_column(Text)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    recorded_by: Mapped[Optional[str]] = mapped_column(String(160))
+    source: Mapped[str] = mapped_column(String(8), nullable=False, default="portal")
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    retracted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    retracted_reason: Mapped[Optional[str]] = mapped_column(String(300))
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class RecordFileStatus:
+    #: Not downloaded yet (or a retry is due).
+    PENDING = "pending"
+    #: A worker is downloading it.
+    DOWNLOADING = "downloading"
+    STORED = "stored"
+    #: Gave up after the last retry.
+    FAILED = "failed"
+    #: No longer part of the record (a correction dropped it).
+    REMOVED = "removed"
+
+
+class RecordFile(Base):
+    """A file attached to a hospital record, and the platform's copy of it."""
+
+    __tablename__ = "record_files"
+    __table_args__ = (
+        UniqueConstraint("record_id", "file_id", name="uq_record_files_record_file"),
+        Index("ix_record_files_due", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    record_id: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    #: The hospital's file id (32 hex).
+    file_id: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    filename: Mapped[str] = mapped_column(String(200), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default=RecordFileStatus.PENDING)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    last_error: Mapped[Optional[str]] = mapped_column(String(300))
+    stored_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class FollowUp(Base):
+    """A follow-up visit a hospital doctor set (contract section 3)."""
+
+    __tablename__ = "follow_ups"
+    __table_args__ = (UniqueConstraint("hospital_id", "visit_id", name="uq_follow_ups_visit"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    hospital_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    visit_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: YYYY-MM-DD (the hospital's calendar day).
+    follow_up_on: Mapped[str] = mapped_column(String(10), nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(String(500))
+    doctor_name: Mapped[Optional[str]] = mapped_column(String(120))
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: When the hospital sent the newest change applied (the envelope time),
+    #: so a change delivered late never overwrites a newer one.
+    event_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class QueueEntry(Base):
+    """The latest known state of one place in a hospital queue (contract section 4)."""
+
+    __tablename__ = "queue_entries"
+
+    #: The hospital's entry id (32 hex).
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    #: Null for a walk-in without an Endod account.
+    user_id: Mapped[Optional[str]] = mapped_column(String(32), index=True)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    hospital_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    doctor_name: Mapped[Optional[str]] = mapped_column(String(120))
+    day: Mapped[str] = mapped_column(String(10), index=True, nullable=False)
+    ticket: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(12), nullable=False)
+    ahead: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class RecordShare(Base):
+    """Records the patient shared with a partner hospital (contract section 5)."""
+
+    __tablename__ = "record_shares"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    hospital_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: When ``records.unshared`` was queued (revoked, or expired).
+    unshared_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class RecordShareItem(Base):
+    """One record in a share: a hospital record or a self-reported one."""
+
+    __tablename__ = "record_share_items"
+    __table_args__ = (UniqueConstraint("share_id", "record_id", name="uq_record_share_items"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    share_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("record_shares.id", ondelete="CASCADE"), index=True, nullable=False)
+    #: "hospital" (hospital_records.id) or "self" (health_events.id).
+    kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    record_id: Mapped[str] = mapped_column(String(32), nullable=False)
