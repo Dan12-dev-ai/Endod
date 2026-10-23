@@ -142,3 +142,18 @@ secret equals `JITSI_APP_SECRET`), open **UDP 10000** on the firewall, then
 `hospital.endod-health.com` (the hospital portal) and
 `meet.endod-health.com` (video). Each needs a proxied DNS record in
 Cloudflare pointing at the server.
+
+## Pharmacy site (pharmacy.endod-health.com)
+
+The pharmacy site (github.com/Habtamu-Semagn/pharmacy_scanner) runs from
+`deploy/pharmacy/docker-compose.yml`, with its code checked out at
+`/opt/endod-pharmacy/app`:
+
+    cd /opt/endod/deploy/pharmacy
+    docker compose --env-file ../.env up -d --build
+
+It reads `PHARMACY_API_KEY` from the platform's `.env` (the same key the
+internal API checks) and calls only the platform's internal API on endod-bus.
+The shared nginx sends it `pharmacy.endod-health.com` and sets
+`X-Endod-Client-IP` (Cloudflare's header only for Cloudflare's addresses), the
+only client address the site trusts for rate limits.
