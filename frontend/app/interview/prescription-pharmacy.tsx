@@ -6,6 +6,20 @@ import { type TranslationKey, useI18n } from "../lib/i18n";
 import { type Dispensing, rows, text } from "./history-data";
 
 /**
+ * The record's medicines by their index in the hospital's list
+ * (`item_index`, kept when the platform drops an empty item). Records stored
+ * before that carry none: their position is their index.
+ */
+function byIndex(items: Record<string, unknown>[]): Map<number, Record<string, unknown>> {
+  const out = new Map<number, Record<string, unknown>>();
+  items.forEach((medicine, position) => {
+    const index = medicine.item_index;
+    out.set(typeof index === "number" && Number.isInteger(index) && index >= 0 ? index : position, medicine);
+  });
+  return out;
+}
+
+/**
  * A hospital prescription at the pharmacy (docs/pharmacy.md section 3): the
  * QR to scan, the 6-digit code (shown with the patient's phone number),
  * until when it works, what has been given of each medicine, and where.
@@ -14,7 +28,7 @@ import { type Dispensing, rows, text } from "./history-data";
 export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details: Record<string, unknown> }) {
   const { t, locale } = useI18n();
   const [qr, setQr] = useState<string | null>(null);
-  const medicines = rows(details.items);
+  const medicines = byIndex(rows(details.items));
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +110,7 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
       {rx.items.length > 0 && (
         <ul className="space-y-1.5" data-purpose="rx-items">
           {rx.items.map((item) => {
-            const medicine = medicines[item.item_index] ?? {};
+            const medicine = medicines.get(item.item_index) ?? {};
             return (
               <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-xl bg-white border border-slate-200 px-3 py-2" data-purpose="rx-item" data-status={item.status} key={item.item_index}>
                 <span className="min-w-0 text-sm font-medium text-slate-800 break-words">

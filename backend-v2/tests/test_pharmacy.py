@@ -164,6 +164,17 @@ def test_quantity_parsing():
     assert parse_quantity(" 2.5 ml") == 2.5
     assert parse_quantity("0 tablets") is None
     assert parse_quantity("tablets: 21") is None
+    # Thousands separators.
+    assert parse_quantity("1,000 tablets") == 1000
+    assert parse_quantity("1,000") == 1000
+    assert parse_quantity("2,500,000 IU") == 2_500_000
+    assert parse_quantity("1,000.5 ml") == 1000.5
+    assert parse_quantity("1.5 ml") == 1.5
+    assert parse_quantity("21, then review") == 21
+    # A comma that is not a thousands group is ambiguous: no count.
+    assert parse_quantity("1,5 ml") is None
+    assert parse_quantity("1,0000") is None
+    assert parse_quantity("12,34") is None
     assert parse_quantity("") is None and parse_quantity(None) is None
 
 
@@ -569,20 +580,33 @@ def test_no_code_text_to_an_unverified_phone(client, bus):
     assert texts("sms_rx_code") == []
 
 
+PHISHING_NAMES = ["Call 0911-234-567 now", "bit.ly/x", "t.me/x", "Visit www.evil.example now"]
+
+
 def test_each_dispense_texts_and_tells_the_inbox(client, patient, bus, pharmacy):
-    record_id = publish(bus, patient)
+    record_id = publish(bus, patient, items=[{"drug": "Amoxicillin", "quantity": "100 tablets"}])
     deliver_due()  # the code text
-    assert dispense(pharmacy, give(record_id, (0, 7, False))).status_code == 200
-    assert dispense(pharmacy, give(record_id, (0, 7, False), name="Visit www.evil.example now")).status_code == 200
+    names = ["Kenema Pharmacy", *PHISHING_NAMES]
+    for name in names:
+        assert dispense(pharmacy, give(record_id, (0, 7, False), name=name)).status_code == 200
     delivered = [t for _phone, t in deliver_due()]
-    assert len(delivered) == 2
-    assert delivered[0] == f"{BRAND}: medicine from your prescription was given at Kenema Pharmacy."
-    assert delivered[1] == f"{BRAND}: medicine from your prescription was given at a pharmacy."
-    assert all("Amoxicillin" not in t for t in delivered)
+    assert len(delivered) == len(names)
+    # Never the pharmacy's name (typed at the counter): one fixed text, Amharic then English.
+    am, en = delivered[0].split("\n")
+    assert en == f"{BRAND}: medicine from your prescription was given at a pharmacy. Details in the {BRAND} app."
+    assert BRAND in am and "Pharmacy" not in am
+    assert set(delivered) == {delivered[0]}
+    for text in delivered:
+        assert "Kenema" not in text and "Amoxicillin" not in text
+        assert not any(bad in text for bad in ("0911", "bit.ly", "t.me", "www", "evil"))
     inbox = client.get("/users/me/inbox", headers=patient["auth"]).json()["items"]
     given = [i for i in inbox if i["kind"] == "prescription_dispensed"]
-    assert len(given) == 2 and given[-1]["title"] == "Medicine given at Kenema Pharmacy"
-    assert given[0]["link"] == {"screen": "history", "id": record_id}
+    assert len(given) == len(names)
+    # A generic title; the name only in the body, labelled as entered.
+    assert {i["title"] for i in given} == {"Medicine given at a pharmacy"}
+    bodies = {i["body"] for i in given}
+    assert "Pharmacy (as entered): Kenema Pharmacy. Open your prescription in History to see what is left." in bodies
+    assert all(i["link"] == {"screen": "history", "id": record_id} for i in given)
     assert all("Amoxicillin" not in (i["title"] + (i["body"] or "")) for i in given)
 
 
@@ -627,3 +651,40 @@ def test_history_shows_the_qr_code_expiry_and_dispenses(client, patient, bus, ph
     rx = next(i for i in items if i["id"] == record_id)["dispensing"]
     assert rx["status"] == "completed" and rx["qr_url"] is None and rx["code"] is None
     assert len(rx["dispenses"]) == 2
+
+
+def test_item_index_is_the_hospitals_position_end_to_end(client, patient, bus, pharmacy):
+    """[A, {}, B]: the empty item is dropped, and B keeps index 2 in the
+    record, the lookup, a dispense, the hospital event and corrections."""
+    a = {"drug": "Amoxicillin", "quantity": "21 tablets"}
+    b = {"drug": "Zinc", "quantity": "10 tablets"}
+    record_id = publish(bus, patient, items=[a, {}, b])
+    history_item = next(i for i in client.get("/users/me/history", headers=patient["auth"]).json()["items"]
+                        if i["id"] == record_id)
+    assert [(m["drug"], m["item_index"]) for m in history_item["details"]["items"]] == [("Amoxicillin", 0), ("Zinc", 2)]
+    assert [i["item_index"] for i in history_item["dispensing"]["items"]] == [0, 2]
+
+    body = lookup(pharmacy, {"token": token(record_id)}).json()
+    assert [(i["item_index"], i["drug"], i["quantity_total"]) for i in body["items"]] == [
+        (0, "Amoxicillin", 21), (2, "Zinc", 10)]
+    # There is no item 1 to give.
+    assert dispense(pharmacy, give(record_id, (1, 1, False))).status_code == 422
+    given = dispense(pharmacy, give(record_id, (2, 4, False)))
+    assert given.status_code == 200
+    zinc = next(i for i in given.json()["items"] if i["item_index"] == 2)
+    assert (zinc["drug"], zinc["given_total"], zinc["status"]) == ("Zinc", 4, "partly_given")
+    run_worker(bus)
+    assert sent(bus, "prescription.dispensed")[-1]["items"] == [
+        {"item_index": 2, "amount": 4, "complete": False, "given_total": 4, "status": "partly_given"}]
+
+    # A correction that fills in the gap: B is still item 2, its given amount kept.
+    publish(bus, patient, record_id=record_id, version=2,
+            items=[a, {"drug": "ORS", "quantity": "2 sachets"}, dict(b, quantity="12 tablets")])
+    body = lookup(pharmacy, {"token": token(record_id)}).json()
+    assert [(i["item_index"], i["drug"], i["quantity_total"], i["given_total"]) for i in body["items"]] == [
+        (0, "Amoxicillin", 21, None), (1, "ORS", 2, None), (2, "Zinc", 12, 4)]
+    # And one that empties it again: item 1 drops, item 2 is still Zinc.
+    publish(bus, patient, record_id=record_id, version=3, items=[a, {"drug": None}, dict(b, quantity="12 tablets")])
+    body = lookup(pharmacy, {"token": token(record_id)}).json()
+    assert [(i["item_index"], i["drug"], i["given_total"]) for i in body["items"]] == [
+        (0, "Amoxicillin", None), (2, "Zinc", 4)]

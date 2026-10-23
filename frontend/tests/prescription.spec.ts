@@ -50,12 +50,16 @@ test.describe('Prescriptions at the pharmacy', () => {
     await expect(items.nth(0).locator('[data-purpose="rx-item-status"]')).toHaveText('14 of 21 given');
     await expect(items.nth(1).locator('[data-purpose="rx-item-status"]')).toHaveText('Not given yet');
     await expect(panel.locator('[data-purpose="rx-dispense"]')).toHaveCount(1);
-    await expect(panel.locator('[data-purpose="rx-dispense"]')).toContainText('Kenema Pharmacy');
+    await expect(panel.locator('[data-purpose="rx-dispense"]')).toContainText('Pharmacy (as entered): Kenema Pharmacy');
+    // The typed name is plain text, never a link.
+    await expect(panel.locator('[data-purpose="rx-dispenses"] a')).toHaveCount(0);
 
-    // The dispense reached the inbox, without the medicine's name.
+    // The dispense reached the inbox, without the medicine's name: a generic
+    // title, the pharmacy only in the body, labelled as entered.
     const inbox = await (await page.request.get('/api/backend/users/me/inbox')).json();
     const notice = inbox.items.find((i: { kind: string }) => i.kind === 'prescription_dispensed');
-    expect(notice.title).toBe('Medicine given at Kenema Pharmacy');
+    expect(notice.title).toBe('Medicine given at a pharmacy');
+    expect(notice.body).toContain('Pharmacy (as entered): Kenema Pharmacy.');
     expect(JSON.stringify(notice)).not.toContain('Amoxicillin');
 
     // The rest of the first medicine, at another pharmacy.

@@ -74,9 +74,18 @@ never call it directly.
 
 On each hospital prescription in History: the QR (large, for scanning), the
 6-digit code, expiry, per-item status ("14 of 21 given" / "Given" / "Not
-given yet") and the list of dispenses ("Kenema Pharmacy, 23 Oct 14:10").
-Inbox item + SMS on each dispense ("Endod: medicine from your prescription
-was given at <pharmacy>." no drug names).
+given yet") and the list of dispenses ("Pharmacy (as entered): Kenema
+Pharmacy, 23 Oct 14:10").
+On each dispense, an SMS (Amharic then English: "Endod: medicine from your
+prescription was given at a pharmacy. Details in the Endod app.") and an
+inbox item ("Medicine given at a pharmacy"). Neither names a drug. The SMS
+never names the pharmacy. In the inbox body and History, the pharmacy's
+name is shown only as plain text (never a link), labelled as entered by the
+pharmacy.
+
+Items are identified by `item_index`, the item's position in the
+hospital's list as sent. Empty items the platform drops do not shift the
+others.
 
 ## 4. Platform -> hospital
 

@@ -58,7 +58,10 @@ _EPSILON = 1e-9
 
 _TOKEN_RE = re.compile(r"^([0-9a-f]{32})\.([A-Za-z0-9_-]{22})$")
 _CODE_RE = re.compile(r"^[0-9]{6}$")
-_LEADING_NUMBER = re.compile(r"^\s*(\d{1,7}(?:\.\d{1,3})?)(?![\d.])")
+#: A leading count: "21", "2.5", or with thousands commas "1,000" / "1,000,000".
+#: A comma followed by a digit that is not a thousands group ("1,5") is
+#: ambiguous, so there is no count.
+_LEADING_NUMBER = re.compile(r"^\s*((?:\d{1,3}(?:,\d{3}){1,2}|\d{1,7})(?:\.\d{1,3})?)(?![\d.]|,\d)")
 
 OPEN, COMPLETED, EXPIRED, RETRACTED = "open", "completed", "expired", "retracted"
 NOT_GIVEN, PARTLY_GIVEN, GIVEN = "not_given", "partly_given", "given"
@@ -112,13 +115,14 @@ def valid_code(code: Any) -> bool:
 # --- quantities, expiry, statuses ----------------------------------------------------------
 
 def parse_quantity(text: Optional[str]) -> Optional[float]:
-    """The leading number of a quantity as written ("21 tablets" -> 21), or None."""
+    """The leading number of a quantity as written ("21 tablets" -> 21,
+    "1,000 tablets" -> 1000), or None."""
     if not text:
         return None
     match = _LEADING_NUMBER.match(text)
     if match is None:
         return None
-    value = float(match.group(1))
+    value = float(match.group(1).replace(",", ""))
     return value if value > 0 else None
 
 
@@ -188,13 +192,27 @@ def _withdraw(session: Session, rx: Prescription) -> None:
     patient_sms.cancel_prefix(session, f"sms:rx:{rx.id}:")
 
 
+def by_index(items: Any) -> Dict[int, Dict[str, Any]]:
+    """A prescription's cleaned items by their index in the hospital's list
+    (``item_index``, kept by patient_history.clean_details so a dropped empty
+    item never shifts the others). Records stored before that have no
+    ``item_index``: their position is their index."""
+    out: Dict[int, Dict[str, Any]] = {}
+    for position, medicine in enumerate(items if isinstance(items, list) else []):
+        if not isinstance(medicine, dict):
+            continue
+        index = medicine.get("item_index")
+        out[index if isinstance(index, int) and not isinstance(index, bool) and index >= 0 else position] = medicine
+    return out
+
+
 def _sync_items(session: Session, rx: Prescription, details: Dict[str, Any]) -> None:
-    """Items by index: given amounts kept, quantities as the record now says."""
-    medicines = details.get("items") if isinstance(details.get("items"), list) else []
+    """Items by the hospital's index: given amounts kept, quantities as the record now says."""
+    medicines = by_index(details.get("items"))
     existing = {item.item_index: item for item in session.scalars(
         select(PrescriptionItem).where(PrescriptionItem.rx_id == rx.id))}
-    for index, medicine in enumerate(medicines):
-        quantity = medicine.get("quantity") if isinstance(medicine, dict) else None
+    for index, medicine in sorted(medicines.items()):
+        quantity = medicine.get("quantity")
         item = existing.pop(index, None)
         if item is None:
             item = PrescriptionItem(rx_id=rx.id, item_index=index, given_total=None, completed=False)
@@ -281,13 +299,12 @@ def on_record_retracted(session: Session, record: HospitalRecord) -> None:
 
 # --- what pharmacies and the patient see ---------------------------------------------------
 
-def _medicines(record: HospitalRecord) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+def _medicines(record: HospitalRecord) -> Tuple[Dict[int, Dict[str, Any]], Optional[str]]:
     try:
         details = json.loads(record.details_json) if record.details_json else {}
     except ValueError:
         details = {}
-    items = details.get("items") if isinstance(details.get("items"), list) else []
-    return [m if isinstance(m, dict) else {} for m in items], details.get("notes")
+    return by_index(details.get("items")), details.get("notes")
 
 
 def _age(dob: Optional[datetime]) -> Optional[int]:
@@ -324,7 +341,7 @@ def pharmacy_view(session: Session, rx: Prescription, record: HospitalRecord) ->
     items = []
     if status != RETRACTED:  # entered in error: its contents are not shown again
         for item in _active_items(session, rx.id):
-            medicine = medicines[item.item_index] if item.item_index < len(medicines) else {}
+            medicine = medicines.get(item.item_index, {})
             items.append({
                 "item_index": item.item_index, "drug": medicine.get("drug"), "dose": medicine.get("dose"),
                 "route": medicine.get("route"), "frequency": medicine.get("frequency"),
@@ -427,18 +444,6 @@ def lookup(rx_id: str) -> Optional[Dict[str, Any]]:
 
 # --- dispensing -----------------------------------------------------------------------------
 
-def _sms_pharmacy_name(name: str) -> Optional[str]:
-    """The pharmacy's name for a text to the patient. Typed by anyone at a
-    pharmacy, so a name that looks like a link or a phone number (a way to
-    phish the patient in Endod's name) is left out."""
-    clean = " ".join(name.split())[:60]
-    lowered = clean.lower()
-    if re.search(r"\d{5,}", clean.replace(" ", "")) or any(
-            marker in lowered for marker in ("http", "www", "://", ".com", ".et", ".net", ".org", "@")):
-        return None
-    return clean or None
-
-
 def dispense(rx_id: str, *, pharmacy_name: str, pharmacist_name: Optional[str],
              items: List[Dict[str, Any]], idempotency_key: Optional[str] = None,
              before_apply=None) -> Dict[str, Any]:
@@ -522,13 +527,18 @@ def dispense(rx_id: str, *, pharmacy_name: str, pharmacist_name: Optional[str],
             "at": ensure_aware(now).isoformat(), "pharmacy_name": pharmacy_name,
             "status": COMPLETED if rx.status == COMPLETED else OPEN, "items": given,
         })
-        sms_name = _sms_pharmacy_name(pharmacy_name)
+        # The text never names the pharmacy: the name is typed by whoever is at
+        # the counter, and an SMS in Endod's name must not carry a number or a
+        # link they chose. The app shows it, labelled as entered.
         patient_sms.to_account(session, rx.user_id, patient_sms.RX_DISPENSED, f"sms:rx:{rx.id}:dispense:{row.id}",
-                               {"rx_id": rx.id, "pharmacy": sms_name or ""})
+                               {"rx_id": rx.id})
         after.append((rx.user_id, record.id, " ".join(pharmacy_name.split())))
     from dedan_platform import inbox
 
     for user_id, record_id, name in after:
-        inbox.add_item(user_id, "records", "prescription_dispensed", f"Medicine given at {name}"[:160],
-                       "Open your prescription in History to see what is left.", "history", record_id)
+        # A generic title; the name only in the body, plain text and labelled
+        # as the pharmacy entered it (it is not verified).
+        inbox.add_item(user_id, "records", "prescription_dispensed", "Medicine given at a pharmacy",
+                       f"Pharmacy (as entered): {name[:120]}. Open your prescription in History to see what is left.",
+                       "history", record_id)
     return response

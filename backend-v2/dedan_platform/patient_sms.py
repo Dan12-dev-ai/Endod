@@ -15,11 +15,11 @@ Rules for the text itself:
   phone, and a hospital's name can reveal the kind of care. The app shows
   the details after sign-in.
 
-Two exceptions, decided with the pharmacy contract (docs/pharmacy.md): a
-prescription's code (``RX_CODE``) names the hospital that wrote it, and is
-always Amharic, then English; a dispense (``RX_DISPENSED``) names the
-pharmacy as it was typed there (left out when it looks like a link or a
-phone number). Neither names a medicine.
+Decided with the pharmacy contract (docs/pharmacy.md): a prescription's
+code (``RX_CODE``) names the hospital that wrote it. It and a dispense
+(``RX_DISPENSED``) are always Amharic, then English. A dispense never names
+the pharmacy (typed by whoever is at the counter, so it could carry a phone
+number or a link). Neither names a medicine.
 
 One exception, not to a patient: a clinic's contact who booked an Endod demo
 (``DEMO_BOOKED``/``DEMO_MOVED``, see hospital_onboarding) is texted the
@@ -67,7 +67,7 @@ RX_CODE = "sms_rx_code"
 RX_DISPENSED = "sms_rx_dispensed"
 
 #: Always Amharic, then English (whatever the account's language).
-_BILINGUAL = frozenset({RX_CODE})
+_BILINGUAL = frozenset({RX_CODE, RX_DISPENSED})
 
 _TEXTS: Dict[str, Dict[str, str]] = {
     BOOKING_CONFIRMED: {
@@ -119,8 +119,8 @@ _TEXTS: Dict[str, Dict[str, str]] = {
         "am": "{brand}፦ ከ{hospital} የመድኃኒት ማዘዣ ኮድ {code}። በፋርማሲው ከስልክ ቁጥርዎ ጋር ያሳዩት።",
     },
     RX_DISPENSED: {
-        "en": "{brand}: medicine from your prescription was given at {pharmacy}.",
-        "am": "{brand}፦ ከማዘዣዎ መድኃኒት በ{pharmacy} ተሰጥቷል።",
+        "en": "{brand}: medicine from your prescription was given at a pharmacy. Details in the {brand} app.",
+        "am": "{brand}፦ ከማዘዣዎ መድኃኒት በፋርማሲ ተሰጥቷል። ዝርዝሩ በ{brand} መተግበሪያ ውስጥ ነው።",
     },
 }
 
@@ -162,7 +162,6 @@ def _render_one(template: str, params: Dict[str, Any], language: str) -> str:
     values = {"brand": BRAND, "when": when, "date": params.get("date", ""),
               "hospital": params.get("hospital", ""),
               "ticket": params.get("ticket", ""), "code": params.get("code", ""),
-              "pharmacy": params.get("pharmacy") or ("ፋርማሲ" if language == "am" else "a pharmacy"),
               "refund": _refund_text(params.get("amount"), language),
               "ahead_text": _ahead_text(params.get("ahead"), language)}
     return _TEXTS[template][language].format(**values)
