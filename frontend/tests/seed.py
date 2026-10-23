@@ -10,6 +10,10 @@
     python seed.py follow-up <dedan_id> <date>     the hospital sets a follow-up on <date> (YYYY-MM-DD)
     python seed.py queue <dedan_id> <entry> <seq> <ahead> <status>
                                                    the patient's place in today's queue (Africa/Addis_Ababa)
+    python seed.py prescription <dedan_id> <tag>   the hospital publishes a prescription ("Chest infection <tag>")
+    python seed.py dispense <tag> <pharmacy> <amount>
+                                                   a pharmacy gives <amount> of its first medicine
+                                                   (as internal-api's /pharmacy/dispense does)
 
 Uses the same handlers as the event worker, against DEDAN_DATABASE_URL. The
 patient is linked to the test hospital first (the platform accepts nothing
@@ -26,7 +30,7 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.getcwd())
 
-from dedan_platform import hospital_bookings, partners, patient_history, record_files  # noqa: E402
+from dedan_platform import hospital_bookings, partners, patient_history, prescriptions, record_files  # noqa: E402
 from dedan_platform.db import create_all, session_scope  # noqa: E402
 
 PARTNER_ID = "e2e0" * 8
@@ -82,6 +86,30 @@ def _records(dedan, tag):
     ]
 
 
+def _prescription(dedan, tag):
+    return {"record_id": uuid.uuid4().hex, "version": 1, "hospital_id": PARTNER_ID, "hospital_name": PARTNER_NAME,
+            "dedan_id": dedan, "visit_id": uuid.uuid4().hex, "category": "prescription",
+            "title": f"Chest infection {tag}",
+            "details": {"items": [
+                {"drug": "Amoxicillin", "dose": "500 mg", "route": "oral", "frequency": "three times a day",
+                 "duration": "7 days", "quantity": "21 tablets"},
+                {"drug": "Paracetamol syrup", "dose": "10 ml", "quantity": "1 bottle"}]},
+            "occurred_at": datetime.now(timezone.utc).isoformat(), "recorded_by": "Dr. Hiwot Bekele",
+            "source": "portal", "files": []}
+
+
+def _dispense(tag, pharmacy, amount):
+    from sqlalchemy import select
+
+    from dedan_platform.models import HospitalRecord, Prescription
+
+    with session_scope() as session:
+        rx_id = session.scalar(select(Prescription.id).join(HospitalRecord, HospitalRecord.id == Prescription.record_id)
+                               .where(HospitalRecord.title == f"Chest infection {tag}"))
+    prescriptions.dispense(rx_id, pharmacy_name=pharmacy, pharmacist_name=None,
+                           items=[{"item_index": 0, "amount": float(amount), "complete": False}])
+
+
 def _link(session, dedan):
     user = patient_history._user_by_dedan(session, dedan)
     if user is not None:
@@ -92,10 +120,12 @@ def main(argv):
     create_all()
     deferred = []
     with session_scope() as session:
-        if argv[0] in ("records", "records-arriving", "follow-up", "queue"):
+        if argv[0] in ("records", "records-arriving", "follow-up", "queue", "prescription"):
             _link(session, argv[1])
-        if argv[0] == "download":
+        if argv[0] in ("download", "dispense"):
             pass
+        elif argv[0] == "prescription":
+            patient_history.on_record_published(session, _prescription(argv[1], argv[2]))
         elif argv[0] == "partner":
             partners.on_listed(session, LISTING)
         elif argv[0] == "confirm":
@@ -125,6 +155,8 @@ def main(argv):
         deferred = list(session.info.get("after_commit", []))
     for action in deferred:
         action()
+    if argv[0] == "dispense":
+        _dispense(argv[1], argv[2], argv[3])
     if argv[0] in ("records", "download"):
         # What the events worker's download thread does.
         record_files.download_due()
