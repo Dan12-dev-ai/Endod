@@ -11,7 +11,9 @@ which keys the rate limits (counted in the database, see throttle.py):
 * token lookups: 60 per client per hour.
 
 A forged token, an unknown code and a phone that does not match all answer
-the same 404 "Not found".
+the same 404 "Not found". A dispense that cannot be applied answers 409
+``{"detail": {"status": <the prescription's status>, "message": ...}}``
+(over-dispensing an open one: status "open", the message says what is left).
 """
 
 from __future__ import annotations
@@ -104,6 +106,12 @@ class Dispense(Lookup):
         return _clean_name(value) or None
 
 
+def _conflict(status: str, message: str) -> JSONResponse:
+    """A 409 the pharmacy site reads: the prescription's status (open,
+    completed, expired, retracted) and why (e.g. how much is left)."""
+    return JSONResponse(status_code=409, content={"detail": {"status": status, "message": message}})
+
+
 def _not_found() -> HTTPException:
     return HTTPException(status_code=404, detail="Not found")
 
@@ -165,10 +173,9 @@ def dispense(body: Dispense, x_client_ip: Optional[str] = Header(default=None),
     except prescriptions.DispenseError as exc:
         if exc.status_code == 404:
             raise _not_found() from exc
-        content: Dict[str, Any] = {"detail": exc.detail}
-        if exc.prescription_status:
-            content["status"] = exc.prescription_status
-        return JSONResponse(status_code=exc.status_code, content=content)
+        if exc.status_code == 409:
+            return _conflict(exc.prescription_status or prescriptions.status_of(rx_id) or "open", exc.detail)
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
     except IntegrityError:
         # The same Idempotency-Key sent for two prescriptions at the same moment.
-        return JSONResponse(status_code=409, content={"detail": "This Idempotency-Key was used for another dispense."})
+        return _conflict(prescriptions.status_of(rx_id) or "open", "This Idempotency-Key was used for another dispense.")

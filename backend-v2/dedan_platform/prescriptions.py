@@ -65,7 +65,8 @@ NOT_GIVEN, PARTLY_GIVEN, GIVEN = "not_given", "partly_given", "given"
 
 
 class DispenseError(Exception):
-    """A dispense that cannot be applied; ``status_code`` is 409 or 422."""
+    """A dispense that cannot be applied; ``status_code`` is 404, 409 or 422.
+    A 409 always carries the prescription's status (``prescription_status``)."""
 
     def __init__(self, status_code: int, detail: str, prescription_status: Optional[str] = None) -> None:
         super().__init__(detail)
@@ -400,6 +401,13 @@ def find_by_code(code: Any, phone: Any) -> Optional[str]:
         return matches[0][0].id
 
 
+def status_of(rx_id: str) -> Optional[str]:
+    with session_scope() as session:
+        rx = session.get(Prescription, rx_id)
+        record = session.get(HospitalRecord, rx.record_id) if rx is not None else None
+        return current_status(rx, record) if rx is not None and record is not None else None
+
+
 def code_still_usable(rx_id: str) -> bool:
     """Whether a queued code text is still worth sending (checked just before)."""
     with session_scope() as session:
@@ -454,7 +462,8 @@ def dispense(rx_id: str, *, pharmacy_name: str, pharmacist_name: Optional[str],
                 PrescriptionDispense.idempotency_key == idempotency_key))
             if done is not None:
                 if done.rx_id != rx_id or not done.response_json:
-                    raise DispenseError(409, "This Idempotency-Key was used for another dispense.")
+                    raise DispenseError(409, "This Idempotency-Key was used for another dispense.",
+                                        current_status(rx, record))
                 return json.loads(done.response_json)
         status = current_status(rx, record)
         if status != OPEN:
@@ -473,12 +482,12 @@ def dispense(rx_id: str, *, pharmacy_name: str, pharmacist_name: Optional[str],
             if request.get("amount") is None and not request.get("complete"):
                 raise DispenseError(422, f"Item {index}: give an amount or mark it complete.")
             if item.status == GIVEN:
-                raise DispenseError(409, f"Item {index} has already been given.")
+                raise DispenseError(409, f"Item {index} has already been given.", status)
             amount = request.get("amount")
             if amount is not None and item.quantity_total is not None:
                 left = item.quantity_total - (item.given_total or 0)
                 if amount > left + _EPSILON:
-                    raise DispenseError(409, f"Item {index}: only {number(max(left, 0))} left to give.")
+                    raise DispenseError(409, f"Item {index}: only {number(max(left, 0))} left to give.", status)
 
         if before_apply is not None:
             before_apply()  # (tests) between checking what is left and giving it

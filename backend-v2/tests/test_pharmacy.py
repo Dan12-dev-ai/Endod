@@ -204,7 +204,7 @@ def test_expiry_is_30_days_at_the_end_of_the_day_in_addis(client, patient, bus, 
     body = lookup(pharmacy, {"token": token(old)}).json()
     assert body["status"] == "expired"
     refused = dispense(pharmacy, give(old, (0, 1, False)))
-    assert refused.status_code == 409 and refused.json()["status"] == "expired"
+    assert refused.status_code == 409 and refused.json()["detail"]["status"] == "expired"
     # Never texted: the code could not be used anyway.
     assert [t for t in texts("sms_rx_code") if t["payload"]["params"]["rx_id"] == entry(old)["rx_id"]] == []
 
@@ -378,6 +378,8 @@ def test_partial_then_complete_dispensing(client, patient, bus, pharmacy):
     assert items[2]["status"] == "not_given" and second.json()["status"] == "open"
 
     # "x": no count, so an amount is counted up, and "complete" finishes it.
+    given = dispense(pharmacy, give(record_id, (1, None, True)))
+    assert given.json() == {"detail": {"status": "open", "message": "Item 1 has already been given."}}
     third = dispense(pharmacy, give(record_id, (2, 2, False)))
     assert (third.json()["items"][2]["given_total"], third.json()["items"][2]["status"]) == (2, "partly_given")
     done = dispense(pharmacy, give(record_id, (2, None, True)))
@@ -387,7 +389,7 @@ def test_partial_then_complete_dispensing(client, patient, bus, pharmacy):
 
     # Completed: the QR and code stop dispensing; lookup still shows it.
     again = dispense(pharmacy, give(record_id, (0, 1, False)))
-    assert again.status_code == 409 and again.json()["status"] == "completed"
+    assert again.status_code == 409 and again.json()["detail"]["status"] == "completed"
     assert lookup(pharmacy, {"token": token(record_id)}).json()["status"] == "completed"
     code = entry(record_id)["code"]
     assert lookup(pharmacy, {"code": code, "phone": PHONE}).json()["status"] == "completed"
@@ -398,9 +400,11 @@ def test_more_than_is_left_is_refused(client, patient, bus, pharmacy):
     assert dispense(pharmacy, give(record_id, (0, 22, False))).status_code == 409
     assert dispense(pharmacy, give(record_id, (0, 20, False))).status_code == 200
     over = dispense(pharmacy, give(record_id, (0, 2, False)))
-    assert over.status_code == 409 and "1 left" in over.json()["detail"]
+    assert over.status_code == 409
+    assert over.json() == {"detail": {"status": "open", "message": "Item 0: only 1 left to give."}}
     # Nothing of a refused request is applied (all items or none).
-    assert dispense(pharmacy, give(record_id, (1, None, True), (0, 5, False))).status_code == 409
+    partly = dispense(pharmacy, give(record_id, (1, None, True), (0, 5, False)))
+    assert partly.status_code == 409 and partly.json()["detail"]["status"] == "open"
     body = lookup(pharmacy, {"token": token(record_id)}).json()
     assert body["items"][0]["given_total"] == 20 and body["items"][1]["status"] == "not_given"
     assert len(body["dispenses"]) == 1
@@ -438,7 +442,8 @@ def test_the_same_idempotency_key_dispenses_once(client, patient, bus, pharmacy)
     assert len(texts("sms_rx_dispensed")) == 1
     # The key cannot be reused for another prescription.
     other = publish(bus, patient)
-    assert dispense(pharmacy, give(other, (0, 1, False)), key=key).status_code == 409
+    reused = dispense(pharmacy, give(other, (0, 1, False)), key=key)
+    assert reused.status_code == 409 and reused.json()["detail"]["status"] == "open"
 
 
 def test_two_pharmacies_at_the_same_moment_cannot_over_give(client, patient, bus):
@@ -509,7 +514,7 @@ def test_a_retraction_closes_it(client, patient, bus, pharmacy):
     body = lookup(pharmacy, {"token": tok}).json()
     assert body["status"] == "retracted" and body["items"] == [] and body["notes"] is None
     refused = dispense(pharmacy, {"token": tok, "pharmacy_name": "Kenema", "items": [{"item_index": 0, "amount": 1}]})
-    assert refused.status_code == 409 and refused.json()["status"] == "retracted"
+    assert refused.status_code == 409 and refused.json()["detail"]["status"] == "retracted"
     assert entry(record_id)["active_code"] is None
     # The unsent code text is not sent.
     assert deliver_due() == []
