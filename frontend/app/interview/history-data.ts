@@ -30,6 +30,21 @@ export type HistoryItem = {
   visit_id: string | null;
   details: Record<string, unknown>;
   files: RecordFile[];
+  /** On a hospital prescription: its QR, code and what pharmacies gave (docs/pharmacy.md section 3). */
+  dispensing?: Dispensing | null;
+};
+
+export type RxItemStatus = "not_given" | "partly_given" | "given";
+
+export type Dispensing = {
+  rx_id: string;
+  status: "open" | "completed" | "expired" | "retracted";
+  expires_at: string;
+  /** Only while the prescription can still be used at a pharmacy. */
+  code: string | null;
+  qr_url: string | null;
+  items: { item_index: number; quantity_text: string | null; quantity_total: number | null; given_total: number | null; status: RxItemStatus }[];
+  dispenses: { at: string; pharmacy_name: string; items: { item_index: number; amount: number | null; complete: boolean }[] }[];
 };
 
 export type HistoryResponse = {

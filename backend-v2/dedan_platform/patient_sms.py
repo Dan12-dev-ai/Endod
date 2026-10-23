@@ -15,6 +15,12 @@ Rules for the text itself:
   phone, and a hospital's name can reveal the kind of care. The app shows
   the details after sign-in.
 
+Decided with the pharmacy contract (docs/pharmacy.md): a prescription's
+code (``RX_CODE``) names the hospital that wrote it. It and a dispense
+(``RX_DISPENSED``) are always Amharic, then English. A dispense never names
+the pharmacy (typed by whoever is at the counter, so it could carry a phone
+number or a link). Neither names a medicine.
+
 One exception, not to a patient: a clinic's contact who booked an Endod demo
 (``DEMO_BOOKED``/``DEMO_MOVED``, see hospital_onboarding) is texted the
 facility's own name, like a walk-in (no account; Amharic, then English).
@@ -57,6 +63,11 @@ QUEUE_NEAR = "sms_queue_near"
 QUEUE_TURN = "sms_queue_turn"
 DEMO_BOOKED = "sms_demo_booked"
 DEMO_MOVED = "sms_demo_moved"
+RX_CODE = "sms_rx_code"
+RX_DISPENSED = "sms_rx_dispensed"
+
+#: Always Amharic, then English (whatever the account's language).
+_BILINGUAL = frozenset({RX_CODE, RX_DISPENSED})
 
 _TEXTS: Dict[str, Dict[str, str]] = {
     BOOKING_CONFIRMED: {
@@ -103,6 +114,14 @@ _TEXTS: Dict[str, Dict[str, str]] = {
         "en": "{brand}: your demo for {hospital} has moved to {when}. We will call you then.",
         "am": "{brand}፦ ለ{hospital} የማሳያ ቀጠሮዎ ወደ {when} ተዛውሯል። በዚያ ሰዓት እንደውልልዎታለን።",
     },
+    RX_CODE: {
+        "en": "{brand}: prescription code {code} from {hospital}. Show it with your phone number at the pharmacy.",
+        "am": "{brand}፦ ከ{hospital} የመድኃኒት ማዘዣ ኮድ {code}። በፋርማሲው ከስልክ ቁጥርዎ ጋር ያሳዩት።",
+    },
+    RX_DISPENSED: {
+        "en": "{brand}: medicine from your prescription was given at a pharmacy. Details in the {brand} app.",
+        "am": "{brand}፦ ከማዘዣዎ መድኃኒት በፋርማሲ ተሰጥቷል። ዝርዝሩ በ{brand} መተግበሪያ ውስጥ ነው።",
+    },
 }
 
 TEMPLATES = frozenset(_TEXTS)
@@ -142,7 +161,7 @@ def _render_one(template: str, params: Dict[str, Any], language: str) -> str:
         when = when.get(language) or when.get("en", "")
     values = {"brand": BRAND, "when": when, "date": params.get("date", ""),
               "hospital": params.get("hospital", ""),
-              "ticket": params.get("ticket", ""),
+              "ticket": params.get("ticket", ""), "code": params.get("code", ""),
               "refund": _refund_text(params.get("amount"), language),
               "ahead_text": _ahead_text(params.get("ahead"), language)}
     return _TEXTS[template][language].format(**values)
@@ -153,8 +172,9 @@ def render(job: Dict[str, Any]) -> str:
     payload = job.get("payload") or {}
     params = payload.get("params") or {}
     template = job["template"]
-    if payload.get("walk_in"):
-        # No account, so no known language: Amharic first, then English.
+    if payload.get("walk_in") or template in _BILINGUAL:
+        # No account (so no known language), or a text the contract wants in
+        # both: Amharic first, then English.
         return f"{_render_one(template, params, 'am')}\n{_render_one(template, params, 'en')}"
     return _render_one(template, params, _language(payload.get("language")))
 
@@ -277,6 +297,11 @@ def stale_reason(job: Dict[str, Any]) -> Optional[str]:
             wanted = "waiting" if template == QUEUE_NEAR else "called"
             if entry is not None and entry.status != wanted:
                 return "queue_moved_on"
+    if template == RX_CODE:
+        from dedan_platform import prescriptions
+
+        if not prescriptions.code_still_usable(params.get("rx_id") or ""):
+            return "prescription_closed"
     if payload.get("walk_in"):
         return None
     try:

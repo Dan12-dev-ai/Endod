@@ -11,6 +11,7 @@ import {
   type RecordFile, rows, type Share, TABS, text,
 } from "./history-data";
 import { AddVisitModal, ShareModal, SharesList } from "./history-modals";
+import { PrescriptionPharmacy } from "./prescription-pharmacy";
 
 /** While a record file is still arriving, the page asks again this often... */
 const ARRIVING_POLL_MS = 10_000;
@@ -266,6 +267,9 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
                   {expanded && (
                     <div className="px-4 pb-4 pt-1 border-t border-slate-100 space-y-3" data-purpose="history-details">
                       <RecordDetails item={item} />
+                      {item.category === "prescription" && item.dispensing && (
+                        <PrescriptionPharmacy details={item.details} rx={item.dispensing} />
+                      )}
                       {item.files.length > 0 && (
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">{t("history.files")}</p>

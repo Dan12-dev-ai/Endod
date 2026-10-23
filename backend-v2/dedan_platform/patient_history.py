@@ -260,17 +260,24 @@ def _choice(value: Any, allowed: tuple) -> Optional[str]:
     return value if isinstance(value, str) and value in allowed else None
 
 
-def _items(value: Any, fields: Dict[str, int], limit: int, extra=None) -> List[Dict[str, Any]]:
+def _items(value: Any, fields: Dict[str, int], limit: int, extra=None,
+           keep_index: bool = False) -> List[Dict[str, Any]]:
+    """The hospital's items, cleaned; empty or malformed ones are dropped.
+    With ``keep_index``, each keeps its position in the hospital's list as
+    ``item_index``, so dropping one never shifts the others (prescriptions:
+    pharmacies and the hospital refer to medicines by that index)."""
     if not isinstance(value, list):
         return []
     out = []
-    for item in value[:limit]:
+    for position, item in enumerate(value[:limit]):
         if not isinstance(item, dict):
             continue
         clean = {key: _text(item.get(key), size) for key, size in fields.items()}
         if extra:
             clean.update(extra(item))
         if any(v is not None for v in clean.values()):
+            if keep_index:
+                clean["item_index"] = position
             out.append(clean)
     return out
 
@@ -286,7 +293,8 @@ def clean_details(category: str, details: Dict[str, Any]) -> Dict[str, Any]:
                 "notes": _text(d.get("notes"), long)}
     if category == "prescription":
         return {"items": _items(d.get("items"), {"drug": short, "dose": 80, "route": 40, "frequency": 80,
-                                                 "duration": 80, "quantity": 40, "notes": 500}, 50),
+                                                 "duration": 80, "quantity": 40, "notes": 500}, 50,
+                                keep_index=True),
                 "notes": _text(d.get("notes"), long)}
     if category == "lab_result":
         return {"items": _items(d.get("items"), {"test": short, "value": 80, "unit": 40, "reference_range": 80},
@@ -347,6 +355,14 @@ def on_record_published(session: Session, payload: Dict[str, Any]) -> None:
     row.source = published.source
     row.version = published.version
     row.updated_at = utcnow()
+    cleaned = json.loads(row.details_json)
+    session.flush()
+    if published.category == "prescription" or not is_new:
+        # Its dispensing entry (docs/pharmacy.md): issued, corrected, or
+        # withdrawn when a correction made it something else.
+        from dedan_platform import prescriptions
+
+        prescriptions.on_prescription_stored(session, row, cleaned)
 
     existing = {f.file_id: f for f in session.scalars(
         select(RecordFile).where(RecordFile.record_id == published.record_id).with_for_update())}
@@ -421,6 +437,9 @@ def on_record_retracted(session: Session, payload: Dict[str, Any]) -> None:
     row.retracted_at = utcnow()
     row.retracted_reason = retracted.reason
     row.updated_at = utcnow()
+    from dedan_platform import prescriptions
+
+    prescriptions.on_record_retracted(session, row)
 
 
 # --- 3. follow-ups -----------------------------------------------------------------------------

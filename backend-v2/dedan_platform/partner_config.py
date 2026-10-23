@@ -68,6 +68,19 @@ def platform_admin_key() -> Optional[str]:
     return _get("PLATFORM_ADMIN_KEY")
 
 
+def pharmacy_api_key() -> Optional[str]:
+    """Shared with the pharmacy site's server: required as ``X-Pharmacy-Key``
+    on internal-api's /pharmacy endpoints (docs/pharmacy.md). Unset: refused."""
+    return _get("PHARMACY_API_KEY")
+
+
+def rx_signing_key() -> Optional[str]:
+    """Signs prescription QR tokens (docs/pharmacy.md section 1). Separate from
+    the card key. Unset: no QR is issued and every token is refused (the
+    6-digit code still works)."""
+    return _get("RX_SIGNING_KEY")
+
+
 def record_files_dir() -> str:
     """Where the platform keeps its copies of hospital record files (a volume)."""
     return _get("RECORD_FILES_DIR", "/data/records") or "/data/records"

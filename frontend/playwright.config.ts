@@ -82,6 +82,8 @@ export default defineConfig({
         HOSPITAL_API_URL: FAKE_HOSPITAL_URL,
         PLATFORM_ADMIN_KEY: E2E_PLATFORM_KEY,
         RECORD_FILES_DIR: process.env.E2E_RECORDS ?? '',
+        // Signs the prescription QR codes History shows.
+        RX_SIGNING_KEY: 'e2e-rx-signing-key',
       },
     },
     {

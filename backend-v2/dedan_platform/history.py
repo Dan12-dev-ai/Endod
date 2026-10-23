@@ -87,6 +87,13 @@ def list_history(user_id: str) -> Dict[str, Any]:
                     .order_by(RecordFile.filename)):
                 files.setdefault(row.record_id, []).append(row)
         items = [hospital_item(r, files.get(r.id, [])) for r in records]
+        # A prescription's QR, code and what pharmacies have given (docs/pharmacy.md section 3).
+        from dedan_platform import prescriptions
+
+        dispensing = prescriptions.patient_views(session, records)
+        for item in items:
+            if item["category"] == "prescription":
+                item["dispensing"] = dispensing.get(item["id"])
         for event in session.scalars(select(HealthEvent).where(
                 HealthEvent.user_id == user_id, HealthEvent.event_type == HealthEventType.CONSULTATION,
         ).order_by(HealthEvent.occurred_at.desc()).limit(MAX_ITEMS)):
