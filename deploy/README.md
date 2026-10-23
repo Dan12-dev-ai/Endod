@@ -107,6 +107,28 @@ docker compose exec backend ls /data/records | head
 docker compose logs events-worker | grep record_file
 ```
 
+### Prescriptions at pharmacies
+
+The contract is `docs/pharmacy.md`. Each hospital prescription gets a QR code
+and a 6-digit code (texted once to the patient's verified phone); any
+pharmacy can look it up and record what it gives, partly or in full, until
+everything is given, it expires (30 days) or the hospital retracts it.
+
+- The pharmacy site's server calls `internal-api` (`endod-platform-api` on
+  `endod-bus`) at `/pharmacy/lookup` and `/pharmacy/dispense` with
+  `X-Pharmacy-Key`, and passes the pharmacist's address in `X-Client-IP`
+  (rate limits, counted in the database). The patient API does not serve
+  `/pharmacy`.
+- Set `PHARMACY_API_KEY` (the same value as the pharmacy site's) and
+  `RX_SIGNING_KEY` in `deploy/.env`. Compose gives the pharmacy key to
+  `internal-api` only, and the signing key to `internal-api` (checks QR codes)
+  and `backend` (shows them in History). Without the pharmacy key, `/pharmacy`
+  refuses every request; without the signing key, no QR is shown and only
+  the code works. Keep `RX_SIGNING_KEY` once set: changing it voids every QR
+  already issued.
+- Each dispense texts the patient, adds an inbox item and sends
+  `prescription.dispensed` to the hospital service (through the events worker).
+
 ### Video (deploy/jitsi)
 
 Jitsi Meet at `meet.endod-health.com`, joined only with a token Endod signs

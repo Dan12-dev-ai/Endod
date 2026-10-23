@@ -45,6 +45,10 @@ services:
       # sign-in and SMS codes keep their own, much stricter limits.
       RATE_LIMIT_REQUESTS: "240"
       DEBUG: "false"
+      # Signs the prescription QR codes History shows (docs/pharmacy.md).
+      RX_SIGNING_KEY: ${RX_SIGNING_KEY:-}
+      # The pharmacy API is internal-api's only: the patient API never holds its key.
+      PHARMACY_API_KEY: ""
     volumes:
       - records:/data/records
     depends_on:
@@ -52,9 +56,11 @@ services:
         condition: service_healthy
 
   # The platform's internal API (backend-v2/main_internal.py): /internal/...
-  # (X-Platform-Key) and /health, nothing else. The only platform service on
-  # endod-bus, where the hospital service fetches shared record files from
-  # it as "endod-platform-api"; the patient API is not reachable from there.
+  # (X-Platform-Key), /pharmacy/... (X-Pharmacy-Key, docs/pharmacy.md) and
+  # /health, nothing else. The only platform service on endod-bus, where the
+  # hospital service fetches shared record files from it and the pharmacy
+  # site looks up and dispenses prescriptions, as "endod-platform-api"; the
+  # patient API is not reachable from there.
   internal-api:
     build:
       context: ..
@@ -68,6 +74,10 @@ services:
       # Nothing in front of it: a client's forwarded address is never believed.
       TRUST_PROXY_HEADERS: "false"
       RECORD_FILES_DIR: /data/records
+      # Required on /pharmacy (shared with the pharmacy site's server; unset:
+      # refused), and the key that checks the prescription QR tokens.
+      PHARMACY_API_KEY: ${PHARMACY_API_KEY:-}
+      RX_SIGNING_KEY: ${RX_SIGNING_KEY:-}
     volumes:
       # Serves files only; the events worker writes them.
       - records:/data/records:ro
@@ -200,6 +210,10 @@ services:
       REDIS_MIN_REPLICAS: "1"
       # Downloads hospital record files here; the API serves them from the same volume.
       RECORD_FILES_DIR: /data/records
+      # Issues prescription codes but never signs or checks a QR, nor serves
+      # pharmacies: neither key is needed here.
+      PHARMACY_API_KEY: ""
+      RX_SIGNING_KEY: ""
     volumes:
       - records:/data/records
     healthcheck:
