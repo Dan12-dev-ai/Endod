@@ -1046,3 +1046,93 @@ class RecordShareItem(Base):
     #: "hospital" (hospital_records.id) or "self" (health_events.id).
     kind: Mapped[str] = mapped_column(String(8), nullable=False)
     record_id: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+# ===========================================================================
+# Prescriptions at pharmacies (docs/pharmacy.md)
+# ===========================================================================
+
+class Prescription(Base):
+    """A hospital prescription's dispensing entry (contract section 1).
+
+    One per prescription record; a correction keeps it (same rx_id, QR and
+    code). Only when a correction moves the record to another patient is the
+    entry withdrawn and a new one issued, so the first patient's QR and code
+    never open the second patient's prescription.
+    """
+
+    __tablename__ = "prescriptions"
+
+    #: rx_id (32 hex): what the QR token signs.
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    record_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("hospital_records.id", ondelete="CASCADE"), index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
+    #: The 6-digit code, kept for the entry's life (lookups by code + phone).
+    code: Mapped[str] = mapped_column(String(6), index=True, nullable=False)
+    #: The same code while the entry is active, else null: unique, so no two
+    #: active prescriptions share a code.
+    active_code: Mapped[Optional[str]] = mapped_column(String(6), unique=True)
+    #: "open" or "completed"; "expired" and "retracted" are worked out on read.
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="open")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: Set when the record moved to another patient or stopped being a prescription.
+    withdrawn_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: Bumped by every dispense before anything is read: the row lock.
+    lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class PrescriptionItem(Base):
+    """One medicine on a prescription, matched to the record's items by index."""
+
+    __tablename__ = "prescription_items"
+    __table_args__ = (UniqueConstraint("rx_id", "item_index", name="uq_prescription_items_index"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    rx_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("prescriptions.id", ondelete="CASCADE"), index=True, nullable=False)
+    item_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    quantity_text: Mapped[Optional[str]] = mapped_column(String(40))
+    quantity_total: Mapped[Optional[float]] = mapped_column(Float)
+    given_total: Mapped[Optional[float]] = mapped_column(Float)
+    #: A pharmacist marked it given ("complete"), whatever the count.
+    completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: "not_given" | "partly_given" | "given"
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default="not_given")
+    #: A correction dropped this item (its given amount is kept, should it return).
+    removed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class PrescriptionDispense(Base):
+    """Medicine given at a pharmacy (contract section 2, ``/pharmacy/dispense``)."""
+
+    __tablename__ = "prescription_dispenses"
+
+    #: dispense_id (32 hex), sent to the hospital.
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    rx_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("prescriptions.id", ondelete="CASCADE"), index=True, nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    #: As the pharmacist typed it (not verified).
+    pharmacy_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    pharmacist_name: Mapped[Optional[str]] = mapped_column(String(120))
+    #: [{"item_index", "amount", "complete"}]
+    items_json: Mapped[str] = mapped_column(Text, nullable=False)
+    #: The pharmacy site's Idempotency-Key: a repeat returns ``response_json``.
+    idempotency_key: Mapped[Optional[str]] = mapped_column(String(36), unique=True)
+    response_json: Mapped[Optional[str]] = mapped_column(Text)
+
+
+class ThrottleHit(Base):
+    """One attempt counted against a rate limit (see throttle.py). In the
+    database, so every process and replica shares the limits."""
+
+    __tablename__ = "throttle_hits"
+    __table_args__ = (Index("ix_throttle_hits_bucket_at", "bucket", "at"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    bucket: Mapped[str] = mapped_column(String(120), nullable=False)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True, nullable=False)

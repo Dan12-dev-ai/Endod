@@ -347,6 +347,14 @@ def on_record_published(session: Session, payload: Dict[str, Any]) -> None:
     row.source = published.source
     row.version = published.version
     row.updated_at = utcnow()
+    cleaned = json.loads(row.details_json)
+    session.flush()
+    if published.category == "prescription" or not is_new:
+        # Its dispensing entry (docs/pharmacy.md): issued, corrected, or
+        # withdrawn when a correction made it something else.
+        from dedan_platform import prescriptions
+
+        prescriptions.on_prescription_stored(session, row, cleaned)
 
     existing = {f.file_id: f for f in session.scalars(
         select(RecordFile).where(RecordFile.record_id == published.record_id).with_for_update())}
@@ -421,6 +429,9 @@ def on_record_retracted(session: Session, payload: Dict[str, Any]) -> None:
     row.retracted_at = utcnow()
     row.retracted_reason = retracted.reason
     row.updated_at = utcnow()
+    from dedan_platform import prescriptions
+
+    prescriptions.on_record_retracted(session, row)
 
 
 # --- 3. follow-ups -----------------------------------------------------------------------------
