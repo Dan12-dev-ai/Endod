@@ -36,7 +36,8 @@ export default function PwaInstallButton() {
     () => true,
     () => false,
   );
-  const [hidden, setHidden] = useState(false);
+  // Dismissed on this path only: coming back to a page shows it again.
+  const [hiddenOn, setHiddenOn] = useState<string | null>(null);
   const [bottomMode, setBottomMode] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.sessionStorage.getItem("pwa-install-bottom") === "1";
@@ -51,7 +52,7 @@ export default function PwaInstallButton() {
         // ignore
       }
     } else {
-      setHidden(true);
+      setHiddenOn(window.location.pathname);
     }
   };
   const [installed, setInstalled] = useState<boolean>(() => isStandaloneMode());
@@ -99,10 +100,7 @@ export default function PwaInstallButton() {
   const isLanding = pathname === "/";
   const bottomPlacement = bottomMode && isLanding;
 
-  useEffect(() => {
-    setHidden(false);
-  }, [pathname]);
-
+  const hidden = hiddenOn === pathname;
   if (!isClient || installed || hidden || pathname !== "/") return null;
 
   const handleInstall = async () => {
@@ -125,8 +123,8 @@ export default function PwaInstallButton() {
   return (
     <>
       {!open && !installed && (
-        <div className={bottomPlacement ? "fixed bottom-4 right-4 z-[60]" : "fixed top-4 inset-x-0 z-[60] flex justify-center px-4"}>
-        <div className="inline-flex items-center gap-1 rounded-full bg-orange-500 text-white pl-4 pr-2 py-2 text-sm font-semibold shadow-lg">
+        <div className={bottomPlacement ? "fixed bottom-4 right-4 z-[60]" : "pointer-events-none fixed top-4 inset-x-0 z-[60] flex justify-center px-4"}>
+        <div className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-orange-500 text-white pl-4 pr-2 py-2 text-sm font-semibold shadow-lg">
           <button
             type="button"
             onClick={() => {
