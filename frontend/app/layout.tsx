@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Newsreader, Plus_Jakarta_Sans } from "next/font/google";
 import { I18nProvider, LANGUAGE_INIT_SCRIPT } from "./lib/i18n";
 import "./globals.css";
@@ -54,7 +55,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-full flex flex-col">
         <I18nProvider>{children}</I18nProvider>
-        <PwaInstallButton />
+        {/* It reads the path: outside Suspense, pages like /card/[id] cannot be prerendered. */}
+        <Suspense fallback={null}>
+          <PwaInstallButton />
+        </Suspense>
       </body>
     </html>
   );
