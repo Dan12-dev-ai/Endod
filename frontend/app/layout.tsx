@@ -42,6 +42,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
+        {/* Captures the PWA install prompt as early as possible, before React hydrates. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              `(function(){if(typeof window==="undefined")return;window.addEventListener("beforeinstallprompt",function(e){try{e.preventDefault();}catch(_){}window.__pwaDeferredPrompt=e;});})();`,
+          }}
+        />
         {/* Applies the stored language to <html lang> before the first paint. */}
         <script dangerouslySetInnerHTML={{ __html: LANGUAGE_INIT_SCRIPT }} />
       </head>
