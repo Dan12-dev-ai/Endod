@@ -67,8 +67,11 @@ export function AddVisitModal({ onClose, onSaved, onOpenSettings }: {
   const input = "w-full text-sm rounded-xl border border-slate-200 px-3 py-2";
   return (
     <div data-purpose="record-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div aria-labelledby="record-modal-title" aria-modal="true" role="dialog" className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
-        <h3 id="record-modal-title" className="text-lg font-bold text-slate-900">{t("records.modal.title")}</h3>
+      <div aria-labelledby="record-modal-title" aria-modal="true" role="dialog" className="relative bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
+        <button type="button" onClick={onClose} aria-label="Close" className="absolute top-3 right-3 p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+        <h3 id="record-modal-title" className="text-lg font-bold text-slate-900 pr-8">{t("records.modal.title")}</h3>
         <p className="text-xs text-slate-500 mt-0.5">{t("records.modal.subtitle")}</p>
         <form onSubmit={submit} className="space-y-3 mt-4">
           <div className="grid grid-cols-2 gap-3">

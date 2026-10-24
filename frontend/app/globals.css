@@ -97,3 +97,16 @@ body {
   border-color: #1e5852;
   box-shadow: 0 0 0 2px rgba(30, 88, 82, 0.15);
 }
+
+/* ===== Landing page: partners marquee ===== */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+.animate-marquee {
+  animation: marquee 20s linear infinite;
+}

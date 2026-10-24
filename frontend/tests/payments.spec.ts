@@ -56,7 +56,8 @@ test.describe('Endod balance and paid bookings', () => {
     await page.locator('[data-purpose="deposit-submit"]').click();
     // Below the 10 birr minimum: the form does not submit.
     expect(await page.locator('#deposit-amount').evaluate((el: HTMLInputElement) => el.validity.rangeUnderflow)).toBe(true);
-    await expect(page).toHaveURL(/\/interview$/);
+    // The open section is kept in the address, so a refresh stays on the wallet.
+    await expect(page).toHaveURL(/\/interview(\?section=wallet)?$/);
 
     await page.locator('#deposit-amount').fill('500');
     await page.locator('[data-purpose="deposit-submit"]').click();

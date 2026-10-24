@@ -174,12 +174,12 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
         </div>
 
         {/* Tabs, search, dates */}
-        <div className="bg-white rounded-2xl border border-slate-200 card-shadow p-3 sm:p-4 space-y-3">
-          <div role="tablist" aria-label={t("history.categories")} className="flex gap-1.5 overflow-x-auto -mx-1 px-1 pb-1">
+        <div className="bg-white rounded-2xl border border-slate-200 card-shadow p-3 sm:p-4 space-y-3 mt-2">
+          <div role="tablist" aria-label={t("history.categories")} className="flex gap-2.5 overflow-x-auto -mx-1 px-1 pb-1">
             {TABS.map((item) => (
               <button
                 aria-selected={tab === item.id}
-                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-semibold border transition ${tab === item.id ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-semibold border transition ${tab === item.id ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
                 data-purpose={`history-tab-${item.id}`}
                 key={item.id}
                 onClick={() => setTab(item.id)}
