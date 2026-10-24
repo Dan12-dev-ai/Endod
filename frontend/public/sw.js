@@ -1,5 +1,5 @@
 /* Endod Health service worker */
-const CACHE_NAME = "endod-shell-v3";
+const CACHE_NAME = "endod-shell-v4";
 const OFFLINE_URL = "/";
 
 self.addEventListener("install", (event) => {
@@ -28,8 +28,10 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
 
-  // Never cache API or auth calls.
+  // Only Endod's own files: other sites (the video server, Chapa) are left
+  // to the browser. Never cache API or auth calls.
   const url = new URL(request.url);
+  if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
 
   // Navigation requests: always the network. Only the public landing page is
