@@ -1,5 +1,5 @@
 /* Endod Health service worker */
-const CACHE_NAME = "endod-shell-v2";
+const CACHE_NAME = "endod-shell-v3";
 const OFFLINE_URL = "/";
 
 self.addEventListener("install", (event) => {
@@ -32,16 +32,20 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.pathname.startsWith("/api/")) return;
 
-  // Navigation requests: network first, fall back to cache.
+  // Navigation requests: always the network. Only the public landing page is
+  // kept for offline use; signed-in pages (records, the printable history)
+  // are never stored, so nothing personal stays on a shared device.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined);
+          if (url.pathname === OFFLINE_URL && response.ok && !response.redirected) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(OFFLINE_URL, copy)).catch(() => undefined);
+          }
           return response;
         })
-        .catch(() => caches.match(request).then((r) => r || caches.match(OFFLINE_URL))),
+        .catch(() => caches.match(OFFLINE_URL)),
     );
     return;
   }
