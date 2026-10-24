@@ -147,9 +147,9 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
           </div>
         </section>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer">
-            <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.nextAppointment")}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.nextAppointment")}</p>
             {next === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
                 <Bone className="h-5 w-2/3 rounded mt-1.5" />
@@ -157,29 +157,29 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
               </InlineSkeleton>
             ) : (
               <>
-                <h2 className="text-base font-bold text-slate-900 mt-1 group-hover:text-white">
+                <h2 className="text-lg font-bold text-slate-900 mt-1 group-hover:text-white">
                   {next ? formatWhen(next.scheduled_at, locale) : t("home.noneScheduled")}
                 </h2>
-                {next && <p className="text-xs text-emerald-600 font-medium mt-0.5 group-hover:text-emerald-300">{appointmentTitle(next, t)}</p>}
+                {next && <p className="text-sm text-emerald-600 font-medium mt-0.5 group-hover:text-emerald-300">{appointmentTitle(next, t)}</p>}
               </>
             )}
           </button>
-<button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer">
-            <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.notifications")}</p>
+<button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.notifications")}</p>
             {unread === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
                 <Bone className="h-5 w-1/2 rounded mt-1.5" />
               </InlineSkeleton>
             ) : (
-              <h2 className="text-base font-bold text-slate-900 mt-1 group-hover:text-white">
+              <h2 className="text-lg font-bold text-slate-900 mt-1 group-hover:text-white">
                 {unread === null ? "—" : unread === 0 ? t("home.upToDate") : t("home.unread", { count: unread })}
               </h2>
             )}
           </button>
           {SHORTCUTS.map((s) => (
-<button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white p-5 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer">
-              <h3 className="text-sm font-bold text-slate-900 group-hover:text-white">{t(s.titleKey)}</h3>
-              <p className="text-xs text-slate-500 mt-1 group-hover:text-slate-300">{t(s.hintKey)}</p>
+<button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+              <h3 className="text-base font-bold text-slate-900 group-hover:text-white">{t(s.titleKey)}</h3>
+              <p className="text-sm text-slate-500 mt-1 group-hover:text-slate-300">{t(s.hintKey)}</p>
             </button>
           ))}
         </div>

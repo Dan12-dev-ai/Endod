@@ -202,14 +202,14 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
         </div>
 
         {/* Category filter (counts are unread) */}
-        <div className="flex items-center space-x-2 overflow-x-auto pb-2">
+        <div className="flex items-center gap-3 overflow-x-auto pb-2">
           {[{ id: "all" as const, label: t("notifications.all"), count: unread.total }, ...CATEGORIES.map((c) => ({ id: c.id, label: t(c.labelKey), count: unread.byCategory[c.id] ?? 0 }))].map((pill) => (
             <button
               key={pill.id}
               type="button"
               data-purpose={`notif-filter-${pill.id}`}
               onClick={() => setFilter(pill.id)}
-              className={`px-3.5 py-1.5 rounded-full text-xs whitespace-nowrap transition flex items-center space-x-1.5 ${filter === pill.id ? "font-semibold bg-emerald-600 text-white shadow-xs" : "font-medium bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"}`}
+              className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition flex items-center gap-1.5 ${filter === pill.id ? "font-semibold bg-black text-white shadow-xs" : "font-medium bg-white text-slate-600 hover:bg-slate-50 border border-slate-200"}`}
             >
               <span>{pill.label}{pill.count ? ` (${pill.count})` : ""}</span>
             </button>

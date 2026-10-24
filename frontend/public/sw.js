@@ -1,5 +1,5 @@
 /* Endod Health service worker */
-const CACHE_NAME = "endod-shell-v1";
+const CACHE_NAME = "endod-shell-v2";
 const OFFLINE_URL = "/";
 
 self.addEventListener("install", (event) => {
@@ -46,7 +46,25 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets: cache first.
+  // Static assets: cache first, except JS bundles which are network-first so
+  // code updates (and the section-restore fix) are never stuck behind a stale
+  // cache after a normal refresh.
+  const isScript = request.destination === "script" || url.pathname.endsWith(".js");
+  if (isScript) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok && url.origin === self.location.origin) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined);
+          }
+          return response;
+        })
+        .catch(() => caches.match(request)),
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;

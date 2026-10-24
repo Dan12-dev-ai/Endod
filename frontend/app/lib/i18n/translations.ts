@@ -97,6 +97,9 @@ export const en = {
   "buildLab.findHospital": "Find a hospital",
   "buildLab.imageAlt": "Endod AI symptom conversation",
 
+  "partners.title": "Trusted by healthcare partners",
+  "partners.subtitle": "Hospitals, clinics and health organizations we work with",
+
   "cloudLab.badge": "FOR HOSPITALS",
   "cloudLab.title": "Reach the right hospital, faster",
   "cloudLab.subtitle": "An interactive map of nearby hospitals paired with live crowd levels",
@@ -968,6 +971,9 @@ export const am: Dictionary = {
   "buildLab.cta": "ምርመራ ጀምር",
   "buildLab.findHospital": "ሆስፒታል ፈልግ",
   "buildLab.imageAlt": "የእንዶድ AI የምልክት ውይይት",
+
+  "partners.title": "በጤና አጋሮቻችን የታመነ",
+  "partners.subtitle": "የምንሠራባቸው ሆስፒታሎች፣ ክሊኒኮችና የጤና ድርጅቶች",
 
   "cloudLab.badge": "ለሆስፒታሎች",
   "cloudLab.title": "ትክክለኛውን ሆስፒታል በፍጥነት ይድረሱ",

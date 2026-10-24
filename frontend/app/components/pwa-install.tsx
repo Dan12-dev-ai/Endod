@@ -35,8 +35,22 @@ export default function PwaInstallButton() {
     () => true,
     () => false,
   );
+  const [bottomMode, setBottomMode] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem("pwa-install-bottom") === "1";
+  });
+
+  const dismissFloating = () => {
+    setBottomMode(true);
+    try {
+      window.sessionStorage.setItem("pwa-install-bottom", "1");
+    } catch {
+      // ignore
+    }
+  };
   const [installed, setInstalled] = useState<boolean>(() => isStandaloneMode());
   const [open, setOpen] = useState(false);
+
   const [ios] = useState<boolean>(() => isIosSafari());
 
   useEffect(() => {
@@ -96,27 +110,43 @@ export default function PwaInstallButton() {
 
   return (
     <>
-      {!open && (
-        <button
-          type="button"
-          onClick={() => {
-            if (deferred || (window as any).__pwaDeferredPrompt) {
-              void handleInstall();
-            } else {
-              setOpen(true);
-            }
-          }}
-          className="fixed bottom-4 right-4 z-[60] inline-flex items-center gap-2 rounded-full bg-white text-black px-4 py-2.5 text-sm font-semibold shadow-lg hover:bg-neutral-200 transition-colors"
-          aria-label="Install app"
-          data-purpose="pwa-install"
-          data-testid="install-app"
-          id="pwa-install-button"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
-          </svg>
-          Install app
-        </button>
+      {!open && !installed && (
+        <div className={bottomMode ? "fixed bottom-4 right-4 z-[60]" : "fixed top-4 inset-x-0 z-[60] flex justify-center px-4"}>
+        <div className="inline-flex items-center gap-1 rounded-full bg-orange-500 text-white pl-4 pr-2 py-2 text-sm font-semibold shadow-lg">
+          <button
+            type="button"
+            onClick={() => {
+              if (deferred || (window as any).__pwaDeferredPrompt) {
+                void handleInstall();
+              } else {
+                setOpen(true);
+              }
+            }}
+            className="inline-flex items-center gap-2 hover:opacity-80 transition-opacity"
+            aria-label="Install app"
+            data-purpose="pwa-install"
+            data-testid="install-app"
+            id="pwa-install-button"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" />
+            </svg>
+            Install app
+          </button>
+          {!bottomMode && (
+            <button
+              type="button"
+              onClick={dismissFloating}
+            aria-label="Dismiss install prompt"
+            className="p-1 text-white/70 hover:text-white rounded-full hover:bg-white/10 transition"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          )}
+        </div>
+        </div>
       )}
 
       {open && (
@@ -168,7 +198,7 @@ export default function PwaInstallButton() {
                 <button
                   type="button"
                   onClick={handleInstall}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-black hover:bg-neutral-800 rounded-lg transition"
+                  className="px-4 py-2 text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition"
                   data-purpose="pwa-install"
                   data-testid="install-app"
                   id="pwa-install-button"
@@ -179,7 +209,7 @@ export default function PwaInstallButton() {
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="px-4 py-2 text-sm font-semibold text-white bg-black hover:bg-neutral-800 rounded-lg transition"
+                  className="px-4 py-2 text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition"
                 >
                   Got it
                 </button>

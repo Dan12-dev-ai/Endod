@@ -21,15 +21,48 @@ export default function Interview() {
     if (saved !== language) setLanguage(saved);
   };
   const [activeNav, setActiveNav] = useState("home");
+  const restoredNavRef = useRef(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [emergencyOpen, setEmergencyOpen] = useState(false);
   const closeEmergency = useCallback(() => setEmergencyOpen(false), []);
-  // Back from a payment page: /interview?section=wallet&deposit=<id>.
+  // Synchronously persist + reflect the active section in the URL/sessionStorage.
+  // Using a helper (instead of an effect) guarantees the address bar updates the
+  // moment a section is chosen, so refreshes never fall back to Home.
+  const navigateTo = useCallback((nav: string) => {
+    setActiveNav(nav);
+    try {
+      window.sessionStorage.setItem("dedan:interview:activeNav", nav);
+    } catch {
+      // ignore
+    }
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("section", nav);
+      window.history.replaceState({}, "", url);
+    } catch {
+      // ignore
+    }
+  }, []);
+  // Restore the active section on first load (URL first, then sessionStorage).
   useEffect(() => {
+    if (restoredNavRef.current) return;
+    restoredNavRef.current = true;
     const section = new URLSearchParams(window.location.search).get("section");
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- read the address once, on arrival
-    if (section === "wallet") setActiveNav("wallet");
+    const valid = new Set(["home", "booking", "wallet", "appointment", "followup", "message", "setting"]);
+    let restored: string | null = null;
+    if (section && valid.has(section)) restored = section;
+    else {
+      try {
+        const saved = window.sessionStorage.getItem("dedan:interview:activeNav");
+        if (saved && valid.has(saved)) restored = saved;
+      } catch {
+        // ignore
+      }
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (restored) navigateTo(restored);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // Shared: which card/record a notification click should highlight on the target page
   const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
@@ -38,7 +71,7 @@ export default function Interview() {
   const bookFollowUp = (preset: BookingPreset) => {
     setHighlightTarget(null);
     setBookingPreset(preset);
-    setActiveNav("booking");
+    navigateTo("booking");
   };
 
   const navItems: { id: string; labelKey: TranslationKey; icon: React.ReactNode }[] = [
@@ -98,7 +131,7 @@ export default function Interview() {
   // A notification opens another screen and highlights its card there.
   const openNotifTarget = (nav: string, target: string | null) => {
     setHighlightTarget(target);
-    setActiveNav(nav);
+    navigateTo(nav);
   };
 
   // Reset notification state when navigating away
@@ -248,7 +281,7 @@ export default function Interview() {
                     e.preventDefault();
                     // Sidebar navigation never carries a notification highlight.
                     setHighlightTarget(null);
-                    setActiveNav(item.id);
+                    navigateTo(item.id);
                   }}
                   className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-sm font-medium cursor-pointer"
                 >
@@ -276,7 +309,7 @@ export default function Interview() {
           {/* ===== Booking View ===== */}
           {activeNav === "booking" && (
             <BookingView
-              onOpenWallet={() => setActiveNav("wallet")}
+              onOpenWallet={() => navigateTo("wallet")}
               onPresetUsed={() => setBookingPreset(null)}
               onToast={showToast}
               patientId={healthCard?.userId ?? ""}
@@ -315,7 +348,7 @@ export default function Interview() {
               onToast={showToast}
               onOpenSettings={() => {
                 setHighlightTarget(null);
-                setActiveNav("setting");
+                navigateTo("setting");
               }}
             />
           )}
@@ -330,7 +363,7 @@ export default function Interview() {
               onBook={bookFollowUp}
               onNavigate={(nav) => {
                 setHighlightTarget(null);
-                setActiveNav(nav);
+                navigateTo(nav);
               }}
             />
           )}
@@ -352,7 +385,7 @@ export default function Interview() {
                 key={item.id}
                 onClick={() => {
                   setHighlightTarget(null);
-                  setActiveNav(item.id);
+                  navigateTo(item.id);
                 }}
                 type="button"
               >
