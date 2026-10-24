@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -35,17 +36,22 @@ export default function PwaInstallButton() {
     () => true,
     () => false,
   );
+  const [hidden, setHidden] = useState(false);
   const [bottomMode, setBottomMode] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     return window.sessionStorage.getItem("pwa-install-bottom") === "1";
   });
 
   const dismissFloating = () => {
-    setBottomMode(true);
-    try {
-      window.sessionStorage.setItem("pwa-install-bottom", "1");
-    } catch {
-      // ignore
+    if (isLanding) {
+      setBottomMode(true);
+      try {
+        window.sessionStorage.setItem("pwa-install-bottom", "1");
+      } catch {
+        // ignore
+      }
+    } else {
+      setHidden(true);
     }
   };
   const [installed, setInstalled] = useState<boolean>(() => isStandaloneMode());
@@ -89,7 +95,15 @@ export default function PwaInstallButton() {
     };
   }, []);
 
-  if (!isClient || installed) return null;
+  const pathname = usePathname();
+  const isLanding = pathname === "/";
+  const bottomPlacement = bottomMode && isLanding;
+
+  useEffect(() => {
+    setHidden(false);
+  }, [pathname]);
+
+  if (!isClient || installed || hidden || pathname !== "/") return null;
 
   const handleInstall = async () => {
     const promptEvent =
@@ -111,7 +125,7 @@ export default function PwaInstallButton() {
   return (
     <>
       {!open && !installed && (
-        <div className={bottomMode ? "fixed bottom-4 right-4 z-[60]" : "fixed top-4 inset-x-0 z-[60] flex justify-center px-4"}>
+        <div className={bottomPlacement ? "fixed bottom-4 right-4 z-[60]" : "fixed top-4 inset-x-0 z-[60] flex justify-center px-4"}>
         <div className="inline-flex items-center gap-1 rounded-full bg-orange-500 text-white pl-4 pr-2 py-2 text-sm font-semibold shadow-lg">
           <button
             type="button"
@@ -133,7 +147,7 @@ export default function PwaInstallButton() {
             </svg>
             Install app
           </button>
-          {!bottomMode && (
+          {!bottomPlacement && (
             <button
               type="button"
               onClick={dismissFloating}

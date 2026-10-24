@@ -154,7 +154,7 @@ export default function Interview() {
 
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth >= 1024) setMobileSidebarOpen(false);
+      setMobileSidebarOpen(false);
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
@@ -165,24 +165,12 @@ export default function Interview() {
       {/* ===== Main Header ===== */}
       <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center space-x-3 sm:space-x-6">
-<button
-            aria-label={t("interview.openMenu")}
-            className="lg:hidden p-2 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none"
-            onClick={() => setMobileSidebarOpen(true)}
-            type="button"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
           <button
             type="button"
             aria-label={t("interview.openMenu")}
             onClick={() => {
               if (typeof window !== "undefined" && window.innerWidth >= 1024) {
                 setDesktopSidebarOpen((prev) => !prev);
-              } else {
-                setMobileSidebarOpen((prev) => !prev);
               }
             }}
             className="flex items-center space-x-2.5 sm:space-x-3 focus:outline-none"
@@ -208,13 +196,13 @@ export default function Interview() {
             <span className="hidden sm:inline">{t("emergency.button")}</span>
           </button>
           <LanguageSwitcher tone="light" />
-          <div className="flex items-center space-x-2 pl-1 sm:pl-2 py-1">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0">
+          <div className="hidden lg:flex items-center space-x-2 pl-1 sm:pl-2 py-1">
+            <div className="hidden lg:flex w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-emerald-100 items-center justify-center text-emerald-700 flex-shrink-0">
               <svg className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-700" fill="currentColor" viewBox="0 0 20 20">
                 <path clipRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" fillRule="evenodd" />
               </svg>
             </div>
-            <div className="text-left text-xs leading-tight hidden xs:block sm:block">
+            <div className="text-left text-xs leading-tight hidden lg:block">
               <div className="font-bold text-slate-800 flex items-center">
                 {healthCard?.fullName ?? ""}
                 <svg className="w-3.5 h-3.5 text-slate-500 ml-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -248,7 +236,7 @@ export default function Interview() {
       {/* ===== Body Content ===== */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* ===== Sidebar ===== */}
-<aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out flex flex-col justify-between p-4 flex-shrink-0 shadow-2xl ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"} ${desktopSidebarOpen ? "lg:static lg:w-64 lg:translate-x-0 lg:flex lg:shadow-none" : "lg:hidden"}`}>
+<aside className={`hidden fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out flex-col justify-between p-4 flex-shrink-0 shadow-2xl ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"} ${desktopSidebarOpen ? "lg:static lg:w-64 lg:translate-x-0 lg:flex lg:shadow-none" : "lg:hidden"}`}>
           <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100 lg:hidden">
             <div className="flex items-center space-x-2.5">
               <div className="w-8 h-8 rounded-full bg-teal-500 flex items-center justify-center text-white shadow-sm">
