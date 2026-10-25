@@ -98,4 +98,5 @@ Thumbs.db
 *.bak.*
 *.incomplete
 *_incomplete.*
-
+# Made on the server by sync.sh: origin certificate and the edge key.
+deploy/shared-nginx/tls/

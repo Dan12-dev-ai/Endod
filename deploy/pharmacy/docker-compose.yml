@@ -18,6 +18,9 @@ services:
       PHARMACY_API_KEY: ${PHARMACY_API_KEY:?set PHARMACY_API_KEY in the platform .env}
       # https: production rules (the client IP must come from nginx).
       SITE_ORIGIN: https://pharmacy.endod-health.com
+      # Only our nginx sends it (shared-nginx/tls/edge.key); other containers on
+      # the shared network cannot call the site directly.
+      EDGE_SHARED_SECRET: ${EDGE_SHARED_SECRET:?set EDGE_SHARED_SECRET in the platform .env (shared-nginx/tls/edge.key)}
     networks:
       # The platform's internal API (endod-bus has no internet access).
       bus: {}
