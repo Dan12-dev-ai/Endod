@@ -9,8 +9,10 @@ import {
   browserTimezone,
   departmentLabel,
   DEPARTMENT_KEYS,
+  CHAPA_CHECKOUT_ORIGIN,
   type Facility,
   type FacilityList,
+  type PaymentsStatus,
   formatBirr,
   formatWhen,
   initials,
@@ -66,6 +68,19 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
   const [quote, setQuote] = useState<Quote | null>(null);
   // Paid bookings: on the way to Chapa's checkout.
   const [redirecting, setRedirecting] = useState(false);
+  // Whether online payment is on (no Chapa key yet: paid bookings cannot be made).
+  const [payments, setPayments] = useState<PaymentsStatus | null>(null);
+  const paymentsOff = payments !== null && !payments.online_payments;
+
+  useEffect(() => {
+    let cancelled = false;
+    api<PaymentsStatus>("users/me/payments/status")
+      .then((status) => !cancelled && setPayments(status))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   // A new search is on its way: the current results are dimmed meanwhile.
   const [isFetching, setIsFetching] = useState(true);
 
@@ -215,8 +230,14 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
       setBookingNote("");
       // A partner hospital: the time is held while the patient pays on Chapa,
       // which brings them back to Appointments.
-      const checkout = safeCheckoutUrl(result.payment?.checkout_url);
-      if (checkout) {
+      if (result.payment?.checkout_url) {
+        const status = payments ?? (await api<PaymentsStatus>("users/me/payments/status").catch(() => null));
+        const checkout = safeCheckoutUrl(result.payment.checkout_url, status?.checkout_origins ?? [CHAPA_CHECKOUT_ORIGIN]);
+        if (!checkout) {
+          // Never sent anywhere but Chapa's checkout; the hold shows in Appointments.
+          setFormError(t("booking.error.generic"));
+          return;
+        }
         setRedirecting(true);
         window.location.assign(checkout);
         return;
@@ -376,6 +397,9 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                         )}
                       </div>
                     )}
+                    {facility.partner && paymentsOff && (facility.price_in_person ?? 0) > 0 && (
+                      <p className="text-[11px] text-amber-800 mt-1" data-purpose="payments-off">{t("booking.paymentsOff")}</p>
+                    )}
                   </div>
                 </div>
                 <button
@@ -497,6 +521,12 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 </dl>
               )}
 
+              {selected.partner && paymentsOff && (quote === null || quote.total > 0) && (
+                <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-purpose="payments-off" role="status">
+                  {t("booking.paymentsOff")}
+                </p>
+              )}
+
               {formError && (
                 <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" data-purpose="booking-error" role="alert">{formError}</p>
               )}
@@ -505,7 +535,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 <button type="button" onClick={closeBooking} className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
                   {t("common.cancel")}
                 </button>
-                <button type="submit" disabled={isSubmitting || redirecting} className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
+                <button type="submit" disabled={isSubmitting || redirecting || (selected.partner && paymentsOff && (quote === null || quote.total > 0))} className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
                   <span>
                     {redirecting
                       ? t("booking.toChapa")

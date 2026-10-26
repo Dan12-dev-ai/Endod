@@ -1,5 +1,6 @@
 import { test, expect, BLANK_PNG, type Locator, type Page } from './fixtures';
 import { createAppointment, futureSlot, openSection, PARTNER_ID, payBooking, seed } from './helpers';
+import { safeCheckoutUrl } from '../app/interview/data';
 
 // Paying for each partner-hospital booking through Chapa (tests/fake-chapa.mjs,
 // which behaves like Chapa's checkout and refund API), with partner hospitals
@@ -200,6 +201,63 @@ test.describe('Paying for each booking through Chapa', () => {
   test('someone else cannot open the video page for a visit that is not theirs', async ({ page }) => {
     await page.goto('/visit/not-a-real-appointment');
     await expect(page.locator('[data-purpose="visit-error"]')).toBeVisible();
+  });
+});
+
+test.describe('Online payment not set up yet', () => {
+  test('paid hospitals say so and "Pay and book" is off; other bookings are unaffected', async ({ page }) => {
+    // As in production before Chapa keys are set (the backend answers paid bookings with 503).
+    await page.route('**/api/backend/users/me/payments/status', (route) =>
+      route.fulfill({ json: { online_payments: false, checkout_origins: ['https://checkout.chapa.co'] } }),
+    );
+    await openSection(page, 'Booking', 'booking-view');
+    await page.locator('[data-purpose="hospital-search"]').fill('Endod Test General');
+    const card = page.locator(PARTNER);
+    await expect(card.locator('[data-purpose="payments-off"]')).toHaveText(
+      "Online payment isn't available yet. Please try again later.",
+    );
+    await card.getByRole('button', { name: 'Book Now' }).click();
+    const modal = page.locator('[data-purpose="booking-modal"]');
+    await expect(modal.locator('[data-purpose="payments-off"]')).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Pay and book' })).toBeDisabled();
+    await modal.getByRole('button', { name: 'Cancel' }).click();
+
+    // A hospital outside Endod's partners books as before.
+    await page.locator('[data-purpose="hospital-search"]').fill('Peter');
+    const other = page.locator('[data-purpose="hospital-et-addis-stpeter"]');
+    await expect(other.locator('[data-purpose="payments-off"]')).toHaveCount(0);
+    await other.getByRole('button', { name: 'Book Now' }).click();
+    await expect(modal.locator('[data-purpose="payments-off"]')).toHaveCount(0);
+    await expect(modal.getByRole('button', { name: 'Submit Booking' })).toBeEnabled();
+  });
+
+  test('in Amharic too', async ({ page }) => {
+    await page.route('**/api/backend/users/me/payments/status', (route) =>
+      route.fulfill({ json: { online_payments: false, checkout_origins: ['https://checkout.chapa.co'] } }),
+    );
+    await page.request.patch('/api/backend/users/me/preferences', { data: { language: 'am' } });
+    try {
+      await page.goto('/interview?section=booking', { waitUntil: 'networkidle' });
+      await page.locator('[data-purpose="hospital-search"]').fill('Endod Test General');
+      await expect(page.locator(PARTNER).locator('[data-purpose="payments-off"]')).toHaveText(
+        'የመስመር ላይ ክፍያ ገና አልተጀመረም። እባክዎ ቆይተው እንደገና ይሞክሩ።',
+      );
+    } finally {
+      await page.request.patch('/api/backend/users/me/preferences', { data: { language: 'en' } });
+    }
+  });
+});
+
+test.describe('Where the app sends a patient to pay', () => {
+  test("only Chapa's checkout, or the origin the backend names for its Chapa server", () => {
+    expect(safeCheckoutUrl('https://checkout.chapa.co/checkout/payment/abc')).toBe('https://checkout.chapa.co/checkout/payment/abc');
+    for (const bad of [
+      'https://evil.example/checkout/abc', 'http://checkout.chapa.co/x', 'https://checkout.chapa.co.evil.example/x',
+      'https://user:pw@checkout.chapa.co/x', 'javascript:alert(1)', 'http://127.0.0.1:8012/checkout/x', '', null,
+    ]) {
+      expect(safeCheckoutUrl(bad)).toBeNull();
+    }
+    expect(safeCheckoutUrl('http://127.0.0.1:8012/checkout/x', ['http://127.0.0.1:8012'])).toBe('http://127.0.0.1:8012/checkout/x');
   });
 });
 

@@ -8,6 +8,8 @@ import {
   type Appointment,
   appointmentPlace,
   type BookingPaymentCheck,
+  CHAPA_CHECKOUT_ORIGIN,
+  type PaymentsStatus,
   appointmentTitle,
   browserTimezone,
   departmentLabel,
@@ -91,6 +93,18 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
   const [formNotes, setFormNotes] = useState("");
   const [formWindow, setFormWindow] = useState<Appointment["time_window"]>("exact");
   const [facilities, setFacilities] = useState<FacilityList["facilities"]>([]);
+
+  // Where "Pay now" may lead (Chapa's checkout; see safeCheckoutUrl).
+  const [checkoutOrigins, setCheckoutOrigins] = useState<string[]>([CHAPA_CHECKOUT_ORIGIN]);
+  useEffect(() => {
+    let cancelled = false;
+    api<PaymentsStatus>("users/me/payments/status")
+      .then((status) => !cancelled && setCheckoutOrigins(status.checkout_origins))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -308,7 +322,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
     const payment = hb?.payment.status ?? null;
     const closed = hb && (hb.state === "rejected" || hb.state === "cancelled" || hb.state === "payment_expired");
     const unpaid = hb?.state === "awaiting_payment";
-    const payNow = unpaid ? safeCheckoutUrl(hb.payment.checkout_url) : null;
+    const payNow = unpaid ? safeCheckoutUrl(hb.payment.checkout_url, checkoutOrigins) : null;
     const amount = hb ? formatBirr(hb.total, locale) : "";
     return (
       <div

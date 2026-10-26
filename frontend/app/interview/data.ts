@@ -114,16 +114,26 @@ export type BookingPaymentCheck = {
   appointment: Appointment;
 };
 
+/** GET /users/me/payments/status: whether online payment is on, and where paying may happen. */
+export type PaymentsStatus = { online_payments: boolean; checkout_origins: string[] };
+
+/** Chapa's hosted checkout: the only place a patient is sent to pay by default. */
+export const CHAPA_CHECKOUT_ORIGIN = "https://checkout.chapa.co";
+
 /**
- * Only an https page may be opened for payment (never javascript: and the
- * like); plain http only on this machine (the browser tests' stand-in Chapa).
+ * A checkout address the app may send the patient to: only Chapa's checkout
+ * (https://checkout.chapa.co), or an origin the backend names for its
+ * configured Chapa server (the browser tests' stand-in). Anything else,
+ * javascript: included, is refused.
  */
-export function safeCheckoutUrl(url: string | null | undefined): string | null {
+export function safeCheckoutUrl(url: string | null | undefined, origins: string[] = [CHAPA_CHECKOUT_ORIGIN]): string | null {
   if (!url) return null;
   try {
     const parsed = new URL(url);
-    const local = parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost";
-    return parsed.protocol === "https:" || (parsed.protocol === "http:" && local) ? parsed.toString() : null;
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    if (parsed.username || parsed.password) return null;
+    const allowed = new Set([CHAPA_CHECKOUT_ORIGIN, ...origins]);
+    return allowed.has(parsed.origin) ? parsed.toString() : null;
   } catch {
     return null;
   }
