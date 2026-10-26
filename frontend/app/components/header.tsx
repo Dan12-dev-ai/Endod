@@ -6,6 +6,7 @@ import { logout } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import { accountName, homeFor, useSession } from "../lib/session";
 import LanguageSwitcher from "./language-switcher";
+import PwaInstallButton from "./pwa-install";
 import { Bone } from "./skeleton";
 
 export default function Header() {
@@ -112,6 +113,7 @@ export default function Header() {
         </div>
 
         <div className="flex items-center gap-3">
+        <PwaInstallButton />
         <LanguageSwitcher tone="dark" />
 
         <AccountArea />
