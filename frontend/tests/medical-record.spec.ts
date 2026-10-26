@@ -31,9 +31,15 @@ test.describe('Interview — Medical Records', () => {
     const row = page.locator('[data-purpose="history-item"]', { hasText: facility });
     await expect(row.locator('[data-purpose="record-source"]')).toHaveText('Self-reported');
     await row.getByRole('button', { expanded: false }).click();
-    await expect(row).toContainText('High blood pressure');
-    await expect(row).toContainText('Amlodipine, Aspirin');
-    await expect(row).toContainText('30 days');
+    const detail = page.locator('[data-purpose="medical-record-detail"]');
+    await expect(detail).toBeVisible();
+    await expect(detail).toContainText('High blood pressure');
+    await expect(detail).toContainText('Amlodipine, Aspirin');
+    await expect(detail).toContainText('30 days');
+
+    await page.locator('[data-purpose="back-link"]').click();
+    await expect(page.locator('[data-purpose="medical-record-view"]')).toBeVisible();
+
     await expect(page.locator('[data-purpose="stat-total"] p').last()).toHaveText(String(before + 1));
     await expect(page.locator('[data-purpose="stat-self"] p').last()).toHaveText(String(selfBefore + 1));
 

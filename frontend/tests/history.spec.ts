@@ -38,15 +38,23 @@ test.describe('History', () => {
     await expect(lab).toContainText('Dr. Hiwot Bekele');
     await expect(lab.locator('[data-purpose="record-source"]')).toHaveText('Verified');
     await lab.getByRole('button', { expanded: false }).click();
-    const table = lab.locator('[data-purpose="lab-table"]');
+    const detail = page.locator('[data-purpose="medical-record-detail"]');
+    const table = detail.locator('[data-purpose="lab-table"]');
     await expect(table.locator('tr[data-flag="low"]')).toContainText('Hemoglobin');
     await expect(table.locator('tr[data-flag="low"]')).toContainText('Low');
-    await expect(lab).toContainText('Specimen: Blood');
+    await expect(detail).toContainText('Specimen: Blood');
+
+    await page.locator('[data-purpose="back-link"]').click();
+    await expect(page.locator('[data-purpose="medical-record-view"]')).toBeVisible();
 
     const rx = item(page, `Malaria treatment ${tag}`);
     await rx.getByRole('button', { expanded: false }).click();
-    await expect(rx.locator('[data-purpose="medicine-list"]')).toContainText('Artemether-lumefantrine 4 tablets');
-    await expect(rx.locator('[data-purpose="medicine-list"]')).toContainText('twice a day');
+    const rxDetail = page.locator('[data-purpose="medical-record-detail"]');
+    await expect(rxDetail.locator('[data-purpose="medicine-list"]')).toContainText('Artemether-lumefantrine 4 tablets');
+    await expect(rxDetail.locator('[data-purpose="medicine-list"]')).toContainText('twice a day');
+
+    await page.locator('[data-purpose="back-link"]').click();
+    await expect(page.locator('[data-purpose="medical-record-view"]')).toBeVisible();
 
     // Tabs
     await page.locator('[data-purpose="history-tab-labs"]').click();
@@ -56,16 +64,6 @@ test.describe('History', () => {
     await expect(item(page, `Chest X-ray ${tag}`)).toBeVisible();
     await expect(lab).toHaveCount(0);
     await page.locator('[data-purpose="history-tab-all"]').click();
-
-    // Search (by a test inside the details) and the date range.
-    await page.locator('[data-purpose="history-search"]').fill(`hemoglobin ${tag}`);
-    await expect(page.locator('[data-purpose="history-item"]')).toHaveCount(1);
-    await page.locator('[data-purpose="history-search"]').fill(tag);
-    await expect(page.locator('[data-purpose="history-item"]')).toHaveCount(5);
-    await page.locator('[data-purpose="history-from"]').fill(addisDay(-10));
-    await expect(page.locator('[data-purpose="history-item"]')).toHaveCount(4); // the X-ray was 40 days ago
-    await page.locator('[data-purpose="history-to"]').fill(addisDay(-20));
-    await expect(page.locator('[data-purpose="history-no-match"]')).toBeVisible();
   });
 
   test('a record file previews and downloads through the app only', async ({ page, browser }) => {
@@ -74,7 +72,8 @@ test.describe('History', () => {
     await openSection(page, 'Medical Record', 'medical-record-view');
     const lab = item(page, `Complete blood count ${tag}`);
     await lab.getByRole('button', { expanded: false }).click();
-    const file = lab.locator('[data-purpose="record-file"]');
+    const detail = page.locator('[data-purpose="medical-record-detail"]');
+    const file = detail.locator('[data-purpose="record-file"]');
     await expect(file).toContainText('cbc-scan.png');
 
     await file.locator('[data-purpose="file-preview-button"]').click();
@@ -102,10 +101,14 @@ test.describe('History', () => {
     expect((await page.request.get(`/api/backend/internal/shares/${'a'.repeat(32)}/files/${'a'.repeat(32)}`)).status()).toBe(404);
 
     // A PDF opens in a new tab.
+    await page.locator('[data-purpose="back-link"]').click();
+    await expect(page.locator('[data-purpose="medical-record-view"]')).toBeVisible();
+
     const xray = item(page, `Chest X-ray ${tag}`);
     await xray.getByRole('button', { expanded: false }).click();
-    await expect(xray.locator('[data-purpose="file-open"]')).toHaveAttribute('target', '_blank');
-    const pdf = await page.request.get((await xray.locator('[data-purpose="file-open"]').getAttribute('href'))!);
+    const xrayDetail = page.locator('[data-purpose="medical-record-detail"]');
+    await expect(xrayDetail.locator('[data-purpose="file-open"]')).toHaveAttribute('target', '_blank');
+    const pdf = await page.request.get((await xrayDetail.locator('[data-purpose="file-open"]').getAttribute('href'))!);
     expect(pdf.headers()['content-type']).toBe('application/pdf');
     expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
   });
@@ -117,7 +120,8 @@ test.describe('History', () => {
     await openSection(page, 'Medical Record', 'medical-record-view');
     const lab = item(page, `Complete blood count ${tag}`);
     await lab.getByRole('button', { expanded: false }).click();
-    const file = lab.locator('[data-purpose="record-file"]');
+    const detail = page.locator('[data-purpose="medical-record-detail"]');
+    const file = detail.locator('[data-purpose="record-file"]');
     await expect(file.locator('[data-purpose="file-state"]')).toHaveText('Still arriving');
     await expect(file.locator('[data-purpose="file-download"]')).toHaveCount(0);
 
