@@ -575,6 +575,11 @@ appointment as it now stands: `{ "tx_ref", "status": "pending" | "paid" |
 "expired" | "mismatch", "appointment_id", "amount", "currency", "expires_at",
 "paid_at", "appointment" }`.
 
+`GET /payments/status` (public; also `/users/me/payments/status`):
+`{ "online_payments": bool, "checkout_origins": ["https://checkout.chapa.co"] }`.
+While `online_payments` is false, paid bookings answer 503 and the app says
+online payment isn't available yet.
+
 `POST /users/me/wallet/deposits` and `GET /users/me/wallet/deposits/{id}`
 answer **410 Gone** (`Top-ups are no longer available. ...`); there is no
 balance to top up.
