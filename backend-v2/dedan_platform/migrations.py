@@ -109,6 +109,10 @@ _COLUMN_MIGRATIONS: Tuple[ColumnMigration, ...] = (
     ColumnMigration("appointments", "service_fee", "INTEGER"),
     ColumnMigration("appointments", "meeting_room", "VARCHAR(64)"),
     ColumnMigration("appointments", "hospital_reason", "VARCHAR(300)"),
+    # Paid per booking through Chapa (booking_payments.py).
+    ColumnMigration("appointments", "payment_status", "VARCHAR(24)"),
+    ColumnMigration("appointments", "payment_due_at", "TIMESTAMP WITH TIME ZONE"),
+    ColumnMigration("appointments", "payment_url", "VARCHAR(500)"),
 )
 
 #: (index name, table, columns). Created only if absent.

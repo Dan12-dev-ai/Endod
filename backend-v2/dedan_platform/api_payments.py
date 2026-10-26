@@ -1,24 +1,24 @@
-"""Balance, deposits, booking quotes, video joins and emergency numbers.
+"""Booking payments, booking quotes, video joins and emergency numbers.
 
-* ``/users/me/wallet``: the balance and its history; deposits through Chapa.
 * ``/users/me/hospital-bookings/quote``: what a visit at a partner hospital costs.
+* ``/users/me/booking-payments/{tx_ref}``: the patient's payment for a booking,
+  checked with Chapa (the app asks this when the patient comes back from Chapa).
 * ``/users/me/appointments/{id}/video``: join details for an approved video visit.
 * ``/users/me/care/emergency``: numbers to call, and the nearest partner hospitals' ambulances.
 * ``/payments/chapa/...``: Chapa's webhook and callback (public; they only
-  trigger a verification with Chapa, see deposits.settle).
+  trigger a verification with Chapa, see booking_payments.settle).
+* ``/users/me/wallet``: the old Endod balance, readable; top-ups are gone (410).
 """
 
 from __future__ import annotations
 
 import json
-from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel, Field
 
-from dedan_platform import chapa, deposits, hospital_bookings, partners, wallet
+from dedan_platform import booking_payments, chapa, deposits, hospital_bookings, partners, wallet
 from dedan_platform.api_profile import current_user_id
 from dedan_platform.appointments import AppointmentError, AppointmentNotFound
 from dedan_platform.care_navigation import haversine_km
@@ -27,43 +27,45 @@ from dedan_platform.jitsi import JitsiError
 router = APIRouter(tags=["payments"])
 
 
-class DepositRequest(BaseModel):
-    #: Birr, up to two decimals.
-    amount: Decimal = Field(gt=0, le=1_000_000, decimal_places=2)
-
-
 @router.get("/users/me/wallet")
 def read_wallet(user_id: str = Depends(current_user_id),
                 limit: int = Query(default=50, ge=1, le=200)) -> Dict[str, Any]:
     return wallet.summary(user_id, limit=limit)
 
 
-@router.post("/users/me/wallet/deposits", status_code=status.HTTP_201_CREATED)
-def start_deposit(body: DepositRequest, user_id: str = Depends(current_user_id)) -> Dict[str, Any]:
-    santim = int((body.amount * 100).to_integral_value())
-    try:
-        return deposits.start(user_id, santim)
-    except deposits.DepositError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+#: Patients pay for each booking through Chapa: there is no balance to top up.
+TOPUPS_GONE = "Top-ups are no longer available. You pay for each booking through Chapa."
+
+
+@router.post("/users/me/wallet/deposits")
+def start_deposit(user_id: str = Depends(current_user_id)) -> Dict[str, Any]:
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail=TOPUPS_GONE)
 
 
 @router.get("/users/me/wallet/deposits/{deposit_id}")
 def read_deposit(deposit_id: str, user_id: str = Depends(current_user_id)) -> Dict[str, Any]:
-    try:
-        return deposits.status_for(user_id, deposit_id)
-    except deposits.DepositError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail=TOPUPS_GONE)
 
 
 @router.get("/users/me/hospital-bookings/quote")
 def booking_quote(hospital_id: str = Query(max_length=32), visit_mode: str = Query(default="in_person"),
                   user_id: str = Depends(current_user_id)) -> Dict[str, Any]:
     try:
-        quote = hospital_bookings.quote(hospital_id, visit_mode)
+        return hospital_bookings.quote(hospital_id, visit_mode)
     except AppointmentError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    balance = wallet.summary(user_id, limit=1)["balance"]
-    return {**quote, "balance": balance, "enough": balance >= quote["total"]}
+
+
+@router.get("/users/me/booking-payments/{tx_ref}")
+def read_booking_payment(tx_ref: str, user_id: str = Depends(current_user_id)) -> Dict[str, Any]:
+    """The patient back from Chapa: their payment, checked with Chapa itself
+    (the return address proves nothing), and the booking as it now stands."""
+    if len(tx_ref) > 64:
+        raise HTTPException(status_code=404, detail="Payment not found.")
+    try:
+        return booking_payments.status_for(user_id, tx_ref)
+    except booking_payments.PaymentNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/users/me/appointments/{appointment_id}/video")
@@ -118,9 +120,12 @@ def _settle(tx_ref: Optional[str], recheck_settled: bool = False) -> Dict[str, A
     if not tx_ref or len(tx_ref) > 64:
         raise HTTPException(status_code=400, detail="Missing transaction reference.")
     try:
-        result = deposits.settle(tx_ref, recheck_settled=recheck_settled)
+        result = booking_payments.settle(tx_ref)
+        if result is None:
+            # Not a booking: a deposit from the old balance (still settled, never started any more).
+            result = deposits.settle(tx_ref, recheck_settled=recheck_settled)
     except chapa.ChapaError as exc:
-        # Chapa will notify again; the patient's return also re-checks.
+        # Chapa will notify again; the patient's return and the worker also re-check.
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     if result is None:
         raise HTTPException(status_code=404, detail="Unknown transaction.")
@@ -149,8 +154,8 @@ async def chapa_webhook(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Bad body.") from exc
     body = body if isinstance(body, dict) else {}
     tx_ref = body.get("tx_ref") or body.get("trx_ref")
-    # A refund or reversal of an earlier payment is checked even though the
-    # deposit was already credited (Chapa's verify is still the judge).
+    # (Old deposits only:) a refund or reversal of an earlier payment is checked
+    # even though the deposit was already credited (Chapa's verify is still the judge).
     words = f"{body.get('event', '')} {body.get('status', '')}".lower()
     reversal = "refund" in words or "revers" in words
     # Settling calls Chapa (blocking I/O): off the event loop.

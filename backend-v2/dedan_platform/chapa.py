@@ -1,10 +1,15 @@
-"""Deposits through Chapa (https://developer.chapa.co).
+"""Payments through Chapa (https://developer.chapa.co).
 
-A deposit is started here (``initialize``: Chapa returns a checkout page) and
-credited only after Chapa's own verify endpoint says it was paid, for the
-expected amount, in birr. The webhook, the callback and the patient's return
-to the app all just trigger that verification; none of them is trusted on
-its own word, so a forged notification cannot add money.
+A booking's payment is started here (``initialize``: Chapa returns a checkout
+page) and accepted only after Chapa's own verify endpoint says it was paid,
+for the expected amount, in birr. The webhook, the callback and the patient's
+return to the app all just trigger that verification; none of them is trusted
+on its own word, so a forged notification cannot confirm a booking.
+
+Refunds use Chapa's refund API (``POST /v1/refund/{tx_ref}``, the same
+secret-key bearer token; ``GET /v1/refund/{ref_id}/verify`` for its progress).
+Each refund carries a unique ``reference`` of ours, so a retried request is
+refused by Chapa rather than paid twice.
 """
 
 from __future__ import annotations
@@ -61,7 +66,7 @@ def _local_phone(phone: Optional[str]) -> Optional[str]:
 
 
 def initialize(tx_ref: str, amount: int, first_name: str, last_name: str, phone: Optional[str],
-               return_url: str, callback_url: str) -> str:
+               return_url: str, callback_url: str, description: str = "Health visit booking") -> str:
     """Start a payment page. Returns Chapa's checkout URL."""
     body: Dict[str, Any] = {
         "amount": f"{Decimal(amount) / 100:.2f}",
@@ -72,7 +77,7 @@ def initialize(tx_ref: str, amount: int, first_name: str, last_name: str, phone:
         "return_url": return_url,
         "callback_url": callback_url,
         # Chapa limits the title to 16 characters and the description to plain text.
-        "customization": {"title": "Endod Health", "description": "Health balance deposit"},
+        "customization": {"title": "Endod Health", "description": description},
     }
     local = _local_phone(phone)
     if local:
@@ -128,6 +133,54 @@ def verify(tx_ref: str) -> Dict[str, Any]:
         "reference": record.get("reference"),
         "status": status,
     }
+
+
+class RefundRefused(ChapaError):
+    """Chapa answered and said no (e.g. not refundable, not enough merchant
+    balance, or a reference it has already seen): retrying will not help."""
+
+
+def refund(tx_ref: str, amount: int, reason: str, reference: str) -> Dict[str, Any]:
+    """Ask Chapa to refund ``amount`` santim of the payment ``tx_ref``.
+
+    Returns {"ref_id", "payment_reference"} once Chapa accepted it. Raises
+    RefundRefused when Chapa refused it, ChapaError when it gave no answer
+    (unreachable, overloaded, or our key refused: worth retrying).
+    """
+    body = {"amount": f"{Decimal(amount) / 100:.2f}", "reason": (reason or "Refund")[:100],
+            "reference": reference, "meta": {"source": "endod"}}
+    try:
+        with _client() as client:
+            response = client.post(f"/refund/{tx_ref}", json=body)
+    except httpx.HTTPError as exc:
+        raise ChapaError("Chapa could not be reached.") from exc
+    if response.status_code >= 500 or response.status_code in (401, 403, 408, 429):
+        raise ChapaError(f"Chapa could not answer (HTTP {response.status_code}).")
+    data = _json(response)
+    record = data.get("data") or {}
+    if response.status_code >= 400 or str(data.get("status") or "").lower() != "success":
+        message = data.get("message")
+        if isinstance(message, dict):
+            message = "; ".join(f"{k}: {v}" for k, v in message.items())
+        raise RefundRefused(f"Chapa refused the refund (HTTP {response.status_code}): {message or 'no reason'}"[:300])
+    return {"ref_id": str(record.get("ref_id") or "")[:100] or None,
+            "payment_reference": record.get("payment_reference")}
+
+
+def verify_refund(ref_id: str) -> str:
+    """Where Chapa is with a refund: initiated, processing, refunded or reversed
+    (lower case; "unknown" when it does not say). Raises ChapaError on no answer."""
+    try:
+        with _client() as client:
+            response = client.get(f"/refund/{ref_id}/verify", timeout=10.0)
+    except httpx.HTTPError as exc:
+        raise ChapaError("Chapa could not be reached.") from exc
+    if response.status_code >= 500 or response.status_code in (401, 403, 408, 429):
+        raise ChapaError(f"Chapa could not answer (HTTP {response.status_code}).")
+    record = _json(response).get("data") or {}
+    if response.status_code >= 400 or not isinstance(record, dict):
+        return "unknown"
+    return str(record.get("status") or "unknown").lower()
 
 
 def signature_ok(raw_body: bytes, headers: Mapping[str, str]) -> bool:

@@ -167,8 +167,13 @@ def may_act_for(session: Session, hospital_id: str, user_id: str) -> bool:
     if session.scalar(select(HospitalLink.id).where(
             HospitalLink.hospital_id == hospital_id, HospitalLink.user_id == user_id).limit(1)) is not None:
         return True
-    return session.scalar(select(Appointment.id).where(
-        Appointment.hospital_id == hospital_id, Appointment.user_id == user_id).limit(1)) is not None
+    # Only a booking the hospital was sent (paid: it has a payout row), not a
+    # hold left unpaid, which the hospital never heard of.
+    from dedan_platform.models import HospitalPayout
+
+    return session.scalar(select(Appointment.id).join(HospitalPayout, HospitalPayout.appointment_id == Appointment.id)
+                          .where(Appointment.hospital_id == hospital_id, Appointment.user_id == user_id)
+                          .limit(1)) is not None
 
 
 def booking_patient_id(dedan_id: str) -> str:

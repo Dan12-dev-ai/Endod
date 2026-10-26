@@ -126,7 +126,25 @@ def _to_payload(appointment: Appointment) -> Dict[str, Any]:
             "total": (appointment.price or 0) + (appointment.service_fee or 0),
             "reason": appointment.hospital_reason,
             "video_ready": bool(appointment.meeting_room),
+            "payment": _payment_payload(appointment),
         } if appointment.hospital_id else None,
+    }
+
+
+def _payment_payload(appointment: Appointment) -> Dict[str, Any]:
+    """Where the patient's payment for a partner booking is (booking_payments.py):
+    awaiting_payment (with Chapa's page until the hold ends), paid, expired,
+    refund_pending or refunded."""
+    status = appointment.payment_status
+    if status is None:
+        # Paid from the old Endod balance, and refunded there when closed early.
+        status = "refunded" if appointment.hospital_state in ("rejected", "cancelled") else "paid"
+    due = ensure_aware(appointment.payment_due_at) if appointment.payment_due_at else None
+    open_hold = status == "awaiting_payment" and due is not None and due > utcnow()
+    return {
+        "status": status,
+        "due_at": due.isoformat() if due and status == "awaiting_payment" else None,
+        "checkout_url": appointment.payment_url if open_hold else None,
     }
 
 
