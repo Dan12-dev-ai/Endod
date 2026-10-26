@@ -3,7 +3,7 @@ import { callBackend, str } from "@/app/lib/server/backend";
 
 // Chapa's webhook (public), passed to the backend byte for byte with its
 // signature headers: the backend checks the signature and then verifies the
-// payment with Chapa before crediting anything.
+// payment with Chapa before confirming any booking.
 
 const MAX_BODY_BYTES = 64_000;
 

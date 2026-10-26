@@ -2,9 +2,11 @@
 
 Sends this platform's queued events (bookings, cancellations, shared records)
 to the hospital service and applies the hospital service's (listings,
-decisions on bookings, links, records, follow-ups, queues, demo bookings). It also re-checks
-pending Chapa deposits now and then, in case a webhook was missed, ends
-expired record shares, and (on a thread of its own) downloads record files.
+decisions on bookings, links, records, follow-ups, queues, demo bookings). It also ends
+bookings left unpaid past their hold, re-checks booking payments with Chapa
+in case a webhook was missed, sends refunds to Chapa (with retries) and
+follows them, ends expired record shares, and (on a thread of its own)
+downloads record files.
 Survives Redis being down or failing over: it waits and reconnects
 (through Sentinel, to whichever server is master); events wait in the
 database meanwhile.
@@ -21,7 +23,8 @@ import redis
 from sqlalchemy import or_, select
 
 from dedan_platform import (
-    chapa, deposits, eventbus, hospital_bookings, hospital_onboarding, patient_history, record_files, shares,
+    booking_payments, chapa, deposits, eventbus, hospital_bookings, hospital_onboarding, patient_history,
+    record_files, shares,
 )
 from dedan_platform.db import session_scope
 from dedan_platform.models import Deposit, DepositStatus, utcnow
@@ -33,7 +36,11 @@ DEPOSITS_EVERY = 300
 STALE_EVERY = 300
 SHARES_EVERY = 60
 HOUSEKEEPING_EVERY = 3600
-_last = {"deposits": 0.0, "stale": 0.0, "shares": 0.0, "housekeeping": 0.0}
+HOLDS_EVERY = 60
+PAYMENTS_EVERY = 120
+REFUNDS_EVERY = 30
+_last = {"deposits": 0.0, "stale": 0.0, "shares": 0.0, "housekeeping": 0.0, "holds": 0.0, "payments": 0.0,
+         "refunds": 0.0}
 
 #: Every event this worker handles: bookings and listings, patient history,
 #: and texts to facilities signing up.
@@ -85,6 +92,19 @@ def run_once(client: redis.Redis, now: float | None = None) -> int:
             work += recheck_deposits()
         except chapa.ChapaNotConfigured:
             pass
+    if now - _last["holds"] >= HOLDS_EVERY:
+        _last["holds"] = now
+        # Bookings unpaid past their hold: the slot is freed (payment_expired).
+        work += booking_payments.expire_holds()
+    if now - _last["payments"] >= PAYMENTS_EVERY:
+        _last["payments"] = now
+        try:
+            work += booking_payments.recheck()
+        except chapa.ChapaNotConfigured:
+            pass
+    if now - _last["refunds"] >= REFUNDS_EVERY:
+        _last["refunds"] = now
+        work += booking_payments.process_refunds()
     if now - _last["stale"] >= STALE_EVERY:
         _last["stale"] = now
         work += hospital_bookings.refund_unanswered()

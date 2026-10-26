@@ -552,6 +552,38 @@ unknown `facility_id`, telehealth with a facility, field too long,
 `You already have an appointment at that time.`,
 `That time is no longer available. Please choose another.`
 
+**At a partner hospital** (`facility_id` of a listed partner) the booking is
+paid through Chapa ([payments.md](payments.md)). The response is
+`{ "appointment", "payment": { "price", "service_fee", "total", "currency",
+"status": "awaiting_payment", "checkout_url", "tx_ref", "expires_at" },
+"reminders": { "queued": 0, ... } }`: the appointment's
+`hospital_booking.state` is `awaiting_payment` and the slot is held for 30
+minutes while the patient pays at `checkout_url`. The hospital is told, and
+reminders are set, once Chapa confirms the payment. Errors: 409 when the
+patient already has 3 bookings waiting for payment; 503 when payments are not
+set up; 502 when Chapa would not start the payment (the slot is freed).
+
+Every partner appointment carries `hospital_booking.payment`:
+`{ "status": "awaiting_payment" | "paid" | "expired" | "refund_pending" | "refunded",
+"due_at", "checkout_url" }` (`checkout_url` only while the hold is open).
+
+### `GET /users/me/booking-payments/{tx_ref}`
+
+The patient back from Chapa: their own payment (404 otherwise), checked with
+Chapa's verify endpoint (the return address proves nothing), and the
+appointment as it now stands: `{ "tx_ref", "status": "pending" | "paid" |
+"expired" | "mismatch", "appointment_id", "amount", "currency", "expires_at",
+"paid_at", "appointment" }`.
+
+`GET /payments/status` (public; also `/users/me/payments/status`):
+`{ "online_payments": bool, "checkout_origins": ["https://checkout.chapa.co"] }`.
+While `online_payments` is false, paid bookings answer 503 and the app says
+online payment isn't available yet.
+
+`POST /users/me/wallet/deposits` and `GET /users/me/wallet/deposits/{id}`
+answer **410 Gone** (`Top-ups are no longer available. ...`); there is no
+balance to top up.
+
 ### `GET /users/me/appointments/{appointment_id}`
 
 Appointment object, or 404 `Appointment not found.`

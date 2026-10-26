@@ -10,7 +10,6 @@ import NotificationsView from "./notifications-view";
 import HistoryView from "./history-view";
 import type { BookingPreset } from "./history-data";
 import SettingsView from "./settings-view";
-import WalletView from "./wallet-view";
 import EmergencyPanel from "./emergency-panel";
 import { api, logout } from "../lib/api";
 import { isLanguage, useI18n, type TranslationKey } from "../lib/i18n";
@@ -49,7 +48,7 @@ export default function Interview() {
     if (restoredNavRef.current) return;
     restoredNavRef.current = true;
     const section = new URLSearchParams(window.location.search).get("section");
-    const valid = new Set(["home", "booking", "wallet", "appointment", "followup", "message", "setting"]);
+    const valid = new Set(["home", "booking", "appointment", "followup", "message", "setting"]);
     let restored: string | null = null;
     if (section && valid.has(section)) restored = section;
     else {
@@ -78,7 +77,6 @@ export default function Interview() {
   const navItems: { id: string; labelKey: TranslationKey; icon: React.ReactNode }[] = [
     { id: "home", labelKey: "interview.nav.home", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "booking", labelKey: "interview.nav.booking", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
-    // { id: "wallet", labelKey: "interview.nav.wallet", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M3 7a2 2 0 012-2h12a2 2 0 012 2v1h1a1 1 0 011 1v6a1 1 0 01-1 1h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7zm13 4h4v2h-4a1 1 0 010-2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "appointment", labelKey: "interview.nav.appointment", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "followup", labelKey: "interview.nav.medicalRecord", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "message", labelKey: "interview.nav.notification", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
@@ -298,14 +296,12 @@ export default function Interview() {
           {/* ===== Booking View ===== */}
           {activeNav === "booking" && (
             <BookingView
-              onOpenWallet={() => navigateTo("wallet")}
               onPresetUsed={() => setBookingPreset(null)}
               onToast={showToast}
               patientId={healthCard?.userId ?? ""}
               preset={bookingPreset}
             />
           )}
-          {activeNav === "wallet" && <WalletView onToast={showToast} />}
 
           {/* ===== Settings View ===== */}
           {activeNav === "setting" && (

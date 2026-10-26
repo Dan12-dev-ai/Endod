@@ -501,6 +501,13 @@ class Appointment(Base):
     #: The video room on Endod's Jitsi server, once a doctor approved.
     meeting_room: Mapped[Optional[str]] = mapped_column(String(64))
     hospital_reason: Mapped[Optional[str]] = mapped_column(String(300))
+    #: The patient's payment for it (booking_payments.PaymentState); None on
+    #: rows paid from the old Endod balance.
+    payment_status: Mapped[Optional[str]] = mapped_column(String(24))
+    #: While awaiting payment: when the hold on the slot ends.
+    payment_due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: While awaiting payment: Chapa's checkout page ("Pay now").
+    payment_url: Mapped[Optional[str]] = mapped_column(String(500))
 
     __table_args__ = (
         # Supports the "upcoming appointments" query, which is by far the most
@@ -827,6 +834,98 @@ class Deposit(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     #: When the worker last asked Chapa about it (so re-checks take turns).
     last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
+class BookingPaymentStatus:
+    #: Checkout started; Chapa has not confirmed a payment.
+    PENDING = "pending"
+    #: Chapa confirmed the exact amount, in birr.
+    PAID = "paid"
+    #: The hold ended (expired or cancelled) with no confirmed payment.
+    EXPIRED = "expired"
+    #: Chapa reported a payment of another amount or currency: never accepted.
+    MISMATCH = "mismatch"
+    #: Paid, then refunded or reversed at Chapa without an Endod refund (a
+    #: chargeback or a refund from the dashboard): the booking is cancelled.
+    REVERSED = "reversed"
+    ALL = (PENDING, PAID, EXPIRED, MISMATCH, REVERSED)
+
+
+class BookingPayment(Base):
+    """One Chapa payment for one partner-hospital booking (booking_payments.py)."""
+
+    __tablename__ = "booking_payments"
+    __table_args__ = (Index("ix_booking_payments_status_created", "status", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False,
+    )
+    #: One payment per booking.
+    appointment_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    #: Our reference at Chapa.
+    tx_ref: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    #: Santim: the hospital's price plus Endod's fee.
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="ETB")
+    status: Mapped[str] = mapped_column(String(12), nullable=False, default=BookingPaymentStatus.PENDING)
+    checkout_url: Mapped[Optional[str]] = mapped_column(String(500))
+    #: Chapa's own reference, once paid.
+    provider_reference: Mapped[Optional[str]] = mapped_column(String(100))
+    #: What Chapa reported when it did not match (santim), for whoever sorts it out.
+    reported_amount: Mapped[Optional[int]] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    #: The hold on the slot ends here.
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: When the worker last asked Chapa about it (so re-checks take turns).
+    last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+
+class RefundStatus:
+    #: To be sent to Chapa (again after a failed attempt: see next_attempt_at).
+    PENDING = "pending"
+    #: Chapa accepted it; waiting for Chapa to say the payer has it.
+    SUBMITTED = "submitted"
+    SUCCEEDED = "succeeded"
+    #: Chapa refused or reversed it, or could not be reached for too long:
+    #: Endod refunds it by hand from the Chapa dashboard.
+    MANUAL = "manual_refund_needed"
+    ALL = (PENDING, SUBMITTED, SUCCEEDED, MANUAL)
+
+
+class BookingRefund(Base):
+    """Money going back to the patient through Chapa: at most one per payment."""
+
+    __tablename__ = "booking_refunds"
+    __table_args__ = (Index("ix_booking_refunds_status_next", "status", "next_attempt_at"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    #: One refund per payment, whatever retries or races.
+    payment_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    appointment_id: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False,
+    )
+    #: Santim.
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(200), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default=RefundStatus.PENDING)
+    #: Sent to Chapa as the refund's unique reference, so a retry cannot refund twice.
+    reference: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    #: Chapa's id for the refund (``ref_id``), once accepted.
+    chapa_ref_id: Mapped[Optional[str]] = mapped_column(String(100))
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: A request to Chapa may have been accepted without our hearing so (a lost
+    #: answer, a timeout, a crash mid-call): Chapa is asked before anything else.
+    maybe_accepted: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    #: Set while a call to Chapa is under way; still set later means its answer was lost.
+    in_flight_since: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[Optional[str]] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
 class PayoutStatus:

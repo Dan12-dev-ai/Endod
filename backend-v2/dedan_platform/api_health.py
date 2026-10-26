@@ -135,11 +135,12 @@ def create_appointment(
     notification worker. Doing it synchronously would make a mail outage block
     a patient's booking.
     """
-    from dedan_platform import hospital_bookings, partners, wallet
+    from dedan_platform import hospital_bookings, partners
 
     if body.facility_id and partners.get(body.facility_id) is not None:
-        # An Endod partner hospital: booked with the hospital and paid from
-        # the patient's balance (hospital_bookings.py).
+        # An Endod partner hospital: the slot is held and the patient pays on
+        # Chapa's checkout (hospital_bookings.py, booking_payments.py). The
+        # hospital hears of it, and reminders are set, once it is paid.
         try:
             result = hospital_bookings.book(
                 user_id=user_id, hospital_id=body.facility_id, scheduled_at=body.scheduled_at,
@@ -148,17 +149,13 @@ def create_appointment(
                 duration_minutes=body.duration_minutes,
                 correlation_id=request.headers.get("X-Correlation-ID"),
             )
-        except wallet.InsufficientFunds as exc:
-            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=str(exc)) from exc
+        except hospital_bookings.PaymentUnavailable as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        except hospital_bookings.TooManyHolds as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
         except appt.AppointmentError as exc:
             raise _error(exc) from exc
-        # A video visit gets its reminders once a doctor approves it.
-        queued = {"queued": 0, "job_ids": [], "skipped": [], "offsets": [], "channels": {}} if result["appointment"]["hospital_booking"]["state"] == "awaiting_doctor" else \
-            scheduler.schedule_all_channels(
-                user_id=user_id, appointment_id=result["appointment"]["appointment_id"],
-                correlation_id=request.headers.get("X-Correlation-ID"),
-            )
-        return {**result, "reminders": queued}
+        return {**result, "reminders": {"queued": 0, "job_ids": [], "skipped": [], "offsets": [], "channels": {}}}
 
     try:
         result = appt.create_appointment(

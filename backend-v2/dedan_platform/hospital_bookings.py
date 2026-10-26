@@ -1,16 +1,21 @@
-"""Booking a visit at an Endod partner hospital, paid from the patient's balance.
+"""Booking a visit at an Endod partner hospital, paid for through Chapa.
 
-One transaction books it: the appointment, the payment and Endod's fee from
-the wallet, the hospital's share (held until the visit happens), and the
-``appointment.requested`` event to the hospital. So a patient is never charged
-for a booking the hospital does not hear about, or the other way round.
+Booking holds the slot: the appointment waits in ``awaiting_payment`` while
+the patient pays the price plus Endod's fee on Chapa's checkout
+(booking_payments.py). Once Chapa confirms the exact amount, one transaction
+makes it a booking: the hospital's share (held until the visit happens) and
+the ``appointment.requested`` event to the hospital. So a patient is never
+charged for a booking the hospital does not hear about, and the hospital
+never hears of one that is not paid. An unpaid hold ends after 30 minutes
+(``payment_expired``) and frees the slot.
 
 The hospital then decides (events from the hospital service):
 
 * in-person visits are confirmed at once (``appointment.confirmed``);
 * video visits wait for a doctor; approval opens a video room;
 * ``appointment.rejected`` / ``appointment.cancelled`` refund the patient in
-  full (price and fee) and void the hospital's share;
+  full (price and fee, through Chapa to how they paid) and void the
+  hospital's share;
 * ``appointment.completed`` makes the hospital's share due.
 
 The patient can cancel (and is refunded) until the visit starts; after that
@@ -27,15 +32,17 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from dedan_platform import eventbus, identity, jitsi, partner_config, partners, wallet
+from dedan_platform import booking_payments, chapa, eventbus, identity, jitsi, partner_config, partners, wallet
 from dedan_platform.appointments import (
     AppointmentError, AppointmentNotFound, _require_future, _require_no_overlap, _short_text, _to_payload,
-    _transition, _validate_time_window, _zone, reminder_offsets_for,
+    _transition, _validate_time_window, _zone,
 )
+from dedan_platform.booking_payments import PaymentState, refund_sentence
 from dedan_platform.db import ensure_aware, ensure_utc, new_uuid, session_scope
 from dedan_platform.eventbus import PermanentEventError
 from dedan_platform.models import (
-    Appointment, EventStatus, HealthEventType, HospitalPayout, PayoutStatus, WalletEntryKind, utcnow,
+    Appointment, BookingPayment, BookingPaymentStatus, EventStatus, HealthEventType, HospitalPayout, PayoutStatus,
+    WalletEntryKind, utcnow,
 )
 from dedan_platform.timeline import record_event, update_appointment_event
 
@@ -43,6 +50,11 @@ logger = logging.getLogger(__name__)
 
 
 class HospitalState:
+    #: Booked, the slot held, waiting for the patient's payment (the hospital
+    #: has not been told).
+    AWAITING_PAYMENT = "awaiting_payment"
+    #: The hold ended without a confirmed payment; the slot is free again.
+    PAYMENT_EXPIRED = "payment_expired"
     #: In-person: sent to the hospital, not acknowledged yet.
     AWAITING_HOSPITAL = "awaiting_hospital"
     #: Video: waiting for a doctor to approve.
@@ -51,6 +63,7 @@ class HospitalState:
     REJECTED = "rejected"
     CANCELLED = "cancelled"
     COMPLETED = "completed"
+    #: Paid and with the hospital.
     OPEN = (AWAITING_HOSPITAL, AWAITING_DOCTOR, CONFIRMED)
 
 
@@ -61,6 +74,18 @@ _EVENT_MODE = {IN_PERSON: "in_person", VIDEO: "video"}
 
 class BookingError(AppointmentError):
     """The booking cannot be made (bad input, hospital not available)."""
+
+
+class TooManyHolds(BookingError):
+    """The patient already has the most bookings waiting for payment."""
+
+
+class PaymentUnavailable(BookingError):
+    """Chapa cannot take the payment now (not set up, or not answering)."""
+
+    def __init__(self, message: str, status_code: int = 503):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def _mode(visit_mode: Optional[str]) -> str:
@@ -112,6 +137,13 @@ def _quietly(what: str, action, *args, **kwargs) -> None:
         logger.exception("after_payment_side_effect_failed what=%s", what)
 
 
+def _payment_view(appointment: Dict[str, Any], checkout_url: Optional[str], tx_ref: Optional[str]) -> Dict[str, Any]:
+    booking = appointment["hospital_booking"]
+    return {"price": booking["price"], "service_fee": booking["service_fee"], "total": booking["total"],
+            "currency": "ETB", "status": booking["payment"]["status"], "checkout_url": checkout_url,
+            "tx_ref": tx_ref, "expires_at": booking["payment"]["due_at"]}
+
+
 def book(
     user_id: str,
     hospital_id: str,
@@ -125,7 +157,12 @@ def book(
     correlation_id: Optional[str] = None,
     user_preferences: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Book and pay. Raises BookingError, AppointmentError or wallet.InsufficientFunds."""
+    """Hold the slot and open Chapa's checkout for it.
+
+    Returns the appointment (``awaiting_payment``) and the payment with its
+    ``checkout_url``. Raises BookingError (PaymentUnavailable when Chapa
+    cannot take it) or AppointmentError.
+    """
     hospital = partners.get(hospital_id)
     if hospital is None:
         raise BookingError("This hospital is not taking bookings through Endod right now.")
@@ -145,60 +182,140 @@ def book(
         raise BookingError("This hospital does not offer that service.")
     notes = _short_text(notes, "notes", 2000)
     duration = max(5, min(int(duration_minutes or 30), 480))
-    patient = _patient(user_id)
+    total = price + fee
+    if total and not partner_config.chapa_secret_key():
+        raise PaymentUnavailable("Payments are not set up yet.")
     location = None if mode == VIDEO else \
         ", ".join(p for p in (hospital.name, hospital.address, hospital.city) if p)[:200]
 
+    patient = _patient(user_id) if not total else None
     with session_scope() as session:
         _require_no_overlap(session, user_id, scheduled_at, duration, None)
+        booking_payments.require_hold_room(session, user_id)
         appointment = Appointment(
             id=new_uuid(), user_id=user_id, scheduled_at=scheduled_at, appointment_type="consultation",
             duration_minutes=duration, location=location, visit_mode=mode, department=service,
             time_window=time_window, facility_id=hospital.id, notes=notes, timezone=tz_name,
             correlation_id=correlation_id, hospital_id=hospital.id,
-            hospital_state=HospitalState.AWAITING_DOCTOR if mode == VIDEO else HospitalState.AWAITING_HOSPITAL,
-            price=price, service_fee=fee,
+            hospital_state=HospitalState.AWAITING_PAYMENT, price=price, service_fee=fee,
+            payment_status=PaymentState.AWAITING, payment_due_at=utcnow() + booking_payments.HOLD,
         )
         session.add(appointment)
         session.flush()
-        if price:
-            wallet.post(session, user_id, WalletEntryKind.PAYMENT, -price, appointment_id=appointment.id,
-                        description=f"{'Video visit' if mode == VIDEO else 'Visit'}: {hospital.name}")
-        if fee:
-            wallet.post(session, user_id, WalletEntryKind.SERVICE_FEE, -fee, appointment_id=appointment.id,
-                        description="Endod service fee")
-        session.add(HospitalPayout(hospital_id=hospital.id, appointment_id=appointment.id, amount=price))
-        # The booking identifies the patient to this hospital (contract section 1):
-        # what it then sends about them (records, follow-ups, queue places) is accepted.
-        from dedan_platform import patient_history
+        tx_ref = None
+        if total:
+            tx_ref = booking_payments.new_payment(session, appointment, total).tx_ref
+        else:
+            on_paid(session, appointment, patient)  # nothing to pay: booked at once
+        actions = list(session.info.get("after_commit", []))
+        appointment_id = appointment.id
+    for action in actions:
+        _quietly("after_commit", action)
 
-        patient_history.link_booking(session, user_id, hospital.id)
-        eventbus.emit(session, "appointment.requested", {
-            "appointment_id": appointment.id, "hospital_id": hospital.id, "patient": patient,
-            "visit_mode": _EVENT_MODE[mode], "service": service,
-            "scheduled_at": scheduled_at.isoformat(), "duration_minutes": duration,
-            "notes": notes, "price": price,
-        })
-        offsets = reminder_offsets_for(appointment, user_preferences)
-    # Built after the commit (objects stay loaded): no second session while
-    # the booking's transaction holds its locks.
-    payload = _to_payload(appointment)
+    checkout = None
+    if total:
+        try:
+            checkout = booking_payments.open_checkout(appointment_id, tx_ref, total, user_id)
+        except chapa.ChapaError as exc:
+            # No checkout, no hold: the slot is freed at once.
+            with session_scope() as session:
+                held, payment = booking_payments.lock_booking(session, appointment_id=appointment_id)
+                booking_payments.close_hold(session, payment, held, HospitalState.PAYMENT_EXPIRED,
+                                            "The payment could not be started.")
+            raise PaymentUnavailable(str(exc) if isinstance(exc, chapa.ChapaNotConfigured)
+                                     else "The payment could not be started. Please try again.", 502) from exc
+    with session_scope() as session:
+        payload = _to_payload(session.get(Appointment, appointment_id))
+    return {"appointment": payload, "payment": _payment_view(payload, checkout, tx_ref)}
 
-    _quietly("timeline", record_event,
-             user_id=user_id, event_type=HealthEventType.APPOINTMENT,
-             title=f"{'Video visit' if mode == VIDEO else 'Visit'} at {hospital.name}", description=notes,
-             occurred_at=scheduled_at, status=EventStatus.SCHEDULED,
-             metadata={"appointment_id": payload["appointment_id"], "location": location,
-                       "hospital_id": hospital.id},
-             correlation_id=correlation_id)
-    _quietly("inbox", _inbox, user_id, "appointment_booked",
-             "Video visit requested" if mode == VIDEO else "Visit booked",
-             f"Paid {wallet.birr(price + fee)} birr. "
-             + ("A doctor will approve it; you will be told here." if mode == VIDEO else
-                f"{hospital.name} has your booking."),
-             payload["appointment_id"])
-    return {"appointment": payload, "reminder_policy_count": len(offsets), "reminder_offsets": offsets,
-            "payment": {"price": price, "service_fee": fee, "total": price + fee}}
+
+#: A payment confirmed this close to (or after) the visit's start is too late:
+#: the hospital is not sent the booking, and the money goes back.
+SEND_GRACE = timedelta(minutes=5)
+
+
+def on_paid(session: Session, appointment: Appointment, patient: Optional[Dict[str, Any]],
+            payment: Optional[BookingPayment] = None) -> bool:
+    """Chapa confirmed the payment (booking_payments.settle, with the booking
+    locked): the hold becomes a booking and the hospital is told, once.
+
+    Returns False when the payment came too late for the visit (its start,
+    less ``SEND_GRACE``, has passed): nothing is sent, the hold ends and the
+    payment is refunded at once."""
+    if payment is not None and utcnow() >= ensure_aware(appointment.scheduled_at) - SEND_GRACE:
+        logger.warning("booking_paid_too_late appointment=%s tx_ref=%s", appointment.id, payment.tx_ref)
+        booking_payments.close_hold(session, payment, appointment, HospitalState.PAYMENT_EXPIRED,
+                                    "The payment arrived too close to the visit time.")
+        booking_payments.request_refund(session, payment, payment.amount, "Paid too close to the visit time")
+        appointment.payment_status = PaymentState.REFUND_PENDING
+        return False
+    mode = appointment.visit_mode or IN_PERSON
+    appointment.hospital_state = HospitalState.AWAITING_DOCTOR if mode == VIDEO else HospitalState.AWAITING_HOSPITAL
+    appointment.payment_status = PaymentState.PAID
+    appointment.payment_due_at = None
+    appointment.payment_url = None
+    price, fee = appointment.price or 0, appointment.service_fee or 0
+    session.add(HospitalPayout(hospital_id=appointment.hospital_id, appointment_id=appointment.id, amount=price))
+    # The booking identifies the patient to this hospital (contract section 1):
+    # what it then sends about them (records, follow-ups, queue places) is accepted.
+    from dedan_platform import patient_history
+
+    patient_history.link_booking(session, appointment.user_id, appointment.hospital_id)
+    eventbus.emit(session, "appointment.requested", {
+        "appointment_id": appointment.id, "hospital_id": appointment.hospital_id, "patient": patient,
+        "visit_mode": _EVENT_MODE[mode], "service": appointment.department,
+        "scheduled_at": ensure_aware(appointment.scheduled_at).isoformat(),
+        "duration_minutes": appointment.duration_minutes, "notes": appointment.notes, "price": price,
+    })
+    user_id, appointment_id, hospital_id = appointment.user_id, appointment.id, appointment.hospital_id
+    scheduled_at, notes, location = ensure_aware(appointment.scheduled_at), appointment.notes, appointment.location
+    correlation_id = appointment.correlation_id
+
+    def booked() -> None:
+        hospital = partners.get(hospital_id, listed_only=False)
+        name = hospital.name if hospital else "The hospital"
+        _quietly("timeline", record_event,
+                 user_id=user_id, event_type=HealthEventType.APPOINTMENT,
+                 title=f"{'Video visit' if mode == VIDEO else 'Visit'} at {name}", description=notes,
+                 occurred_at=scheduled_at, status=EventStatus.SCHEDULED,
+                 metadata={"appointment_id": appointment_id, "location": location, "hospital_id": hospital_id},
+                 correlation_id=correlation_id)
+        _quietly("inbox", _inbox, user_id, "appointment_booked",
+                 "Video visit requested" if mode == VIDEO else "Visit booked",
+                 f"Paid {wallet.birr(price + fee)} birr. "
+                 + ("A doctor will approve it; you will be told here." if mode == VIDEO else
+                    f"{name} has your booking."),
+                 appointment_id)
+        if mode != VIDEO:
+            # A video visit gets its reminders once a doctor approves it.
+            from dedan_platform import scheduler
+
+            _quietly("reminders", scheduler.schedule_all_channels, user_id=user_id, appointment_id=appointment_id,
+                     correlation_id=correlation_id)
+
+    eventbus.after_commit(session, booked)
+    return True
+
+
+def on_reversed(session: Session, appointment: Appointment) -> bool:
+    """Chapa reversed a paid booking's payment (booking_payments, booking
+    locked; the payout is already stopped). An open booking is cancelled and
+    the hospital told, as when Endod cancels an unanswered one. Returns
+    whether it was cancelled."""
+    if appointment.hospital_state not in HospitalState.OPEN:
+        return False
+    _close(session, appointment, HospitalState.CANCELLED, "The payment was reversed.")
+    eventbus.emit(session, "appointment.cancelled", {
+        "appointment_id": appointment.id, "hospital_id": appointment.hospital_id, "by": "endod"})
+    appointment_id = appointment.id
+
+    def stop_reminders() -> None:
+        from dedan_platform import notifications
+
+        _quietly("reminders", notifications.cancel_for_appointment, appointment_id)
+
+    eventbus.after_commit(session, stop_reminders)
+    return True
 
 
 def _inbox(user_id: str, kind: str, title: str, body: str, appointment_id: Optional[str]) -> None:
@@ -206,6 +323,16 @@ def _inbox(user_id: str, kind: str, title: str, body: str, appointment_id: Optio
 
     inbox.add_item(user_id, "appointments", kind, title, body=body, link_screen="appointment",
                    link_id=appointment_id)
+
+
+def _inbox_refund(user_id: str, title: str, refunded: int, appointment_id: str, prefix: str = "",
+                  prefix_am: str = "", suffix: str = "") -> None:
+    """A refund notice in the patient's language (no balance: back to how they paid)."""
+    language = booking_payments.language_of(user_id)
+    head = prefix_am if language == "am" else prefix
+    body = (head + refund_sentence(refunded, language)) if refunded else head.strip()
+    _inbox(user_id, "appointment_cancelled", booking_payments.title_in(title, language), body + suffix,
+           appointment_id)
 
 
 def _sms(session: Session, appointment: Appointment, template: str, amount: Optional[int] = None) -> None:
@@ -224,16 +351,33 @@ def _sms(session: Session, appointment: Appointment, template: str, amount: Opti
 
 
 def _refund(session: Session, appointment: Appointment, why: str) -> int:
-    """Pay back the price and fee (once, whatever retries) and void the hospital's share."""
+    """Refund the price and fee (once, whatever retries) and void the hospital's share.
+
+    The money goes back through Chapa to how the patient paid: a refund row
+    the events worker sends (booking_payments.process_refunds)."""
     amount = (appointment.price or 0) + (appointment.service_fee or 0)
-    if amount:
+    payment = session.scalar(select(BookingPayment).where(BookingPayment.appointment_id == appointment.id)
+                             .with_for_update())
+    if payment is not None:
+        if payment.status == BookingPaymentStatus.PAID and amount:
+            booking_payments.request_refund(session, payment, amount, why)
+            appointment.payment_status = PaymentState.REFUND_PENDING
+        else:
+            amount = 0
+    elif amount:
+        # Booked before per-booking payments, from the old Endod balance:
+        # refunded there, as it was paid.
         from dedan_platform.models import WalletEntry
 
+        paid = session.scalar(select(WalletEntry.id).where(
+            WalletEntry.appointment_id == appointment.id, WalletEntry.kind == WalletEntryKind.PAYMENT))
         already = session.scalar(select(WalletEntry.id).where(
             WalletEntry.appointment_id == appointment.id, WalletEntry.kind == WalletEntryKind.REFUND))
-        if already is None:
+        if paid is not None and already is None:
             wallet.post(session, appointment.user_id, WalletEntryKind.REFUND, amount,
                         appointment_id=appointment.id, description=why)
+        elif paid is None:
+            amount = 0
     payout = session.scalar(select(HospitalPayout).where(HospitalPayout.appointment_id == appointment.id)
                             .with_for_update())
     if payout is not None and payout.status == PayoutStatus.HELD:
@@ -256,6 +400,20 @@ def cancel_by_patient(user_id: str, appointment_id: str, correlation_id: Optiona
             Appointment.id == appointment_id, Appointment.user_id == user_id).with_for_update())
         if appointment is None:
             raise AppointmentNotFound("Appointment not found.")
+        if appointment.hospital_state == HospitalState.AWAITING_PAYMENT:
+            # Not paid, and the hospital never heard of it: the hold just ends
+            # (a payment Chapa confirms after this is refunded).
+            payment = session.scalar(select(BookingPayment).where(
+                BookingPayment.appointment_id == appointment.id).with_for_update())
+            if payment is not None:
+                booking_payments.close_hold(session, payment, appointment, HospitalState.CANCELLED,
+                                            "Cancelled by you before paying.")
+            else:
+                _close(session, appointment, HospitalState.CANCELLED, "Cancelled by you before paying.")
+            session.flush()
+            payload = _to_payload(appointment)
+            payload["reminders_cancelled"] = 0
+            return payload
         if appointment.hospital_state not in HospitalState.OPEN:
             raise AppointmentError("This visit is already closed.")
         if ensure_aware(appointment.scheduled_at) <= utcnow():
@@ -278,8 +436,7 @@ def cancel_by_patient(user_id: str, appointment_id: str, correlation_id: Optiona
     except Exception:  # noqa: BLE001 -- refunded already; a stray reminder is the lesser harm
         logger.exception("cancel_reminders_failed appointment=%s", appointment_id)
         payload["reminders_cancelled"] = 0
-    _quietly("inbox", _inbox, user_id, "appointment_cancelled", "Visit cancelled",
-             f"{wallet.birr(refunded)} birr is back in your balance.", appointment_id)
+    _quietly("inbox", _inbox_refund, user_id, "Visit cancelled", refunded, appointment_id)
     return payload
 
 
@@ -351,13 +508,12 @@ def _hospital_closed(session: Session, payload: Dict[str, Any], state: str, titl
          else patient_sms.BOOKING_CANCELLED, refunded)
     user_id, appointment_id = appointment.user_id, appointment.id
     reason = f" Reason: {decision.reason}" if decision.reason else ""
-    body = f"{wallet.birr(refunded)} birr is back in your balance.{reason}"
 
     def side_effects() -> None:
         from dedan_platform import notifications
 
         notifications.cancel_for_appointment(appointment_id)
-        _inbox(user_id, "appointment_cancelled", title, body, appointment_id)
+        _inbox_refund(user_id, title, refunded, appointment_id, suffix=reason)
 
     eventbus.after_commit(session, side_effects)
 
@@ -462,7 +618,6 @@ def refund_unanswered() -> int:
             user_id = appointment.user_id
         refunded += 1
         logger.warning("booking_unanswered_refunded appointment=%s", appointment_id)
-        _quietly("inbox", _inbox, user_id, "appointment_cancelled", "Visit cancelled",
-                 f"The hospital did not answer. {wallet.birr(amount)} birr is back in your balance.",
-                 appointment_id)
+        _quietly("inbox", _inbox_refund, user_id, "Visit cancelled", amount, appointment_id,
+                 "The hospital did not answer. ", "ሆስፒታሉ ምላሽ አልሰጠም። ")
     return refunded
