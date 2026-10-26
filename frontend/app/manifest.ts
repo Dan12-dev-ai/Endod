@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Endod Health",
     description:
       "Understand your symptoms, reach the right hospital faster, and arrive with a clear record. You stay in control of your health data.",
-    start_url: "/",
+    start_url: "/login",
     scope: "/",
     display: "standalone",
     orientation: "portrait",

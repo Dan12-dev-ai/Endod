@@ -65,6 +65,7 @@ export default function Interview() {
   }, []);
   // Shared: which card/record a notification click should highlight on the target page
   const [highlightTarget, setHighlightTarget] = useState<string | null>(null);
+  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   // "Book now" on a follow-up: booking opens at that hospital on that day.
   const [bookingPreset, setBookingPreset] = useState<BookingPreset | null>(null);
   const bookFollowUp = (preset: BookingPreset) => {
@@ -334,6 +335,9 @@ export default function Interview() {
                 setHighlightTarget(null);
                 navigateTo("setting");
               }}
+              recordId={selectedRecordId ?? undefined}
+              onBack={() => setSelectedRecordId(null)}
+              onSelectRecord={setSelectedRecordId}
             />
           )}
 

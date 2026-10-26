@@ -16,10 +16,10 @@ export default function Home() {
       <Hero />
       <Bottleneck />
       <BuildLab />
-      <Partners />
       <CloudLab />
       <SocialProof />
       <Pipette />
+      <Partners />
       <SocialLinks />
       <Footer />
     </>

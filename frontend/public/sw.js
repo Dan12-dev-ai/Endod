@@ -1,12 +1,12 @@
 /* Endod Health service worker */
-const CACHE_NAME = "endod-shell-v4";
-const OFFLINE_URL = "/";
+const CACHE_NAME = "endod-shell-v5";
+const OFFLINE_URL = "/login";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
       Promise.allSettled(
-        ["/", "/manifest.webmanifest", "/icon-192.png"].map((url) =>
+        ["/login", "/manifest.webmanifest", "/icon-192.png"].map((url) =>
           cache.add(url).catch(() => undefined),
         ),
       ),

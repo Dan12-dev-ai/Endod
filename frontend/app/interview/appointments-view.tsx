@@ -458,7 +458,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
               </div>
               <p className="text-xs sm:text-sm text-slate-500 mt-1">{t("appointments.subtitle")}</p>
             </div>
-            <button type="button" onClick={openBook} className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition self-start md:self-auto">
+            <button type="button" onClick={openBook} className="hidden lg:inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition self-start md:self-auto">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
                 <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -700,6 +700,19 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
             )}
           </div>
         </div>
+      )}
+      {!modal && (
+        <button
+          type="button"
+          aria-label={t("appointments.scheduleVisit")}
+          data-purpose="appointment-fab"
+          onClick={openBook}
+          className="fixed bottom-20 right-4 z-50 lg:hidden flex items-center justify-center w-12 h-12 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg transition"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
+            <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
       )}
     </>
   );

@@ -136,7 +136,7 @@ export default function SignUp() {
       <div className="max-w-[1360px] w-full grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center my-auto">
         {/* BEGIN: LeftColumn */}
         <section
-          className="lg:col-span-6 xl:col-span-6 flex flex-col justify-between pt-2 pb-6 lg:py-4 lg:pr-8 xl:pr-12"
+          className="order-2 lg:order-1 lg:col-span-6 xl:col-span-6 flex flex-col justify-between pt-2 pb-6 lg:py-4 lg:pr-8 xl:pr-12"
           data-purpose="social-proof-and-branding"
         >
           <div>
@@ -169,7 +169,7 @@ export default function SignUp() {
         {/* END: LeftColumn */}
 
         {/* BEGIN: RightColumn (Sign-Up Card) */}
-        <section className="lg:col-span-6 xl:col-span-6 flex justify-end" data-purpose="registration-form-card">
+        <section className="order-1 lg:order-2 lg:col-span-6 xl:col-span-6 flex justify-end mt-6 lg:mt-0" data-purpose="registration-form-card">
           <div className="w-full max-w-[540px] bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10 lg:p-11">
             {/* Card Heading */}
             <h2 className="font-serif text-4xl sm:text-[42px] font-medium text-brand-heading tracking-tight mb-7">

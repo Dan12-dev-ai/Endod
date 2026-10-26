@@ -48,6 +48,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
   const { t, locale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [department, setDepartment] = useState("");
+  const [ownershipFilter, setOwnershipFilter] = useState<"all" | "private" | "public">("all");
   const [sort, setSort] = useState<"name" | "distance">("name");
   const [coords, setCoords] = useState<Coords | null>(null);
   const [directory, setDirectory] = useState<FacilityList | null>(null);
@@ -250,7 +251,16 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
     }
   };
 
-  const facilities = useMemo(() => directory?.facilities ?? [], [directory]);
+  const allFacilities = useMemo(() => directory?.facilities ?? [], [directory]);
+  const facilities = useMemo(() => {
+    let list = allFacilities;
+    if (ownershipFilter !== "all") {
+      list = list.filter((f) =>
+        ownershipFilter === "private" ? f.ownership === "private" : f.ownership !== "private",
+      );
+    }
+    return list;
+  }, [allFacilities, ownershipFilter]);
   const mapPoints: MapPoint[] = useMemo(
     () => facilities.map((f) => ({ id: f.id, latitude: f.latitude, longitude: f.longitude, label: f.name })),
     [facilities],
@@ -263,22 +273,8 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
         {/* Breadcrumbs & Welcome Hero */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
-            <div className="flex items-center space-x-2 text-xs text-slate-400 mb-1">
-              <span>{t("booking.breadcrumb")}</span>
-              <span>/</span>
-              <span className="text-emerald-700 font-medium">{t("booking.breadcrumbCurrent")}</span>
-            </div>
             <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">{t("booking.title")}</h1>
-            <p className="text-xs md:text-sm text-slate-500 mt-0.5">{t("booking.subtitle")}</p>
           </div>
-          {directory && (
-            <div className="flex items-center space-x-2 text-xs text-slate-600 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-xs self-start sm:self-auto">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>
-                {t("booking.directory")} ({t(directory.total === 1 ? "booking.directoryCountOne" : "booking.directoryCountOther", { total: directory.total })})
-              </span>
-            </div>
-          )}
         </div>
 
         <section data-purpose="manual-booking-section" className="space-y-4 pb-6">
@@ -298,13 +294,13 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 className="w-full pl-9 pr-4 py-2 text-xs md:text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-slate-800 placeholder-slate-400"
               />
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 overflow-x-auto pb-1 -mb-1">
               <select
                 aria-label={t("booking.department")}
                 data-purpose="department-filter"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
-                className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 shrink-0"
               >
                 <option value="">{t("booking.allSpecialties")}</option>
                 {(directory?.departments ?? [...DEPARTMENT_KEYS]).map((d) => (
@@ -312,11 +308,22 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 ))}
               </select>
               <select
+                aria-label={t("booking.ownership")}
+                data-purpose="ownership-filter"
+                value={ownershipFilter}
+                onChange={(e) => setOwnershipFilter(e.target.value as "all" | "private" | "public")}
+                className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 shrink-0"
+              >
+                <option value="all">{t("booking.allFacilities")}</option>
+                <option value="private">{t("booking.private")}</option>
+                <option value="public">{t("booking.public")}</option>
+              </select>
+              <select
                 aria-label={t("booking.sort")}
                 data-purpose="sort-filter"
                 value={sort}
                 onChange={(e) => chooseSort(e.target.value)}
-                className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 shrink-0"
               >
                 <option value="name">{t("booking.sortName")}</option>
                 <option value="distance">{t("booking.sortDistance")}</option>
