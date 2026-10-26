@@ -123,7 +123,7 @@ export default function HospitalMap({
   return (
     <div
       aria-label={t("map.label")}
-      className="relative z-0 w-full h-56 sm:h-64 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100"
+      className="relative z-0 w-full h-64 sm:h-80 lg:h-[26rem] xl:h-[30rem] rounded-2xl overflow-hidden border border-slate-200 bg-slate-100"
       data-purpose="hospital-map"
       ref={box}
       role="region"
