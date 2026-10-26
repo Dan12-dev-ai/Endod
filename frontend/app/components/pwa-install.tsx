@@ -109,7 +109,7 @@ export default function PwaInstallButton() {
             setOpen(true);
           }
         }}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-white hover:bg-white/10 transition-colors"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-neutral-400 text-white hover:bg-white hover:text-black transition-colors"
         aria-label="Install app"
         data-purpose="pwa-install"
         data-testid="install-app"

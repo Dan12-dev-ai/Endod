@@ -13,10 +13,26 @@ const PARTNERS = [
   { name: "Zewditu Hospital", domain: "zewdituhospital.gov.et" },
 ];
 
+// Double the set so one "half" is wide enough to fill large screens.
+const HALF = [...PARTNERS, ...PARTNERS];
+
+function Logo({ name }: { name: string }) {
+  return (
+    <div className="flex-shrink-0 w-24 md:w-80 lg:w-96 flex items-center justify-center drop-shadow-md">
+      <img
+        src="/logo.jpeg"
+        alt={name}
+        width={320}
+        height={320}
+        className="h-16 w-16 md:h-64 md:w-64 lg:h-72 lg:w-72 object-contain"
+        loading="lazy"
+      />
+    </div>
+  );
+}
+
 export default function Partners() {
   const { t } = useI18n();
-
-  const loop = [...PARTNERS, ...PARTNERS];
 
   return (
     <section
@@ -33,27 +49,29 @@ export default function Partners() {
         </p>
       </div>
 
-      <div className="relative">
-        {/* Fade edges */}
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-white to-transparent z-10" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-white to-transparent z-10" />
-
-        <div className="flex animate-marquee gap-24 sm:gap-32 items-center w-max">
-          {loop.map((p, i) => (
-            <div
-              key={i}
-              className="flex-shrink-0 w-40 sm:w-48 flex items-center justify-center opacity-100 transition-all duration-300 drop-shadow-md"
-            >
-              <img
-                src="/logo.jpeg"
-                alt={p.name}
-                width={64}
-                height={64}
-                className="h-20 w-20 sm:h-24 sm:w-24 object-contain"
-                loading="lazy"
-              />
-            </div>
-          ))}
+      <div
+        className="relative overflow-hidden"
+        style={{
+          maskImage:
+            "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
+          WebkitMaskImage:
+            "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
+        }}
+      >
+        <div className="marquee-track flex flex-shrink-0 w-max whitespace-nowrap hover:[animation-play-state:paused]">
+          <div className="flex flex-shrink-0 items-center gap-8 md:gap-16 lg:gap-16 pr-8 md:pr-16 lg:pr-16">
+            {HALF.map((p, i) => (
+              <Logo key={`a-${i}`} name={p.name} />
+            ))}
+          </div>
+          <div
+            className="flex flex-shrink-0 items-center gap-8 md:gap-16 lg:gap-16 pr-8 md:pr-16 lg:pr-16"
+            aria-hidden="true"
+          >
+            {HALF.map((p, i) => (
+              <Logo key={`b-${i}`} name={p.name} />
+            ))}
+          </div>
         </div>
       </div>
     </section>
