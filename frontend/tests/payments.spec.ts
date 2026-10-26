@@ -107,7 +107,7 @@ test.describe('Paying for each booking through Chapa', () => {
   test('a booking the hospital declines is refunded and shown so', async ({ page }) => {
     const booking = await createAppointment(page.request, {
       scheduled_at: futureSlot(11, 9, 30).iso, timezone: 'Africa/Addis_Ababa', facility_id: PARTNER_ID,
-      visit_mode: 'in_person', department: 'general_medicine', time_window: 'morning',
+      visit_mode: 'in_person', department: 'general_medicine',
     });
     await payBooking(page.request, booking.payment!);
     let card = await partnerCard(page, 'upcoming', booking.appointment_id);
