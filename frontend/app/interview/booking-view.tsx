@@ -320,6 +320,7 @@ export default function BookingView({ patientId, onToast, onOpenWallet, preset, 
 
           <div className="mb-4">
             <HospitalMap
+              fill
               here={here}
               onSelect={(id) => {
                 const facility = facilities.find((f) => f.id === id);
