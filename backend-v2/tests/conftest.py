@@ -78,7 +78,8 @@ class FakeChapa:
         self.outage = None  # an HTTP status Chapa answers verify with (e.g. 503)
         self.refund_requests = []  # bodies of POST /refund/{tx_ref}, with "tx_ref" added
         self.refunds = {}  # ref_id -> {"status": "processing", "reference": ...}
-        #: How POST /refund answers: None (accepts), an HTTP status (e.g. 503), or "refuse".
+        #: How POST /refund answers: None (accepts), an HTTP status (e.g. 503), "refuse",
+        #: or "lost" (accepts it, but the answer never arrives: a timeout).
         self.refund_outcome = None
 
     def handler(self, request):
@@ -126,6 +127,8 @@ class FakeChapa:
             ref_id = f"MERC-REF-{len(self.refunds) + 1}"
             self.refunds[ref_id] = {"status": "processing", "reference": body.get("reference"),
                                     "amount": body.get("amount"), "tx_ref": tx_ref}
+            if self.refund_outcome == "lost":
+                raise httpx.ReadTimeout("timed out", request=request)
             return httpx.Response(200, json={"status": "success", "message": "Refund initiated successfully",
                                              "data": {"ref_id": ref_id, "payment_reference": "APabc123"}})
         return httpx.Response(404)
@@ -148,8 +151,11 @@ class FakeChapa:
         return body["appointment"]["appointment_id"]
 
     def finish_refunds(self, status="refunded"):
+        """Chapa finishes its refunds; a completed one shows on the payment too."""
         for refund in self.refunds.values():
             refund["status"] = status
+            if status == "refunded":
+                self.payments[refund["tx_ref"]]["status"] = "refunded"
 
 
 @pytest.fixture

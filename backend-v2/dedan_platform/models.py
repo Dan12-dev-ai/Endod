@@ -845,7 +845,10 @@ class BookingPaymentStatus:
     EXPIRED = "expired"
     #: Chapa reported a payment of another amount or currency: never accepted.
     MISMATCH = "mismatch"
-    ALL = (PENDING, PAID, EXPIRED, MISMATCH)
+    #: Paid, then refunded or reversed at Chapa without an Endod refund (a
+    #: chargeback or a refund from the dashboard): the booking is cancelled.
+    REVERSED = "reversed"
+    ALL = (PENDING, PAID, EXPIRED, MISMATCH, REVERSED)
 
 
 class BookingPayment(Base):
@@ -913,6 +916,11 @@ class BookingRefund(Base):
     #: Chapa's id for the refund (``ref_id``), once accepted.
     chapa_ref_id: Mapped[Optional[str]] = mapped_column(String(100))
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: A request to Chapa may have been accepted without our hearing so (a lost
+    #: answer, a timeout, a crash mid-call): Chapa is asked before anything else.
+    maybe_accepted: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
+    #: Set while a call to Chapa is under way; still set later means its answer was lost.
+    in_flight_since: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     next_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[Optional[str]] = mapped_column(String(300))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

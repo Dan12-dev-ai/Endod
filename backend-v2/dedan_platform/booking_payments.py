@@ -18,9 +18,15 @@ CBE Birr, M-Pesa, a bank or a card.
   hospital never answered, or a late payment) is one ``BookingRefund`` row per
   payment, sent to Chapa's refund API by the events worker
   (``process_refunds``), retried with backoff, and followed until Chapa says
-  the money reached the payer. When Chapa refuses it, reverses it or cannot be
-  reached for long, it becomes ``manual_refund_needed``: logged as an ALERT and
-  audited, for Endod to refund from the Chapa dashboard.
+  the money reached the payer. Before anything is retried after an unknown
+  outcome, and whenever Chapa refuses, the payment is looked up at Chapa: a
+  refund that already went through is adopted, never repeated. When Chapa
+  refuses a first request, reverses a refund, or cannot be reached for long,
+  it becomes ``manual_refund_needed``: an ALERT (saying whether a refund may
+  already exist) and an audit row, for Endod to settle from the Chapa dashboard.
+* A paid booking whose payment Chapa reverses or refunds without us (a
+  chargeback) is cancelled, the hospital told and its payout stopped.
+* Rows are always locked appointment first, then payment (``lock_booking``).
 
 Money is in santim (integers).
 """
@@ -31,7 +37,7 @@ import json
 import logging
 import time
 from datetime import timedelta
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
@@ -68,6 +74,8 @@ class PaymentState:
     EXPIRED = "expired"
     REFUND_PENDING = "refund_pending"
     REFUNDED = "refunded"
+    #: Chapa reversed the payment (a chargeback): the booking was cancelled.
+    REVERSED = "reversed"
 
 
 class PaymentNotFound(LookupError):
@@ -128,6 +136,26 @@ def _run(actions: List[Callable[[], None]]) -> None:
         _quietly("after_commit", action)
 
 
+# --- locks ---------------------------------------------------------------------------------
+
+def lock_booking(session: Session, *, tx_ref: Optional[str] = None, payment_id: Optional[str] = None,
+                 appointment_id: Optional[str] = None) -> Tuple[Optional[Appointment], Optional[BookingPayment]]:
+    """Lock a booking's appointment, then its payment: the one order every
+    writer uses (hospital decisions, cancels, confirmations, expiry, refunds),
+    so two of them can never wait on each other."""
+    if appointment_id is None:
+        query = select(BookingPayment.appointment_id)
+        query = query.where(BookingPayment.tx_ref == tx_ref) if tx_ref else query.where(BookingPayment.id == payment_id)
+        appointment_id = session.scalar(query)
+        if appointment_id is None:
+            return None, None
+    appointment = session.scalar(select(Appointment).where(Appointment.id == appointment_id)
+                                 .with_for_update().execution_options(populate_existing=True))
+    payment = session.scalar(select(BookingPayment).where(BookingPayment.appointment_id == appointment_id)
+                             .with_for_update().execution_options(populate_existing=True))
+    return appointment, payment
+
+
 # --- holds -------------------------------------------------------------------------------
 
 def require_hold_room(session: Session, user_id: str) -> None:
@@ -161,8 +189,7 @@ def open_checkout(appointment_id: str, tx_ref: str, amount: int, user_id: str) -
         description="Health visit booking",
     )
     with session_scope() as session:
-        payment = session.scalar(select(BookingPayment).where(BookingPayment.tx_ref == tx_ref).with_for_update())
-        appointment = session.get(Appointment, appointment_id, with_for_update=True)
+        appointment, payment = lock_booking(session, appointment_id=appointment_id)
         payment.checkout_url = checkout
         if appointment.payment_status == PaymentState.AWAITING:
             appointment.payment_url = checkout
@@ -186,11 +213,31 @@ def close_hold(session: Session, payment: BookingPayment, appointment: Appointme
         _transition(appointment, EventStatus.CANCELLED)
 
 
-def expire_holds(budget_seconds: float = BUDGET) -> int:
-    """End holds whose time is up. Chapa is asked first (within a time budget),
-    in case a payment arrived without its notification."""
+def _expire_one(tx_ref: str, check_with_chapa: bool) -> bool:
     from dedan_platform.hospital_bookings import HospitalState
 
+    if check_with_chapa:
+        try:
+            settle(tx_ref)
+        except chapa.ChapaError as exc:
+            logger.warning("hold_check_failed tx_ref=%s %s", tx_ref, exc)
+    with session_scope() as session:
+        appointment, payment = lock_booking(session, tx_ref=tx_ref)
+        if payment is None or payment.status != BookingPaymentStatus.PENDING:
+            return False
+        if appointment is not None and appointment.hospital_state == HospitalState.AWAITING_PAYMENT:
+            close_hold(session, payment, appointment, HospitalState.PAYMENT_EXPIRED,
+                       "The payment was not completed in time.")
+        else:
+            payment.status = BookingPaymentStatus.EXPIRED
+    logger.info("booking_hold_expired tx_ref=%s", tx_ref)
+    return True
+
+
+def expire_holds(budget_seconds: float = BUDGET) -> int:
+    """End holds whose time is up. Chapa is asked first (within a time budget),
+    in case a payment arrived without its notification. Each hold is handled
+    on its own: one failing never keeps the others held."""
     now = utcnow()
     with session_scope() as session:
         refs = list(session.scalars(select(BookingPayment.tx_ref).where(
@@ -198,23 +245,10 @@ def expire_holds(budget_seconds: float = BUDGET) -> int:
         ).order_by(BookingPayment.expires_at).limit(50)))
     expired, started = 0, time.monotonic()
     for tx_ref in refs:
-        if time.monotonic() - started < budget_seconds:
-            try:
-                settle(tx_ref)
-            except chapa.ChapaError as exc:
-                logger.warning("hold_check_failed tx_ref=%s %s", tx_ref, exc)
-        with session_scope() as session:
-            payment = session.scalar(select(BookingPayment).where(BookingPayment.tx_ref == tx_ref).with_for_update())
-            if payment is None or payment.status != BookingPaymentStatus.PENDING:
-                continue
-            appointment = session.get(Appointment, payment.appointment_id, with_for_update=True)
-            if appointment is not None and appointment.hospital_state == HospitalState.AWAITING_PAYMENT:
-                close_hold(session, payment, appointment, HospitalState.PAYMENT_EXPIRED,
-                           "The payment was not completed in time.")
-            else:
-                payment.status = BookingPaymentStatus.EXPIRED
-        expired += 1
-        logger.info("booking_hold_expired tx_ref=%s", tx_ref)
+        try:
+            expired += int(_expire_one(tx_ref, time.monotonic() - started < budget_seconds))
+        except Exception:  # noqa: BLE001 -- the next round tries it again
+            logger.exception("hold_expiry_failed tx_ref=%s", tx_ref)
     return expired
 
 
@@ -232,11 +266,16 @@ def _payload(payment: BookingPayment) -> Dict[str, Any]:
     }
 
 
-def settle(tx_ref: str) -> Optional[Dict[str, Any]]:
+_SETTLED = (BookingPaymentStatus.MISMATCH, BookingPaymentStatus.REVERSED)
+
+
+def settle(tx_ref: str, recheck_paid: bool = False) -> Optional[Dict[str, Any]]:
     """Check a booking's payment with Chapa and act on it, once.
 
     Returns the payment, or None when ``tx_ref`` is not a booking payment.
-    Raises ChapaError when Chapa gave no answer (nothing changes then).
+    Raises ChapaError when Chapa gave no answer (nothing changes then). A paid
+    payment is asked about again only with ``recheck_paid`` (Chapa notified a
+    refund or reversal), to catch chargebacks.
     """
     from dedan_platform import hospital_bookings
     from dedan_platform.hospital_bookings import HospitalState
@@ -245,18 +284,20 @@ def settle(tx_ref: str) -> Optional[Dict[str, Any]]:
         payment = session.scalar(select(BookingPayment).where(BookingPayment.tx_ref == tx_ref))
         if payment is None:
             return None
-        if payment.status in (BookingPaymentStatus.PAID, BookingPaymentStatus.MISMATCH):
+        if payment.status in _SETTLED or (payment.status == BookingPaymentStatus.PAID and not recheck_paid):
             return _payload(payment)  # settled for good: nothing to ask Chapa
-        payment_id, user_id = payment.id, payment.user_id
+        user_id = payment.user_id
     record = chapa.verify(tx_ref)
+    if record.get("reversed"):
+        return _on_reversed(tx_ref)
     # Read before taking the locks (it opens a session of its own).
     patient = hospital_bookings._patient(user_id) if record["paid"] else None
+    notice = None
     with session_scope() as session:
-        payment = session.get(BookingPayment, payment_id, with_for_update=True, populate_existing=True)
+        appointment, payment = lock_booking(session, tx_ref=tx_ref)
         payment.last_checked_at = utcnow()
-        if not record["paid"] or payment.status in (BookingPaymentStatus.PAID, BookingPaymentStatus.MISMATCH):
+        if not record["paid"] or payment.status in _SETTLED + (BookingPaymentStatus.PAID,):
             return _payload(payment)
-        appointment = session.get(Appointment, payment.appointment_id, with_for_update=True, populate_existing=True)
         exact = record["amount"] == payment.amount and record.get("currency") == payment.currency
         if not exact:
             # Never accept another amount or currency (a tampered checkout, or
@@ -271,7 +312,7 @@ def settle(tx_ref: str) -> Optional[Dict[str, Any]]:
                            "The payment did not match the price.")
             refund = request_refund(session, payment, record["amount"] or 0, "Payment did not match the price")
             mark_manual(session, refund, f"amount mismatch: Chapa reported {record['amount']} "
-                                         f"{record.get('currency')}")
+                                         f"{record.get('currency')}; no refund was sent", may_exist=False)
             appointment.payment_status = PaymentState.REFUND_PENDING
             body_en = ("Your payment did not match the price, so the visit was not booked. Endod will refund "
                        "it to your payment method (it can take a few days).")
@@ -283,8 +324,13 @@ def settle(tx_ref: str) -> Optional[Dict[str, Any]]:
             payment.paid_at = utcnow()
             payment.provider_reference = (record.get("reference") or "")[:100] or None
             if appointment.hospital_state == HospitalState.AWAITING_PAYMENT:
-                hospital_bookings.on_paid(session, appointment, patient)
-                notice = None
+                if not hospital_bookings.on_paid(session, appointment, patient, payment):
+                    notice = ("Payment refunded",
+                              "Your payment arrived too close to the visit time, so the visit was not booked. "
+                              + refund_sentence(payment.amount, "en"),
+                              "ክፍያዎ ለቀጠሮው ሰዓት በጣም ተቃርቦ ስለደረሰ ቀጠሮው አልተያዘም። "
+                              + refund_sentence(payment.amount, "am"),
+                              "payment_refunded")
             else:
                 # The hold ended (expired, or the patient cancelled it) before
                 # Chapa confirmed: the slot may be gone, so the money goes back.
@@ -301,9 +347,66 @@ def settle(tx_ref: str) -> Optional[Dict[str, Any]]:
         appointment_id = appointment.id
     _run(actions)
     if notice is not None:
-        language = language_of(user_id)
-        _quietly("inbox", _inbox, user_id, title_in(notice[0], language),
-                 notice[2] if language == "am" else notice[1], appointment_id, notice[3])
+        _notify(user_id, appointment_id, *notice)
+    return result
+
+
+def _notify(user_id: str, appointment_id: str, title: str, body_en: str, body_am: str, kind: str) -> None:
+    language = language_of(user_id)
+    _quietly("inbox", _inbox, user_id, title_in(title, language), body_am if language == "am" else body_en,
+             appointment_id, kind)
+
+
+def _on_reversed(tx_ref: str) -> Dict[str, Any]:
+    """Chapa reports the payment refunded or reversed (status ``refunded`` or
+    ``reversed``; webhooks ``charge.refunded`` / ``charge.reversed``).
+
+    If Endod asked for that refund, it is done. Otherwise the money went back
+    without us (a chargeback, or a refund from the dashboard): an unpaid
+    booking cannot stand, so it is cancelled, the hospital told, its payout
+    stopped, and the patient told; loudly logged and audited."""
+    from dedan_platform import hospital_bookings
+    from dedan_platform.models import HospitalPayout, PayoutStatus
+
+    notice = None
+    with session_scope() as session:
+        appointment, payment = lock_booking(session, tx_ref=tx_ref)
+        payment.last_checked_at = utcnow()
+        refund = session.scalar(select(BookingRefund).where(BookingRefund.payment_id == payment.id)
+                                .with_for_update())
+        if refund is not None:
+            if refund.status != RefundStatus.SUCCEEDED:
+                _succeed(refund, appointment, "Chapa shows the payment refunded")
+            return _payload(payment)
+        if payment.status != BookingPaymentStatus.PAID:
+            # Never confirmed here (pending, expired, mismatched): nothing was booked on it.
+            if payment.status == BookingPaymentStatus.PENDING:
+                payment.status = BookingPaymentStatus.EXPIRED
+            return _payload(payment)
+        payment.status = BookingPaymentStatus.REVERSED
+        appointment.payment_status = PaymentState.REVERSED
+        payout = session.scalar(select(HospitalPayout).where(HospitalPayout.appointment_id == appointment.id)
+                                .with_for_update())
+        if payout is not None and payout.status == PayoutStatus.HELD:
+            payout.status, payout.updated_at = PayoutStatus.VOID, utcnow()
+        elif payout is not None and payout.status in (PayoutStatus.DUE, PayoutStatus.PAID):
+            payout.status, payout.updated_at = PayoutStatus.DISPUTED, utcnow()
+        cancelled = hospital_bookings.on_reversed(session, appointment)
+        logger.error("ALERT booking_payment_reversed tx_ref=%s appointment=%s amount=%s cancelled=%s", tx_ref,
+                     appointment.id, payment.amount, cancelled)
+        session.add(UserEvent(user_id=payment.user_id, event_type="payment.reversed", payload=json.dumps({
+            "tx_ref": tx_ref, "appointment_id": appointment.id, "amount": payment.amount,
+            "booking_cancelled": cancelled})))
+        notice = ("Booking cancelled: payment reversed",
+                  "Your payment for this visit was reversed through Chapa, so the booking is cancelled. "
+                  "Book again if you still need the visit.",
+                  "ለዚህ ቀጠሮ የከፈሉት ገንዘብ በቻፓ በኩል ስለተመለሰ ቀጠሮው ተሰርዟል። አሁንም ጉብኝቱ ካስፈለገዎት እንደገና ያስይዙ።",
+                  "payment_reversed")
+        result, user_id, appointment_id = _payload(payment), payment.user_id, appointment.id
+        actions = list(session.info.get("after_commit", []))
+    _run(actions)
+    if notice is not None:
+        _notify(user_id, appointment_id, *notice)
     return result
 
 
@@ -317,7 +420,7 @@ def status_for(user_id: str, tx_ref: str) -> Dict[str, Any]:
             BookingPayment.tx_ref == tx_ref, BookingPayment.user_id == user_id))
         if payment is None:
             raise PaymentNotFound("Payment not found.")
-        settled = payment.status in (BookingPaymentStatus.PAID, BookingPaymentStatus.MISMATCH)
+        settled = payment.status in _SETTLED + (BookingPaymentStatus.PAID,)
     if not settled:
         try:
             settle(tx_ref)
@@ -329,24 +432,44 @@ def status_for(user_id: str, tx_ref: str) -> Dict[str, Any]:
         return {**_payload(payment), "appointment": _to_payload(appointment)}
 
 
+#: Chapa documents no expiry for a checkout page, so a hold that ended is
+#: asked about for this long (a payment made later is refunded) ...
+LATE_PAYMENT_WINDOW = timedelta(days=7)
+#: ... less often as it ages: (age up to, check every).
+LATE_CHECKS = ((timedelta(hours=1), timedelta(minutes=5)), (timedelta(days=1), timedelta(minutes=30)),
+               (LATE_PAYMENT_WINDOW, timedelta(hours=6)))
+
+
+def _late_check_due(expires_at, last_checked_at, now) -> bool:
+    age = now - ensure_aware(expires_at)
+    for up_to, every in LATE_CHECKS:
+        if age <= up_to:
+            return last_checked_at is None or now - ensure_aware(last_checked_at) >= every
+    return False
+
+
 def recheck(budget_seconds: float = BUDGET) -> int:
     """Ask Chapa about payments whose notification may have been missed: open
-    holds a few minutes old, and (less often) holds that ended in the last day,
-    in case the patient still paid (then refunded)."""
+    holds a few minutes old, and holds that ended unpaid, for as long as their
+    checkout could still be paid (then refunded), less often as they age."""
     now = utcnow()
     with session_scope() as session:
-        refs = list(session.scalars(select(BookingPayment.tx_ref).where(or_(
-            and_(BookingPayment.status == BookingPaymentStatus.PENDING,
-                 BookingPayment.created_at < now - timedelta(minutes=2),
-                 or_(BookingPayment.last_checked_at.is_(None),
-                     BookingPayment.last_checked_at < now - timedelta(minutes=5))),
-            and_(BookingPayment.status == BookingPaymentStatus.EXPIRED,
-                 BookingPayment.expires_at > now - timedelta(days=1),
-                 or_(BookingPayment.last_checked_at.is_(None),
-                     BookingPayment.last_checked_at < now - timedelta(minutes=30))),
-        )).order_by(BookingPayment.created_at.desc()).limit(20)))
+        pending = list(session.scalars(select(BookingPayment.tx_ref).where(
+            BookingPayment.status == BookingPaymentStatus.PENDING,
+            BookingPayment.created_at < now - timedelta(minutes=2),
+            or_(BookingPayment.last_checked_at.is_(None),
+                BookingPayment.last_checked_at < now - timedelta(minutes=5)),
+        ).order_by(BookingPayment.created_at.desc()).limit(20)))
+        ended = session.execute(select(BookingPayment.tx_ref, BookingPayment.expires_at,
+                                       BookingPayment.last_checked_at).where(
+            BookingPayment.status == BookingPaymentStatus.EXPIRED,
+            BookingPayment.expires_at > now - LATE_PAYMENT_WINDOW,
+            or_(BookingPayment.last_checked_at.is_(None),
+                BookingPayment.last_checked_at < now - timedelta(minutes=5)),
+        ).order_by(BookingPayment.last_checked_at.asc()).limit(200)).all()
+    late = [ref for ref, expires_at, checked in ended if _late_check_due(expires_at, checked, now)][:20]
     checked, started = 0, time.monotonic()
-    for tx_ref in refs:
+    for tx_ref in pending + late:
         if time.monotonic() - started > budget_seconds:
             break
         try:
@@ -365,135 +488,232 @@ def recheck(budget_seconds: float = BUDGET) -> int:
 
 def request_refund(session: Session, payment: BookingPayment, amount: int, reason: str) -> BookingRefund:
     """The refund of ``payment`` (made once: a second request returns the first).
-    Sent to Chapa by the events worker. Call with the payment row locked."""
+    Sent to Chapa by the events worker. Call with the booking locked (lock_booking)."""
     existing = session.scalar(select(BookingRefund).where(BookingRefund.payment_id == payment.id))
     if existing is not None:
         return existing
     refund = BookingRefund(payment_id=payment.id, appointment_id=payment.appointment_id, user_id=payment.user_id,
                            amount=amount, reason=reason[:200], reference=f"endod-rf-{payment.id}"[:64],
-                           status=RefundStatus.PENDING, next_attempt_at=utcnow())
+                           status=RefundStatus.PENDING, next_attempt_at=utcnow(), maybe_accepted=False)
     session.add(refund)
     session.flush()
     logger.info("refund_requested payment=%s amount=%s reason=%s", payment.tx_ref, amount, reason)
     return refund
 
 
-def mark_manual(session: Session, refund: BookingRefund, why: str) -> None:
-    """Endod must refund this one by hand (Chapa dashboard): said loudly."""
+def mark_manual(session: Session, refund: BookingRefund, why: str, may_exist: bool) -> None:
+    """Endod must look at this one by hand (Chapa dashboard): said loudly,
+    with whether Chapa may already have accepted a refund for it."""
     refund.status = RefundStatus.MANUAL
     refund.last_error = why[:300]
     refund.next_attempt_at = None
+    refund.in_flight_since = None
     refund.updated_at = utcnow()
     tx_ref = session.scalar(select(BookingPayment.tx_ref).where(BookingPayment.id == refund.payment_id))
-    logger.error("ALERT manual_refund_needed refund=%s tx_ref=%s amount=%s appointment=%s why=%s",
-                 refund.id, tx_ref, refund.amount, refund.appointment_id, why)
+    hint = ("a refund MAY ALREADY HAVE BEEN ACCEPTED by Chapa" if may_exist
+            else "Chapa has accepted no refund for it")
+    logger.error("ALERT manual_refund_needed refund=%s tx_ref=%s amount=%s appointment=%s refund_may_exist=%s "
+                 "why=%s -- %s; check the Chapa dashboard before refunding",
+                 refund.id, tx_ref, refund.amount, refund.appointment_id, "yes" if may_exist else "no", why, hint)
     session.add(UserEvent(user_id=refund.user_id, event_type="payment.manual_refund_needed", payload=json.dumps({
         "refund_id": refund.id, "tx_ref": tx_ref, "amount": refund.amount, "appointment_id": refund.appointment_id,
+        "refund_may_already_exist": may_exist,
     })))
 
 
-def _set_appointment(session: Session, appointment_id: str, state: str) -> None:
-    appointment = session.get(Appointment, appointment_id)
+def _succeed(refund: BookingRefund, appointment: Optional[Appointment], why: str) -> None:
+    refund.status, refund.completed_at, refund.next_attempt_at = RefundStatus.SUCCEEDED, utcnow(), None
+    refund.in_flight_since, refund.updated_at = None, utcnow()
     if appointment is not None:
-        appointment.payment_status = state
+        appointment.payment_status = PaymentState.REFUNDED
+    logger.info("refund_succeeded refund=%s %s", refund.id, why)
+
+
+def _locked_refund(session: Session, refund_id: str) -> Tuple[Optional[Appointment], BookingRefund]:
+    """The refund and its appointment, locked appointment first (as everywhere)."""
+    appointment_id = session.scalar(select(BookingRefund.appointment_id).where(BookingRefund.id == refund_id))
+    appointment = session.scalar(select(Appointment).where(Appointment.id == appointment_id).with_for_update()
+                                 .execution_options(populate_existing=True))
+    refund = session.scalar(select(BookingRefund).where(BookingRefund.id == refund_id).with_for_update()
+                            .execution_options(populate_existing=True))
+    return appointment, refund
+
+
+def _money_back_at_chapa(tx_ref: str) -> bool:
+    """Whether Chapa shows the payment refunded (or reversed): the money is
+    back with the payer, whoever asked. Raises ChapaError on no answer."""
+    return bool(chapa.verify(tx_ref).get("reversed"))
+
+
+#: An unconfirmed refund (Chapa refused a retry that may have duplicated an
+#: accepted one) is watched this long before a person looks.
+REFUND_UNCONFIRMED_FOR = timedelta(days=3)
 
 
 def _attempt(refund_id: str) -> bool:
     """One step for one refund: send it, or check on it. True if Chapa was asked."""
     now = utcnow()
     with session_scope() as session:
-        refund = session.get(BookingRefund, refund_id, with_for_update=True)
+        _appointment, refund = _locked_refund(session, refund_id)
         if refund is None or refund.status not in (RefundStatus.PENDING, RefundStatus.SUBMITTED):
             return False
         if refund.next_attempt_at is not None and ensure_aware(refund.next_attempt_at) > now:
             return False  # another worker has it, or it is not time yet
+        if refund.in_flight_since is not None:
+            # The last call's answer was never recorded (lost, or the worker died).
+            refund.maybe_accepted = True
         # Claimed for a while: a crash mid-call leaves it to be tried again
-        # later (with the same reference, which Chapa will not pay twice).
+        # later, with the same reference (and Chapa asked first).
         refund.next_attempt_at = now + REFUND_LEASE
-        if refund.status == RefundStatus.PENDING:
-            refund.attempts += 1
+        refund.in_flight_since = now
         refund.updated_at = now
-        status, attempts, ref_id = refund.status, refund.attempts, refund.chapa_ref_id
+        status, ref_id, maybe = refund.status, refund.chapa_ref_id, bool(refund.maybe_accepted)
         amount, reason, reference = refund.amount, refund.reason, refund.reference
-        created = ensure_aware(refund.created_at)
+        created, updated_attempts = ensure_aware(refund.created_at), refund.attempts
         tx_ref = session.scalar(select(BookingPayment.tx_ref).where(BookingPayment.id == refund.payment_id))
-    if status == RefundStatus.PENDING:
-        try:
-            accepted = chapa.refund(tx_ref, amount, reason, reference)
-        except chapa.RefundRefused as exc:
-            with session_scope() as session:
-                mark_manual(session, session.get(BookingRefund, refund_id, with_for_update=True), str(exc))
-            return True
-        except chapa.ChapaError as exc:
-            with session_scope() as session:
-                refund = session.get(BookingRefund, refund_id, with_for_update=True)
-                if attempts > len(REFUND_BACKOFF):
-                    mark_manual(session, refund, f"Chapa unavailable after {attempts} attempts: {exc}")
-                else:
-                    refund.last_error = str(exc)[:300]
-                    refund.next_attempt_at = utcnow() + REFUND_BACKOFF[attempts - 1]
-                    refund.updated_at = utcnow()
-                    logger.warning("refund_retry refund=%s attempt=%s %s", refund_id, attempts, exc)
-            return True
-        with session_scope() as session:
-            refund = session.get(BookingRefund, refund_id, with_for_update=True)
-            refund.chapa_ref_id = accepted.get("ref_id")
-            refund.last_error = None
-            refund.updated_at = utcnow()
-            if refund.chapa_ref_id:
-                refund.status, refund.next_attempt_at = RefundStatus.SUBMITTED, utcnow() + REFUND_CHECK_EVERY
-            else:  # accepted, but nothing to follow it by: taken as done
-                refund.status, refund.completed_at, refund.next_attempt_at = RefundStatus.SUCCEEDED, utcnow(), None
-                _set_appointment(session, refund.appointment_id, PaymentState.REFUNDED)
-            logger.info("refund_accepted refund=%s tx_ref=%s ref_id=%s", refund_id, tx_ref, refund.chapa_ref_id)
-        return True
-    # Submitted: has the money reached the payer?
+    if status == RefundStatus.SUBMITTED:
+        return _follow(refund_id, tx_ref, ref_id, created)
     try:
-        state = chapa.verify_refund(ref_id)
+        if maybe and _money_back_at_chapa(tx_ref):
+            with session_scope() as session:
+                appointment, refund = _locked_refund(session, refund_id)
+                _succeed(refund, appointment, "Chapa shows the payment refunded (an earlier request went through)")
+            return True
+        accepted = chapa.refund(tx_ref, amount, reason, reference)
+    except chapa.ChapaNotConfigured:
+        _release(refund_id, "Chapa is not configured")
+        return False
+    except chapa.RefundRefused as exc:
+        return _refused(refund_id, tx_ref, str(exc), maybe)
+    except chapa.ChapaError as exc:
+        with session_scope() as session:
+            _appointment, refund = _locked_refund(session, refund_id)
+            refund.attempts = updated_attempts + 1
+            refund.in_flight_since = None
+            # No answer is not a "no": the request may have gone through.
+            refund.maybe_accepted = True
+            if refund.attempts > len(REFUND_BACKOFF):
+                mark_manual(session, refund, f"Chapa unavailable after {refund.attempts} attempts: {exc}",
+                            may_exist=True)
+            else:
+                refund.last_error = str(exc)[:300]
+                refund.next_attempt_at = utcnow() + REFUND_BACKOFF[refund.attempts - 1]
+                refund.updated_at = utcnow()
+                logger.warning("refund_retry refund=%s attempt=%s %s", refund_id, refund.attempts, exc)
+        return True
+    with session_scope() as session:
+        _appointment, refund = _locked_refund(session, refund_id)
+        refund.chapa_ref_id = accepted.get("ref_id")
+        refund.last_error, refund.in_flight_since = None, None
+        refund.status, refund.next_attempt_at = RefundStatus.SUBMITTED, utcnow() + REFUND_CHECK_EVERY
+        refund.updated_at = utcnow()
+        logger.info("refund_accepted refund=%s tx_ref=%s ref_id=%s", refund_id, tx_ref, refund.chapa_ref_id)
+    return True
+
+
+def _release(refund_id: str, why: str) -> None:
+    """Not tried (no Chapa key): stays pending, attempt not counted, back soon."""
+    with session_scope() as session:
+        _appointment, refund = _locked_refund(session, refund_id)
+        refund.in_flight_since = None
+        refund.last_error = why
+        refund.next_attempt_at = utcnow() + NOT_CONFIGURED_WAIT
+        refund.updated_at = utcnow()
+
+
+def _refused(refund_id: str, tx_ref: str, message: str, maybe: bool) -> bool:
+    """Chapa said no. A refusal can mean an earlier request of ours (same
+    reference) already went through, so Chapa is asked about the payment
+    before a person is: never a second refund by hand for one Chapa has."""
+    try:
+        back: Optional[bool] = _money_back_at_chapa(tx_ref)
+        lookup_error = None
+    except chapa.ChapaError as exc:
+        back, lookup_error = None, str(exc)
+    with session_scope() as session:
+        appointment, refund = _locked_refund(session, refund_id)
+        refund.in_flight_since = None
+        refund.updated_at = utcnow()
+        if back:
+            _succeed(refund, appointment, "Chapa shows the payment refunded (refused as a repeat)")
+        elif back is None:
+            # Could not look: ask again later, as for any outage.
+            refund.attempts += 1
+            if refund.attempts > len(REFUND_BACKOFF):
+                mark_manual(session, refund, f"{message}; Chapa could not be asked about the payment "
+                                             f"({lookup_error})", may_exist=maybe)
+            else:
+                refund.last_error = f"{message}; lookup failed: {lookup_error}"[:300]
+                refund.next_attempt_at = utcnow() + REFUND_BACKOFF[refund.attempts - 1]
+        elif not maybe:
+            # Our only request, answered no, and the payment is not refunded.
+            mark_manual(session, refund, message, may_exist=False)
+        else:
+            # Perhaps a repeat of a request Chapa accepted and is still
+            # processing: watch the payment before a person looks.
+            refund.status = RefundStatus.SUBMITTED
+            refund.last_error = f"{message}; checking whether an earlier request went through"[:300]
+            refund.next_attempt_at = utcnow() + REFUND_CHECK_EVERY
+            logger.warning("refund_unconfirmed refund=%s tx_ref=%s %s", refund_id, tx_ref, message)
+    return True
+
+
+def _follow(refund_id: str, tx_ref: str, ref_id: Optional[str], created) -> bool:
+    """A refund Chapa accepted (``ref_id``), or may have (none): has the money
+    reached the payer?"""
+    error = None
+    try:
+        state = chapa.verify_refund(ref_id) if ref_id else ("refunded" if _money_back_at_chapa(tx_ref) else "unknown")
     except chapa.ChapaError as exc:
         state, error = "unknown", str(exc)
-    else:
-        error = None
     with session_scope() as session:
-        refund = session.get(BookingRefund, refund_id, with_for_update=True)
+        appointment, refund = _locked_refund(session, refund_id)
+        refund.in_flight_since = None
         refund.updated_at = utcnow()
         if state in ("refunded", "success", "successful", "completed"):
-            refund.status, refund.completed_at, refund.next_attempt_at = RefundStatus.SUCCEEDED, utcnow(), None
-            _set_appointment(session, refund.appointment_id, PaymentState.REFUNDED)
-            logger.info("refund_succeeded refund=%s tx_ref=%s", refund_id, tx_ref)
-        elif state in ("reversed", "failed", "cancelled", "canceled", "rejected"):
-            mark_manual(session, refund, f"Chapa {state} the refund {ref_id}")
-        elif utcnow() - created > REFUND_FOLLOW_FOR:
+            _succeed(refund, appointment, f"tx_ref={tx_ref} ref_id={ref_id}")
+        elif ref_id and state in ("reversed", "failed", "cancelled", "canceled", "rejected"):
+            mark_manual(session, refund, f"Chapa {state} the refund {ref_id}: the money did not reach the payer",
+                        may_exist=False)
+        elif not ref_id and utcnow() - created > REFUND_UNCONFIRMED_FOR:
+            mark_manual(session, refund, f"Chapa refused a repeated request and shows no refund after "
+                                         f"{REFUND_UNCONFIRMED_FOR.days} days ({refund.last_error})", may_exist=True)
+        elif ref_id and utcnow() - created > REFUND_FOLLOW_FOR:
             mark_manual(session, refund, f"Chapa still says {state} for refund {ref_id} after "
-                                         f"{REFUND_FOLLOW_FOR.days} days")
+                                         f"{REFUND_FOLLOW_FOR.days} days", may_exist=True)
         else:
-            refund.last_error = error[:300] if error else None
+            if error:
+                refund.last_error = error[:300]
             refund.next_attempt_at = utcnow() + REFUND_CHECK_EVERY
     return True
 
 
+#: With no Chapa key, refunds wait (not counted as attempts) and are tried this often.
+NOT_CONFIGURED_WAIT = timedelta(minutes=5)
+
+
 def process_refunds(budget_seconds: float = BUDGET) -> int:
     """Send due refunds to Chapa and follow the ones it accepted (the events worker)."""
+    from dedan_platform import partner_config
+
     now = utcnow()
     with session_scope() as session:
         ids = list(session.scalars(select(BookingRefund.id).where(
             BookingRefund.status.in_([RefundStatus.PENDING, RefundStatus.SUBMITTED]),
             or_(BookingRefund.next_attempt_at.is_(None), BookingRefund.next_attempt_at <= now),
         ).order_by(BookingRefund.next_attempt_at).limit(20)))
+    if not ids:
+        return 0
+    if not partner_config.chapa_secret_key():
+        # Nothing is tried, so nothing is counted against the refunds.
+        logger.warning("refunds_waiting chapa_not_configured due=%s: set CHAPA_SECRET_KEY", len(ids))
+        return 0
     done, started = 0, time.monotonic()
     for refund_id in ids:
         if time.monotonic() - started > budget_seconds:
             break
         try:
             done += int(_attempt(refund_id))
-        except chapa.ChapaNotConfigured:
-            logger.error("ALERT refunds_waiting chapa_not_configured")
-            break
+        except Exception:  # noqa: BLE001 -- one refund failing never holds up the rest
+            logger.exception("refund_step_failed refund=%s", refund_id)
     return done
-
-
-def refund_payload(session: Session, appointment_id: str) -> Optional[Dict[str, Any]]:
-    refund = session.scalar(select(BookingRefund).where(BookingRefund.appointment_id == appointment_id))
-    if refund is None:
-        return None
-    return {"amount": refund.amount, "status": refund.status}

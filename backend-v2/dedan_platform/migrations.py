@@ -113,6 +113,8 @@ _COLUMN_MIGRATIONS: Tuple[ColumnMigration, ...] = (
     ColumnMigration("appointments", "payment_status", "VARCHAR(24)"),
     ColumnMigration("appointments", "payment_due_at", "TIMESTAMP WITH TIME ZONE"),
     ColumnMigration("appointments", "payment_url", "VARCHAR(500)"),
+    ColumnMigration("booking_refunds", "maybe_accepted", "BOOLEAN"),
+    ColumnMigration("booking_refunds", "in_flight_since", "TIMESTAMP WITH TIME ZONE"),
 )
 
 #: (index name, table, columns). Created only if absent.

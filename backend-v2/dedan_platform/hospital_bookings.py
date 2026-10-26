@@ -219,9 +219,7 @@ def book(
         except chapa.ChapaError as exc:
             # No checkout, no hold: the slot is freed at once.
             with session_scope() as session:
-                payment = session.scalar(select(BookingPayment).where(BookingPayment.tx_ref == tx_ref)
-                                         .with_for_update())
-                held = session.get(Appointment, appointment_id, with_for_update=True)
+                held, payment = booking_payments.lock_booking(session, appointment_id=appointment_id)
                 booking_payments.close_hold(session, payment, held, HospitalState.PAYMENT_EXPIRED,
                                             "The payment could not be started.")
             raise PaymentUnavailable(str(exc) if isinstance(exc, chapa.ChapaNotConfigured)
@@ -231,9 +229,26 @@ def book(
     return {"appointment": payload, "payment": _payment_view(payload, checkout, tx_ref)}
 
 
-def on_paid(session: Session, appointment: Appointment, patient: Dict[str, Any]) -> None:
-    """Chapa confirmed the payment (booking_payments.settle, with the rows
-    locked): the hold becomes a booking and the hospital is told, once."""
+#: A payment confirmed this close to (or after) the visit's start is too late:
+#: the hospital is not sent the booking, and the money goes back.
+SEND_GRACE = timedelta(minutes=5)
+
+
+def on_paid(session: Session, appointment: Appointment, patient: Optional[Dict[str, Any]],
+            payment: Optional[BookingPayment] = None) -> bool:
+    """Chapa confirmed the payment (booking_payments.settle, with the booking
+    locked): the hold becomes a booking and the hospital is told, once.
+
+    Returns False when the payment came too late for the visit (its start,
+    less ``SEND_GRACE``, has passed): nothing is sent, the hold ends and the
+    payment is refunded at once."""
+    if payment is not None and utcnow() >= ensure_aware(appointment.scheduled_at) - SEND_GRACE:
+        logger.warning("booking_paid_too_late appointment=%s tx_ref=%s", appointment.id, payment.tx_ref)
+        booking_payments.close_hold(session, payment, appointment, HospitalState.PAYMENT_EXPIRED,
+                                    "The payment arrived too close to the visit time.")
+        booking_payments.request_refund(session, payment, payment.amount, "Paid too close to the visit time")
+        appointment.payment_status = PaymentState.REFUND_PENDING
+        return False
     mode = appointment.visit_mode or IN_PERSON
     appointment.hospital_state = HospitalState.AWAITING_DOCTOR if mode == VIDEO else HospitalState.AWAITING_HOSPITAL
     appointment.payment_status = PaymentState.PAID
@@ -279,6 +294,28 @@ def on_paid(session: Session, appointment: Appointment, patient: Dict[str, Any])
                      correlation_id=correlation_id)
 
     eventbus.after_commit(session, booked)
+    return True
+
+
+def on_reversed(session: Session, appointment: Appointment) -> bool:
+    """Chapa reversed a paid booking's payment (booking_payments, booking
+    locked; the payout is already stopped). An open booking is cancelled and
+    the hospital told, as when Endod cancels an unanswered one. Returns
+    whether it was cancelled."""
+    if appointment.hospital_state not in HospitalState.OPEN:
+        return False
+    _close(session, appointment, HospitalState.CANCELLED, "The payment was reversed.")
+    eventbus.emit(session, "appointment.cancelled", {
+        "appointment_id": appointment.id, "hospital_id": appointment.hospital_id, "by": "endod"})
+    appointment_id = appointment.id
+
+    def stop_reminders() -> None:
+        from dedan_platform import notifications
+
+        _quietly("reminders", notifications.cancel_for_appointment, appointment_id)
+
+    eventbus.after_commit(session, stop_reminders)
+    return True
 
 
 def _inbox(user_id: str, kind: str, title: str, body: str, appointment_id: Optional[str]) -> None:

@@ -5,6 +5,7 @@
   checked with Chapa (the app asks this when the patient comes back from Chapa).
 * ``/users/me/appointments/{id}/video``: join details for an approved video visit.
 * ``/users/me/care/emergency``: numbers to call, and the nearest partner hospitals' ambulances.
+* ``/payments/status``: whether online payment is available (public).
 * ``/payments/chapa/...``: Chapa's webhook and callback (public; they only
   trigger a verification with Chapa, see booking_payments.settle).
 * ``/users/me/wallet``: the old Endod balance, readable; top-ups are gone (410).
@@ -116,11 +117,35 @@ def emergency(latitude: Optional[float] = Query(default=None, ge=-90, le=90),
 
 # --- Chapa (public) ---------------------------------------------------------------------
 
+#: Chapa's hosted checkout pages: the only place the app sends a patient to pay.
+CHAPA_CHECKOUT_ORIGIN = "https://checkout.chapa.co"
+
+
+@router.get("/payments/status")
+@router.get("/users/me/payments/status")  # the same, through the app's /users/me proxy
+def payments_status() -> Dict[str, Any]:
+    """Whether online payment is on (a Chapa key is set), so the app can say
+    so before anyone presses "Pay and book", and the pages it may send a
+    patient to for paying: Chapa's checkout, plus the configured Chapa
+    server's own origin when it is not Chapa's (a test stand-in). Public; no
+    secrets."""
+    from urllib.parse import urlsplit
+
+    from dedan_platform import partner_config
+
+    origins = [CHAPA_CHECKOUT_ORIGIN]
+    base = urlsplit(partner_config.chapa_base_url())
+    if base.scheme and base.netloc and not base.netloc.endswith("chapa.co"):
+        origins.append(f"{base.scheme}://{base.netloc}")
+    return {"online_payments": bool(partner_config.chapa_secret_key()), "checkout_origins": origins}
+
+
 def _settle(tx_ref: Optional[str], recheck_settled: bool = False) -> Dict[str, Any]:
     if not tx_ref or len(tx_ref) > 64:
         raise HTTPException(status_code=400, detail="Missing transaction reference.")
     try:
-        result = booking_payments.settle(tx_ref)
+        # A refund or reversal notice re-checks even a paid booking (a chargeback).
+        result = booking_payments.settle(tx_ref, recheck_paid=recheck_settled)
         if result is None:
             # Not a booking: a deposit from the old balance (still settled, never started any more).
             result = deposits.settle(tx_ref, recheck_settled=recheck_settled)
@@ -154,8 +179,8 @@ async def chapa_webhook(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Bad body.") from exc
     body = body if isinstance(body, dict) else {}
     tx_ref = body.get("tx_ref") or body.get("trx_ref")
-    # (Old deposits only:) a refund or reversal of an earlier payment is checked
-    # even though the deposit was already credited (Chapa's verify is still the judge).
+    # A refund or reversal (charge.refunded / charge.reversed) of an earlier
+    # payment is checked even though it was settled (Chapa's verify is still the judge).
     words = f"{body.get('event', '')} {body.get('status', '')}".lower()
     reversal = "refund" in words or "revers" in words
     # Settling calls Chapa (blocking I/O): off the event loop.

@@ -695,6 +695,7 @@ class TestRefundDelivery:
         assert booking_payments.process_refunds() == 1
         [refund] = refunds()
         assert refund.status == "pending" and refund.attempts == 1 and "503" in refund.last_error
+        assert refund.maybe_accepted is True  # no answer is not a "no"
         wait = refund.next_attempt_at.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)
         assert timedelta(seconds=50) < wait <= timedelta(minutes=1)
         assert booking_payments.process_refunds() == 0  # not due yet
@@ -702,7 +703,7 @@ class TestRefundDelivery:
         make_refunds_due()
         assert booking_payments.process_refunds() == 1
         [refund] = refunds()
-        assert refund.status == "submitted" and refund.attempts == 2 and refund.last_error is None
+        assert refund.status == "submitted" and refund.attempts == 1 and refund.last_error is None
         assert len(chapa_api.refunds) == 1
 
     def test_a_refund_chapa_cannot_take_for_long_becomes_manual(self, client, auth, bus, listed, chapa_api, caplog):
@@ -721,9 +722,13 @@ class TestRefundDelivery:
         [refund] = refunds()
         assert refund.status == "manual_refund_needed" and refund.next_attempt_at is None
         assert "ALERT manual_refund_needed" in caplog.text and refund.id in caplog.text
+        # Chapa never answered: a refund may exist, and the alert says so.
+        assert "refund_may_exist=yes" in caplog.text
+        assert "check the Chapa dashboard before refunding" in caplog.text
         with session_scope() as session:
             audit = session.scalar(select(UserEvent).where(UserEvent.event_type == "payment.manual_refund_needed"))
-            assert json.loads(audit.payload)["amount"] == 15800
+            payload = json.loads(audit.payload)
+            assert payload["amount"] == 15800 and payload["refund_may_already_exist"] is True
         # Left for a person: the worker sends nothing more.
         sent_before = len(chapa_api.refund_requests)
         make_refunds_due()
@@ -732,7 +737,7 @@ class TestRefundDelivery:
         # The patient still sees it as on its way.
         assert appointment_of(client, auth, aid)["hospital_booking"]["payment"]["status"] == "refund_pending"
 
-    def test_a_refund_chapa_refuses_is_manual_at_once(self, client, auth, bus, listed, chapa_api, caplog):
+    def test_a_first_request_chapa_refuses_is_manual_at_once(self, client, auth, bus, listed, chapa_api, caplog):
         from dedan_platform import booking_payments
 
         self._rejected(client, auth, bus, chapa_api)
@@ -741,19 +746,97 @@ class TestRefundDelivery:
             booking_payments.process_refunds()
         [refund] = refunds()
         assert refund.status == "manual_refund_needed" and "Insufficient balance" in refund.last_error
-        assert "ALERT manual_refund_needed" in caplog.text
+        assert "ALERT manual_refund_needed" in caplog.text and "refund_may_exist=no" in caplog.text
+        assert "check the Chapa dashboard before refunding" in caplog.text
 
-    def test_a_refund_chapa_reverses_is_manual(self, client, auth, bus, listed, chapa_api):
+    def test_a_refusal_when_chapa_shows_the_payment_refunded_is_adopted(self, client, auth, bus, listed, chapa_api):
+        from dedan_platform import booking_payments
+
+        aid = self._rejected(client, auth, bus, chapa_api)
+        chapa_api.refund_outcome = "refuse"
+        chapa_api.payments[payment_row(aid).tx_ref]["status"] = "refunded"  # e.g. refunded from the dashboard
+        booking_payments.process_refunds()
+        assert refunds()[0].status == "succeeded"
+        assert appointment_of(client, auth, aid)["hospital_booking"]["payment"]["status"] == "refunded"
+
+    def test_a_lost_answer_is_looked_up_and_adopted_never_refunded_twice(self, client, auth, bus, listed, chapa_api,
+                                                                         caplog):
+        from dedan_platform import booking_payments
+
+        aid = self._rejected(client, auth, bus, chapa_api)
+        chapa_api.refund_outcome = "lost"  # Chapa accepts it, the answer times out
+        booking_payments.process_refunds()
+        [refund] = refunds()
+        assert refund.status == "pending" and refund.maybe_accepted is True
+        # The retry: Chapa (still processing) refuses the repeated reference.
+        chapa_api.refund_outcome = None
+        make_refunds_due()
+        with caplog.at_level(logging.ERROR):
+            booking_payments.process_refunds()
+        [refund] = refunds()
+        assert refund.status == "submitted" and "Duplicate reference" in refund.last_error
+        assert "manual_refund_needed" not in caplog.text
+        # Chapa finishes the one refund it has: adopted.
+        chapa_api.finish_refunds()
+        make_refunds_due()
+        booking_payments.process_refunds()
+        assert refunds()[0].status == "succeeded"
+        assert len(chapa_api.refunds) == 1
+        assert appointment_of(client, auth, aid)["hospital_booking"]["payment"]["status"] == "refunded"
+
+    def test_an_unconfirmed_refund_left_too_long_is_manual_with_a_warning(self, client, auth, bus, listed, chapa_api,
+                                                                          caplog):
+        from sqlalchemy import update
+
+        from dedan_platform import booking_payments
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import BookingRefund
+
+        self._rejected(client, auth, bus, chapa_api)
+        chapa_api.refund_outcome = "lost"
+        booking_payments.process_refunds()
+        chapa_api.refund_outcome = None
+        make_refunds_due()
+        booking_payments.process_refunds()  # refused as a repeat: watched
+        with session_scope() as session:
+            session.execute(update(BookingRefund).values(created_at=datetime.now(timezone.utc) - timedelta(days=4)))
+        make_refunds_due()
+        with caplog.at_level(logging.ERROR):
+            booking_payments.process_refunds()
+        assert refunds()[0].status == "manual_refund_needed"
+        assert "refund_may_exist=yes" in caplog.text and "MAY ALREADY HAVE BEEN ACCEPTED" in caplog.text
+
+    def test_a_crash_mid_call_is_looked_up_before_anything_else(self, client, auth, bus, listed, chapa_api):
+        from dedan_platform import booking_payments
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import BookingRefund
+
+        aid = self._rejected(client, auth, bus, chapa_api)
+        booking_payments.process_refunds()  # Chapa accepts it ...
+        with session_scope() as session:  # ... and the worker dies before recording that
+            refund = session.get(BookingRefund, refunds()[0].id)
+            refund.status, refund.chapa_ref_id = "pending", None
+            refund.in_flight_since = datetime.now(timezone.utc) - timedelta(minutes=11)
+        chapa_api.finish_refunds()  # meanwhile Chapa completed it
+        make_refunds_due()
+        booking_payments.process_refunds()
+        assert refunds()[0].status == "succeeded"
+        assert len(chapa_api.refund_requests) == 1  # looked up, never sent again
+        assert appointment_of(client, auth, aid)["hospital_booking"]["payment"]["status"] == "refunded"
+
+    def test_a_refund_chapa_reverses_is_manual(self, client, auth, bus, listed, chapa_api, caplog):
         from dedan_platform import booking_payments
 
         self._rejected(client, auth, bus, chapa_api)
         booking_payments.process_refunds()
         chapa_api.finish_refunds("reversed")
         make_refunds_due()
-        booking_payments.process_refunds()
+        with caplog.at_level(logging.ERROR):
+            booking_payments.process_refunds()
         assert refunds()[0].status == "manual_refund_needed"
+        assert "refund_may_exist=no" in caplog.text
 
-    def test_one_refund_per_payment_whatever_happens(self, client, auth, bus, listed, chapa_api):
+    def test_one_refund_per_payment(self, client, auth, bus, listed, chapa_api):
         from sqlalchemy.exc import IntegrityError
 
         from dedan_platform import booking_payments
@@ -769,15 +852,6 @@ class TestRefundDelivery:
             with session_scope() as session:
                 session.add(BookingRefund(payment_id=payment.id, appointment_id=aid, user_id=payment.user_id,
                                           amount=1, reason="x", reference="endod-rf-other"))
-        # A crash after Chapa accepted (before we recorded it) retries with the
-        # same reference, which Chapa refuses: a person checks; never paid twice.
-        booking_payments.process_refunds()
-        with session_scope() as session:
-            refund = session.get(BookingRefund, refunds()[0].id)
-            refund.status, refund.chapa_ref_id = "pending", None
-        make_refunds_due()
-        booking_payments.process_refunds()
-        assert len(chapa_api.refunds) == 1 and refunds()[0].status == "manual_refund_needed"
 
     def test_two_workers_never_send_the_same_refund(self, client, auth, bus, listed, chapa_api, monkeypatch):
         from dedan_platform import booking_payments, chapa
@@ -794,6 +868,220 @@ class TestRefundDelivery:
         monkeypatch.setattr(chapa, "refund", slow)
         assert booking_payments.process_refunds() == 1
         assert len(chapa_api.refund_requests) == 1
+
+    def test_no_chapa_key_burns_no_attempts(self, client, auth, bus, listed, chapa_api, monkeypatch, caplog):
+        from dedan_platform import booking_payments
+
+        self._rejected(client, auth, bus, chapa_api)
+        monkeypatch.delenv("CHAPA_SECRET_KEY")
+        with caplog.at_level(logging.WARNING):
+            for _ in range(10):
+                make_refunds_due()
+                assert booking_payments.process_refunds() == 0
+        [refund] = refunds()
+        assert refund.status == "pending" and refund.attempts == 0
+        assert "refunds_waiting chapa_not_configured" in caplog.text
+        # A worker that finds the key gone mid-round leaves it pending, uncounted, for a few minutes.
+        assert booking_payments._attempt(refund.id) is False
+        [refund] = refunds()
+        assert refund.status == "pending" and refund.attempts == 0 and refund.in_flight_since is None
+        wait = refund.next_attempt_at.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)
+        assert timedelta(minutes=4) < wait <= booking_payments.NOT_CONFIGURED_WAIT
+        assert chapa_api.refund_requests == []
+        # The key is set again: it goes out.
+        monkeypatch.setenv("CHAPA_SECRET_KEY", "CHASECK_TEST-key")
+        make_refunds_due()
+        assert booking_payments.process_refunds() == 1 and refunds()[0].status == "submitted"
+
+
+class TestChargebacks:
+    def test_a_reversed_payment_cancels_the_booking_and_tells_everyone(self, client, auth, bus, listed, chapa_api,
+                                                                       caplog):
+        from sqlalchemy import select
+
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import HospitalPayout, UserEvent
+
+        aid = paid(client, auth, chapa_api)
+        tx_ref = payment_row(aid).tx_ref
+        run_worker(bus)
+        chapa_api.payments[tx_ref]["status"] = "reversed"
+        # An ordinary notice does not re-open a paid booking ...
+        client.post("/payments/chapa/webhook", json={"tx_ref": tx_ref, "status": "success"})
+        assert appointment_of(client, auth, aid)["hospital_booking"]["state"] == "awaiting_hospital"
+        # ... Chapa's reversal notice does, and its verify confirms it.
+        with caplog.at_level(logging.ERROR):
+            for _ in range(2):
+                resp = client.post("/payments/chapa/webhook",
+                                   json={"tx_ref": tx_ref, "event": "charge.reversed", "status": "reversed"})
+                assert resp.status_code == 200 and resp.json()["status"] == "reversed"
+        appointment = appointment_of(client, auth, aid)
+        assert appointment["status"] == "CANCELLED" and appointment["hospital_booking"]["state"] == "cancelled"
+        assert appointment["hospital_booking"]["payment"]["status"] == "reversed"
+        run_worker(bus)
+        assert [e for e in sent(bus) if e[0] == "appointment.cancelled"] == [
+            ("appointment.cancelled", {"appointment_id": aid, "hospital_id": HOSPITAL, "by": "endod"})]
+        assert refunds() == []
+        assert "ALERT booking_payment_reversed" in caplog.text
+        with session_scope() as session:
+            assert session.scalar(select(HospitalPayout.status)) == "void"
+            assert session.scalar(select(UserEvent.id).where(UserEvent.event_type == "payment.reversed"))
+        assert [i["title"] for i in inbox_items(client, auth)].count("Booking cancelled: payment reversed") == 1
+
+    def test_a_completed_visit_reversed_is_flagged_for_the_payout(self, client, auth, bus, listed, chapa_api):
+        from sqlalchemy import select
+
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import HospitalPayout
+
+        aid = paid(client, auth, chapa_api)
+        from_hospital(bus, "appointment.completed", {"appointment_id": aid, "hospital_id": HOSPITAL})
+        run_worker(bus)
+        tx_ref = payment_row(aid).tx_ref
+        chapa_api.payments[tx_ref]["status"] = "refunded"
+        client.post("/payments/chapa/webhook", json={"tx_ref": tx_ref, "event": "charge.refunded"})
+        assert appointment_of(client, auth, aid)["status"] == "COMPLETED"
+        with session_scope() as session:
+            assert session.scalar(select(HospitalPayout.status)) == "disputed"
+
+    def test_our_own_refund_completing_is_not_a_chargeback(self, client, auth, bus, listed, chapa_api):
+        from dedan_platform import booking_payments
+
+        aid = paid(client, auth, chapa_api)
+        from_hospital(bus, "appointment.rejected", {"appointment_id": aid, "hospital_id": HOSPITAL})
+        run_worker(bus)
+        booking_payments.process_refunds()
+        chapa_api.finish_refunds()
+        client.post("/payments/chapa/webhook", json={"tx_ref": payment_row(aid).tx_ref, "event": "charge.refunded"})
+        assert refunds()[0].status == "succeeded"
+        appointment = appointment_of(client, auth, aid)
+        assert appointment["hospital_booking"]["state"] == "rejected"
+        assert appointment["hospital_booking"]["payment"]["status"] == "refunded"
+        assert not any(i["kind"] == "payment_reversed" for i in inbox_items(client, auth))
+
+
+class TestLateAndLockedPayments:
+    def test_a_payment_too_close_to_the_visit_is_refunded_not_sent(self, client, auth, bus, listed, chapa_api):
+        from sqlalchemy import update
+
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import Appointment
+
+        resp = book(client, auth, at=datetime.now(timezone.utc) + timedelta(minutes=20))
+        aid = resp.json()["appointment"]["appointment_id"]
+        with session_scope() as session:  # the patient pays when the visit is minutes away
+            session.execute(update(Appointment).where(Appointment.id == aid).values(
+                scheduled_at=datetime.now(timezone.utc) + timedelta(minutes=3)))
+        chapa_api.pay_booking(client, resp)
+        appointment = appointment_of(client, auth, aid)
+        assert appointment["status"] == "CANCELLED" and appointment["hospital_booking"]["state"] == "payment_expired"
+        assert appointment["hospital_booking"]["payment"]["status"] == "refund_pending"
+        assert payment_row(aid).status == "paid"
+        assert [(r.appointment_id, r.amount) for r in refunds()] == [(aid, 15800)]
+        run_worker(bus)
+        assert requested(bus) == []
+        items = [i for i in inbox_items(client, auth) if i["title"] == "Payment refunded"]
+        assert len(items) == 1 and "too close to the visit time" in items[0]["body"]
+
+    def test_late_payments_are_looked_for_through_the_checkout_lifetime(self, client, auth, listed, chapa_api):
+        from sqlalchemy import update
+
+        from dedan_platform import booking_payments
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import BookingPayment
+
+        resp = book(client, auth)
+        aid, tx_ref = resp.json()["appointment"]["appointment_id"], resp.json()["payment"]["tx_ref"]
+        end_hold(aid)
+        assert booking_payments.expire_holds() == 1
+
+        def aged(days, checked_hours_ago=None):
+            now = datetime.now(timezone.utc)
+            with session_scope() as session:
+                session.execute(update(BookingPayment).where(BookingPayment.tx_ref == tx_ref).values(
+                    expires_at=now - timedelta(days=days),
+                    last_checked_at=None if checked_hours_ago is None else now - timedelta(hours=checked_hours_ago)))
+
+        aged(3, checked_hours_ago=1)
+        assert booking_payments.recheck() == 0  # three days on: every six hours
+        aged(3, checked_hours_ago=7)
+        assert booking_payments.recheck() == 1
+        aged(8)
+        assert booking_payments.recheck() == 0  # past the window
+        aged(6)
+        chapa_api.pay(tx_ref)  # paid six days later
+        assert booking_payments.recheck() == 1
+        assert [r.amount for r in refunds()] == [15800]
+
+    def test_the_check_schedule_slows_down_with_age(self):
+        from dedan_platform.booking_payments import _late_check_due
+
+        now = datetime.now(timezone.utc)
+        ago = lambda **kw: now - timedelta(**kw)  # noqa: E731
+        assert _late_check_due(ago(minutes=30), ago(minutes=6), now)
+        assert not _late_check_due(ago(hours=5), ago(minutes=20), now)
+        assert _late_check_due(ago(hours=5), ago(minutes=31), now)
+        assert not _late_check_due(ago(days=2), ago(hours=5), now)
+        assert _late_check_due(ago(days=6, hours=23), None, now)
+        assert not _late_check_due(ago(days=7, minutes=1), None, now)
+
+    def test_one_failing_hold_does_not_keep_the_others(self, client, auth, listed, chapa_api, monkeypatch):
+        from dedan_platform import booking_payments
+
+        first = book(client, auth).json()
+        second = book(client, auth, at=when(days=3)).json()
+        for body in (first, second):
+            end_hold(body["appointment"]["appointment_id"])
+        real = booking_payments.settle
+
+        def broken(tx_ref, *args, **kwargs):
+            if tx_ref == first["payment"]["tx_ref"]:
+                raise RuntimeError("boom")
+            return real(tx_ref, *args, **kwargs)
+
+        monkeypatch.setattr(booking_payments, "settle", broken)
+        assert booking_payments.expire_holds() == 1
+        assert payment_row(second["appointment"]["appointment_id"]).status == "expired"
+        assert payment_row(first["appointment"]["appointment_id"]).status == "pending"  # next round
+
+    def test_booking_rows_are_locked_appointment_first(self, client, auth, listed, chapa_api):
+        from sqlalchemy import event
+
+        from dedan_platform import booking_payments, db
+
+        tx_ref = book(client, auth).json()["payment"]["tx_ref"]
+        statements = []
+
+        def capture(_conn, _cursor, statement, *_args):
+            statements.append(statement)
+
+        engine = db.get_engine()
+        event.listen(engine, "before_cursor_execute", capture)
+        try:
+            with db.session_scope() as session:
+                appointment, payment = booking_payments.lock_booking(session, tx_ref=tx_ref)
+                assert payment.tx_ref == tx_ref and appointment.id == payment.appointment_id
+        finally:
+            event.remove(engine, "before_cursor_execute", capture)
+        reads = [s for s in statements if s.lstrip().upper().startswith("SELECT")]
+        tables = ["appointments" if "FROM appointments" in s else "booking_payments" for s in reads[1:]]
+        assert tables == ["appointments", "booking_payments"]
+
+
+class TestPaymentsStatus:
+    def test_the_app_can_tell_whether_online_payment_is_on(self, client, monkeypatch):
+        monkeypatch.delenv("CHAPA_SECRET_KEY", raising=False)
+        off = client.get("/payments/status").json()
+        assert off == {"online_payments": False, "checkout_origins": ["https://checkout.chapa.co"]}
+        assert client.get("/users/me/payments/status").json() == off
+        monkeypatch.setenv("CHAPA_SECRET_KEY", "CHASECK_TEST-key")
+        assert client.get("/payments/status").json()["online_payments"] is True
+        # A stand-in Chapa (tests) adds its own origin; Chapa's own never does.
+        monkeypatch.setenv("CHAPA_BASE_URL", "http://127.0.0.1:8012/v1")
+        assert client.get("/payments/status").json()["checkout_origins"] == [
+            "https://checkout.chapa.co", "http://127.0.0.1:8012"]
+        monkeypatch.setenv("CHAPA_BASE_URL", "https://api.chapa.co/v1")
+        assert client.get("/payments/status").json()["checkout_origins"] == ["https://checkout.chapa.co"]
 
 
 class TestBookingSafety:
