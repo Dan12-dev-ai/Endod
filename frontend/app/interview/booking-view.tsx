@@ -297,6 +297,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
             <div className="flex items-center space-x-2 overflow-x-auto pb-1 -mb-1">
               <select
                 aria-label={t("booking.department")}
+                data-purpose="department-filter"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 shrink-0"

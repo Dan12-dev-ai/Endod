@@ -15,6 +15,11 @@ async function dedanId(page: Page): Promise<string> {
   return me.dedan_user_id as string;
 }
 
+// A record opens on its own page: the pharmacy block (QR, code, dispenses) is there.
+function recordDetail(page: Page) {
+  return page.locator('[data-purpose="medical-record-detail"]');
+}
+
 function prescription(page: Page, tag: string) {
   return page.locator('[data-purpose="history-item"]', { hasText: `Chest infection ${tag}` });
 }
@@ -28,7 +33,7 @@ test.describe('Prescriptions at the pharmacy', () => {
 
     const rx = prescription(page, tag);
     await rx.getByRole('button', { expanded: false }).click();
-    const panel = rx.locator('[data-purpose="rx-pharmacy"]');
+    const panel = recordDetail(page).locator('[data-purpose="rx-pharmacy"]');
     await expect(panel).toHaveAttribute('data-status', 'open');
     await expect(panel.locator('[data-purpose="rx-code"]')).toHaveText(/^\d{6}$/);
     await expect(panel.locator('[data-purpose="rx-expiry"]')).toContainText('Valid until');
@@ -68,9 +73,9 @@ test.describe('Prescriptions at the pharmacy', () => {
     await page.locator('aside').getByRole('link', { name: 'Medical Record' }).click();
     const after = prescription(page, tag);
     await after.getByRole('button', { expanded: false }).click();
-    await expect(after.locator('[data-purpose="rx-item"]').nth(0).locator('[data-purpose="rx-item-status"]')).toHaveText('Given');
-    await expect(after.locator('[data-purpose="rx-dispense"]')).toHaveCount(2);
-    await expect(after.locator('[data-purpose="rx-qr"]')).toHaveCount(1); // the second medicine is still to give
+    await expect(recordDetail(page).locator('[data-purpose="rx-item"]').nth(0).locator('[data-purpose="rx-item-status"]')).toHaveText('Given');
+    await expect(recordDetail(page).locator('[data-purpose="rx-dispense"]')).toHaveCount(2);
+    await expect(recordDetail(page).locator('[data-purpose="rx-qr"]')).toHaveCount(1); // the second medicine is still to give
   });
 
   test('works at phone width, in Amharic', async ({ page }) => {
@@ -85,7 +90,7 @@ test.describe('Prescriptions at the pharmacy', () => {
       await page.locator('[data-purpose="mobile-nav-followup"]').click();
       const rx = prescription(page, tag);
       await rx.getByRole('button', { expanded: false }).click();
-      const panel = rx.locator('[data-purpose="rx-pharmacy"]');
+      const panel = recordDetail(page).locator('[data-purpose="rx-pharmacy"]');
       await expect(panel.locator('[data-purpose="rx-status"]')).toHaveText('መጠቀም ይቻላል');
       await expect(panel.locator('[data-purpose="rx-item-status"]').nth(0)).toHaveText('ከ21 14 ተሰጥቷል');
       await expect(panel.locator('[data-purpose="rx-item-status"]').nth(1)).toHaveText('ገና አልተሰጠም');
