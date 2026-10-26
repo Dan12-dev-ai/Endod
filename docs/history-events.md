@@ -41,10 +41,12 @@ patient gets an inbox item "<Hospital> linked your records to Endod". A
 patient arriving through an Endod booking (`appointment.requested` carries
 `patient.dedan_id`) is already identified: checking that booking in links
 the hospital patient without a request (the platform links the account to
-that hospital when the booking is made).
+that hospital when the booking is paid: `appointment.requested` is only
+sent once Chapa confirms the payment, see [payments.md](payments.md)).
 
 The platform accepts records and follow-ups about a patient only from a
-hospital linked to them (a confirmed link, or an Endod booking there);
+hospital linked to them (a confirmed link, or a paid Endod booking there;
+a booking still waiting for payment does not count);
 anything else is dead-lettered and never stored. A `queue.updated` for an
 account not linked to that hospital is handled as a walk-in (its `dedan_id`
 is ignored: nothing shows in the account, the text goes to `phone`).

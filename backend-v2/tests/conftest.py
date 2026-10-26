@@ -62,3 +62,109 @@ def valid_payload():
         "symptom_description": "persistent headache for two days",
         "consent": True,
     }
+
+
+# --- Chapa, as its API behaves (payments and refunds) ------------------------------
+
+class FakeChapa:
+    """Chapa's initialize, verify and refund endpoints, with payments the test
+    can mark paid and refunds it can move along or make fail."""
+
+    KEY = "Bearer CHASECK_TEST-key"
+
+    def __init__(self):
+        self.payments = {}  # tx_ref -> {"amount": "100.00", "status": "pending", "currency": "ETB"}
+        self.initialized = []
+        self.outage = None  # an HTTP status Chapa answers verify with (e.g. 503)
+        self.refund_requests = []  # bodies of POST /refund/{tx_ref}, with "tx_ref" added
+        self.refunds = {}  # ref_id -> {"status": "processing", "reference": ...}
+        #: How POST /refund answers: None (accepts), an HTTP status (e.g. 503), "refuse",
+        #: or "lost" (accepts it, but the answer never arrives: a timeout).
+        self.refund_outcome = None
+
+    def handler(self, request):
+        import json
+
+        import httpx
+
+        assert request.headers["Authorization"] == self.KEY
+        path = request.url.path
+        if path.endswith("/transaction/initialize"):
+            body = json.loads(request.content)
+            self.initialized.append(body)
+            self.payments[body["tx_ref"]] = {"amount": body["amount"], "status": "pending", "currency": "ETB"}
+            return httpx.Response(200, json={"status": "success", "message": "Hosted Link",
+                                             "data": {"checkout_url": f"https://checkout.chapa.co/{body['tx_ref']}"}})
+        if "/transaction/verify/" in path:
+            if self.outage:
+                return httpx.Response(self.outage, json={"message": "unavailable"})
+            tx_ref = path.rsplit("/", 1)[-1]
+            payment = self.payments.get(tx_ref)
+            if payment is None:
+                return httpx.Response(404, json={"status": "failed", "message": "Invalid transaction", "data": None})
+            return httpx.Response(200, json={"status": "success", "data": {
+                "status": payment["status"], "amount": payment["amount"], "currency": payment["currency"],
+                "tx_ref": tx_ref, "reference": "APabc123"}})
+        if path.endswith("/verify") and "/refund/" in path:
+            ref_id = path.split("/")[-2]
+            refund = self.refunds.get(ref_id)
+            if refund is None:
+                return httpx.Response(404, json={"status": "failed", "message": "Refund not found", "data": None})
+            return httpx.Response(200, json={"status": "success", "data": {"ref_id": ref_id, **refund}})
+        if "/refund/" in path and request.method == "POST":
+            tx_ref = path.rsplit("/", 1)[-1]
+            body = json.loads(request.content)
+            self.refund_requests.append({**body, "tx_ref": tx_ref})
+            if isinstance(self.refund_outcome, int):
+                return httpx.Response(self.refund_outcome, json={"message": "unavailable"})
+            if self.refund_outcome == "refuse":
+                return httpx.Response(400, json={"status": "failed", "message": "Insufficient balance", "data": None})
+            if any(r["reference"] == body.get("reference") for r in self.refunds.values()):
+                return httpx.Response(400, json={"status": "failed", "message": "Duplicate reference", "data": None})
+            payment = self.payments.get(tx_ref)
+            if payment is None or payment["status"] != "success":
+                return httpx.Response(400, json={"status": "failed", "message": "Not refundable", "data": None})
+            ref_id = f"MERC-REF-{len(self.refunds) + 1}"
+            self.refunds[ref_id] = {"status": "processing", "reference": body.get("reference"),
+                                    "amount": body.get("amount"), "tx_ref": tx_ref}
+            if self.refund_outcome == "lost":
+                raise httpx.ReadTimeout("timed out", request=request)
+            return httpx.Response(200, json={"status": "success", "message": "Refund initiated successfully",
+                                             "data": {"ref_id": ref_id, "payment_reference": "APabc123"}})
+        return httpx.Response(404)
+
+    def pay(self, tx_ref, amount=None, currency="ETB"):
+        payment = self.payments[tx_ref]
+        payment["status"] = "success"
+        payment["currency"] = currency
+        if amount is not None:
+            payment["amount"] = amount
+
+    def pay_booking(self, client, response, amount=None, currency="ETB"):
+        """Pay the booking ``response`` (from POST /users/me/appointments) on
+        Chapa and let the callback confirm it. Returns the appointment id."""
+        body = response.json()
+        assert response.status_code == 201, body
+        tx_ref = body["payment"]["tx_ref"]
+        self.pay(tx_ref, amount=amount, currency=currency)
+        client.get(f"/payments/chapa/callback?trx_ref={tx_ref}")
+        return body["appointment"]["appointment_id"]
+
+    def finish_refunds(self, status="refunded"):
+        """Chapa finishes its refunds; a completed one shows on the payment too."""
+        for refund in self.refunds.values():
+            refund["status"] = status
+            if status == "refunded":
+                self.payments[refund["tx_ref"]]["status"] = "refunded"
+
+
+@pytest.fixture
+def chapa_api(monkeypatch):
+    import httpx
+
+    from dedan_platform import chapa
+
+    fake = FakeChapa()
+    monkeypatch.setattr(chapa, "_transport", httpx.MockTransport(fake.handler))
+    monkeypatch.setenv("CHAPA_SECRET_KEY", "CHASECK_TEST-key")
+    return fake

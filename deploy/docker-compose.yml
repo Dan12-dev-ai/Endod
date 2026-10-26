@@ -194,7 +194,8 @@ services:
 
   # Sends Endod's events to the hospital service and applies its replies
   # (listings, decisions on bookings, refunds, links, records, follow-ups,
-  # queues); re-checks Chapa deposits; downloads hospital record files from
+  # queues); ends unpaid booking holds, re-checks booking payments with Chapa
+  # and sends refunds to it (docs/payments.md); downloads hospital record files from
   # the hospital API (endod-hospital-api on endod-bus); ends expired shares.
   events-worker:
     build:

@@ -734,22 +734,16 @@ class TestQueues:
 # --- 5. texts about bookings ----------------------------------------------------------------
 
 class TestBookingTexts:
-    def book(self, client, patient):
-        from dedan_platform import wallet
-        from dedan_platform.db import session_scope
-        from dedan_platform.models import WalletEntryKind
-
-        with session_scope() as session:
-            wallet.post(session, patient["id"], WalletEntryKind.DEPOSIT, 100_000, description="test")
+    def book(self, client, patient, chapa_api):
+        """A paid booking: held, then paid on (fake) Chapa and confirmed by its callback."""
         at = (datetime.now(ADDIS) + timedelta(days=3)).replace(hour=10, minute=30, second=0, microsecond=0)
         resp = client.post("/users/me/appointments", headers=patient["auth"], json={
             "scheduled_at": at.isoformat(), "timezone": "Africa/Addis_Ababa", "facility_id": HOSPITAL,
             "visit_mode": "in_person", "department": "general_medicine"})
-        assert resp.status_code == 201, resp.text
-        return resp.json()["appointment"]["appointment_id"], at
+        return chapa_api.pay_booking(client, resp), at
 
-    def test_confirmed_then_cancelled_by_the_hospital(self, client, bus, patient, listed):
-        appointment_id, at = self.book(client, patient)
+    def test_confirmed_then_cancelled_by_the_hospital(self, client, bus, patient, listed, chapa_api):
+        appointment_id, at = self.book(client, patient, chapa_api)
         decision = {"appointment_id": appointment_id, "hospital_id": HOSPITAL, "doctor_name": "Dr. Hana"}
         from_hospital(bus, "appointment.confirmed", decision)
         from_hospital(bus, "appointment.confirmed", decision)
@@ -760,30 +754,33 @@ class TestBookingTexts:
         assert len(delivered) == 2
         confirmed, cancelled = sorted(delivered, key=lambda m: "cancelled" in m[1])
         assert f"{at:%d/%m/%Y %H:%M}" in confirmed[1] and "confirmed" in confirmed[1]
-        assert "cancelled" in cancelled[1] and "105.00 birr" in cancelled[1]
+        assert "cancelled" in cancelled[1]
+        assert "105.00 birr is being refunded to your payment method (it can take a few days)." in cancelled[1]
+        assert "balance" not in cancelled[1]
         assert "psychiatric" not in cancelled[1] and "Zewditu" not in cancelled[1]
         assert deliver_due() == []
 
-    def test_declined_and_unanswered_and_patient_refunds_are_texted(self, client, bus, patient, listed):
+    def test_declined_and_unanswered_and_patient_refunds_are_texted(self, client, bus, patient, listed,
+                                                                    chapa_api):
         from dedan_platform import hospital_bookings
         from dedan_platform.db import session_scope
         from dedan_platform.models import Appointment
 
-        declined, _ = self.book(client, patient)
+        declined, _ = self.book(client, patient, chapa_api)
         from_hospital(bus, "appointment.rejected", {"appointment_id": declined, "hospital_id": HOSPITAL})
         run_worker(bus)
-        unanswered, _ = self.book(client, patient)
+        unanswered, _ = self.book(client, patient, chapa_api)
         with session_scope() as session:
             session.execute(update(Appointment).where(Appointment.id == unanswered).values(
                 scheduled_at=datetime.now(timezone.utc) - timedelta(hours=3)))
         assert hospital_bookings.refund_unanswered() == 1
-        mine, _ = self.book(client, patient)
+        mine, _ = self.book(client, patient, chapa_api)
         assert client.patch(f"/users/me/appointments/{mine}/status", headers=patient["auth"],
                            json={"status": "CANCELLED"}).status_code in (200, 201)
         assert sorted(t["template"] for t in texts() if t["template"].startswith("sms_")) == [
             "sms_booking_declined", "sms_booking_unanswered", "sms_refund"]
         bodies = [m[1] for m in deliver_due()]
-        assert len([b for b in bodies if "105.00 birr is back" in b]) == 3
+        assert len([b for b in bodies if "105.00 birr is being refunded to your payment method" in b]) == 3
 
 
 # --- 6. sharing --------------------------------------------------------------------------------
@@ -986,12 +983,12 @@ class TestOnlyLinkedHospitalsSendData:
         assert dead_letters(bus) == [] and len(history(client, newcomer["auth"])["items"]) == 1
         assert "hospital_linked" in [i["kind"] for i in inbox(client, newcomer["auth"])]
 
-    def test_a_booking_links_the_patient_to_that_hospital(self, client, bus, listed):
+    def test_a_booking_links_the_patient_to_that_hospital(self, client, bus, listed, chapa_api):
         from dedan_platform.db import session_scope
         from dedan_platform.models import HospitalLink
 
         booker = register(client, email="b@example.com", linked=False)
-        TestBookingTexts().book(client, booker)
+        TestBookingTexts().book(client, booker, chapa_api)
         with session_scope() as session:
             links = session.scalars(select(HospitalLink).where(HospitalLink.user_id == booker["id"])).all()
             assert [(l.hospital_id, l.patient_id) for l in links] == [(HOSPITAL, f"endod:{booker['dedan']}")]
@@ -1008,17 +1005,34 @@ class TestOnlyLinkedHospitalsSendData:
         with session_scope() as session:
             assert len(session.scalars(select(HospitalLink).where(HospitalLink.user_id == booker["id"])).all()) == 1
 
-    def test_an_endod_booking_there_is_enough_without_a_link_row(self, client, bus, listed):
+    def test_an_endod_booking_there_is_enough_without_a_link_row(self, client, bus, listed, chapa_api):
         from dedan_platform.db import session_scope
         from dedan_platform.models import HospitalLink
 
         booker = register(client, email="b@example.com", linked=False)
-        TestBookingTexts().book(client, booker)
+        TestBookingTexts().book(client, booker, chapa_api)
         with session_scope() as session:  # a booking made before links were recorded
             session.execute(HospitalLink.__table__.delete())
         from_hospital(bus, "record.published", lab_record(booker["dedan"]))
         run_worker(bus)
         assert dead_letters(bus) == [] and len(history(client, booker["auth"])["items"]) == 1
+
+    def test_an_unpaid_hold_links_nothing(self, client, bus, listed, chapa_api):
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import HospitalLink
+
+        booker = register(client, email="b@example.com", linked=False)
+        at = (datetime.now(ADDIS) + timedelta(days=3)).replace(hour=10, minute=30, second=0, microsecond=0)
+        resp = client.post("/users/me/appointments", headers=booker["auth"], json={
+            "scheduled_at": at.isoformat(), "timezone": "Africa/Addis_Ababa", "facility_id": HOSPITAL,
+            "visit_mode": "in_person"})
+        assert resp.status_code == 201, resp.text
+        with session_scope() as session:
+            assert session.scalars(select(HospitalLink).where(HospitalLink.user_id == booker["id"])).all() == []
+        # The hospital never heard of the hold, so it cannot send about this patient.
+        from_hospital(bus, "record.published", lab_record(booker["dedan"]))
+        run_worker(bus)
+        assert len(dead_letters(bus)) == 1 and history(client, booker["auth"])["items"] == []
 
     def test_an_unlinked_queue_place_is_a_walk_in(self, client, bus):
         from dedan_platform.db import session_scope

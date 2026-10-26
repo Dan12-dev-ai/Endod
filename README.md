@@ -18,6 +18,7 @@ system** — see [Medical Safety & Limitations](#medical-safety--limitations).
 [API](docs/api.md) ·
 [Development](docs/development.md) ·
 [Appointment Reminders](docs/appointment-reminders.md) ·
+[Payments](docs/payments.md) ·
 [Security](SECURITY.md) ·
 [Engineering Decisions](docs/engineering-decisions.md)
 
@@ -90,6 +91,12 @@ interest here is in the parts a chat UI hides:
   curated registry that constructs citations, **not** a live retrieval system;
   see [docs/evidence-citation-registry.md](docs/evidence-citation-registry.md).*
 - **Rate limiting, CORS, structured error envelopes, stack-trace suppression.**
+- **Paid bookings at partner hospitals** — each booking is paid on Chapa's
+  checkout (telebirr, CBE Birr, M-Pesa, a bank or a card); the slot is held
+  for 30 minutes, the hospital is told only once Chapa confirms the exact
+  amount, and refunds go back through Chapa's refund API to the original
+  payment method (or are flagged for a manual refund). There is no stored
+  Endod balance. See [docs/payments.md](docs/payments.md).
 
 **Prototype / not wired into the running system:** the LangChain+CrewAI agent
 graph (`backend-v2/agents/`), billing, chronic-care, hub, and EMR modules, the

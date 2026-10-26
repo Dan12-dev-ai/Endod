@@ -5,16 +5,20 @@ import { api, ApiError } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import {
   type Appointment,
+  type BookingPayment,
   browserTimezone,
   departmentLabel,
   DEPARTMENT_KEYS,
+  CHAPA_CHECKOUT_ORIGIN,
   type Facility,
   type FacilityList,
+  type PaymentsStatus,
   formatBirr,
   formatWhen,
   initials,
   localDateTimeToIso,
   type Quote,
+  safeCheckoutUrl,
   TIME_WINDOWS,
 } from "./data";
 import HospitalMap, { type MapPoint } from "./hospital-map";
@@ -24,8 +28,6 @@ import { RowBones, Skeleton } from "../components/skeleton";
 type Props = {
   patientId: string;
   onToast: (title: string, message: string) => void;
-  /** Open the Wallet section (to add money). */
-  onOpenWallet?: () => void;
   /** From "Book now" on a follow-up: open booking at this hospital on this day. */
   preset?: BookingPreset | null;
   /** The preset was applied (so it is not applied again). */
@@ -42,7 +44,7 @@ function todayLocal(offsetDays = 0): string {
 }
 
 /** Hospital directory and in-person booking (GET /users/me/care/facilities, POST /users/me/appointments). */
-export default function BookingView({ patientId, onToast, onOpenWallet, preset, onPresetUsed }: Props) {
+export default function BookingView({ patientId, onToast, preset, onPresetUsed }: Props) {
   const { t, locale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [department, setDepartment] = useState("");
@@ -64,8 +66,21 @@ export default function BookingView({ patientId, onToast, onOpenWallet, preset, 
   // Partner hospitals: in person or video, and what it costs.
   const [visitMode, setVisitMode] = useState<"in_person" | "telehealth">("in_person");
   const [quote, setQuote] = useState<Quote | null>(null);
-  const [needsMoney, setNeedsMoney] = useState(false);
-  const [paid, setPaid] = useState<{ total: number } | null>(null);
+  // Paid bookings: on the way to Chapa's checkout.
+  const [redirecting, setRedirecting] = useState(false);
+  // Whether online payment is on (no Chapa key yet: paid bookings cannot be made).
+  const [payments, setPayments] = useState<PaymentsStatus | null>(null);
+  const paymentsOff = payments !== null && !payments.online_payments;
+
+  useEffect(() => {
+    let cancelled = false;
+    api<PaymentsStatus>("users/me/payments/status")
+      .then((status) => !cancelled && setPayments(status))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   // A new search is on its way: the current results are dimmed meanwhile.
   const [isFetching, setIsFetching] = useState(true);
 
@@ -134,9 +149,8 @@ export default function BookingView({ patientId, onToast, onOpenWallet, preset, 
   const openBooking = (facility: Facility) => {
     setSelected(facility);
     setBooked(null);
-    setPaid(null);
     setFormError("");
-    setNeedsMoney(false);
+    setRedirecting(false);
     setVisitMode("in_person");
     setQuote(null);
     // A partner hospital takes the service key; other listings the label.
@@ -169,13 +183,9 @@ export default function BookingView({ patientId, onToast, onOpenWallet, preset, 
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the old quote must not show for the new choice
     setQuote(null);
-    setNeedsMoney(false);
     api<Quote>("users/me/hospital-bookings/quote", { query: { hospital_id: selected.id, visit_mode: visitMode } })
       .then((q) => {
-        if (!cancelled) {
-          setQuote(q);
-          setNeedsMoney(!q.enough);
-        }
+        if (!cancelled) setQuote(q);
       })
       .catch(() => {
         if (!cancelled) setQuote(null);
@@ -205,7 +215,7 @@ export default function BookingView({ patientId, onToast, onOpenWallet, preset, 
     setIsSubmitting(true);
     setFormError("");
     try {
-      const result = await api<{ appointment: Appointment }>("users/me/appointments", {
+      const result = await api<{ appointment: Appointment; payment?: BookingPayment }>("users/me/appointments", {
         method: "POST",
         body: {
           scheduled_at: scheduledAt,
@@ -217,12 +227,23 @@ export default function BookingView({ patientId, onToast, onOpenWallet, preset, 
           notes: bookingNote.trim() || null,
         },
       });
-      setBooked(result.appointment);
-      setPaid(result.appointment.hospital_booking ? { total: result.appointment.hospital_booking.total } : null);
       setBookingNote("");
+      // A partner hospital: the time is held while the patient pays on Chapa,
+      // which brings them back to Appointments.
+      if (result.payment?.checkout_url) {
+        const status = payments ?? (await api<PaymentsStatus>("users/me/payments/status").catch(() => null));
+        const checkout = safeCheckoutUrl(result.payment.checkout_url, status?.checkout_origins ?? [CHAPA_CHECKOUT_ORIGIN]);
+        if (!checkout) {
+          // Never sent anywhere but Chapa's checkout; the hold shows in Appointments.
+          setFormError(t("booking.error.generic"));
+          return;
+        }
+        setRedirecting(true);
+        window.location.assign(checkout);
+        return;
+      }
+      setBooked(result.appointment);
     } catch (error) {
-      // 402: the balance does not cover the visit.
-      if (error instanceof ApiError && error.status === 402) setNeedsMoney(true);
       setFormError(error instanceof ApiError ? error.message : t("booking.error.generic"));
     } finally {
       setIsSubmitting(false);
@@ -376,6 +397,9 @@ export default function BookingView({ patientId, onToast, onOpenWallet, preset, 
                         )}
                       </div>
                     )}
+                    {facility.partner && paymentsOff && (facility.price_in_person ?? 0) > 0 && (
+                      <p className="text-[11px] text-amber-800 mt-1" data-purpose="payments-off">{t("booking.paymentsOff")}</p>
+                    )}
                   </div>
                 </div>
                 <button
@@ -493,19 +517,14 @@ export default function BookingView({ patientId, onToast, onOpenWallet, preset, 
                   <div className="flex justify-between"><dt className="text-slate-500">{t("booking.quote.price")}</dt><dd className="font-semibold">{formatBirr(quote.price, locale)}</dd></div>
                   <div className="flex justify-between"><dt className="text-slate-500">{t("booking.quote.fee")}</dt><dd className="font-semibold">{formatBirr(quote.service_fee, locale)}</dd></div>
                   <div className="flex justify-between border-t border-slate-200 pt-1"><dt className="font-bold text-slate-800">{t("booking.quote.total")}</dt><dd className="font-bold" data-purpose="quote-total">{formatBirr(quote.total, locale)}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-500">{t("booking.quote.balance")}</dt><dd className={quote.enough ? "text-emerald-700 font-semibold" : "text-red-600 font-semibold"}>{formatBirr(quote.balance, locale)}</dd></div>
+                  <p className="text-[11px] text-slate-500 pt-1" data-purpose="pay-hint">{t("booking.payHint")}</p>
                 </dl>
               )}
 
-              {needsMoney && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-center justify-between gap-3" data-purpose="needs-money">
-                  <p className="text-xs text-amber-900">{t("booking.needsMoney")}</p>
-                  {onOpenWallet && (
-                    <button className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold whitespace-nowrap" onClick={onOpenWallet} type="button">
-                      {t("booking.addMoney")}
-                    </button>
-                  )}
-                </div>
+              {selected.partner && paymentsOff && (quote === null || quote.total > 0) && (
+                <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-purpose="payments-off" role="status">
+                  {t("booking.paymentsOff")}
+                </p>
               )}
 
               {formError && (
@@ -516,8 +535,16 @@ export default function BookingView({ patientId, onToast, onOpenWallet, preset, 
                 <button type="button" onClick={closeBooking} className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
                   {t("common.cancel")}
                 </button>
-                <button type="submit" disabled={isSubmitting} className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
-                  <span>{isSubmitting ? t("booking.submitting") : t("booking.submit")}</span>
+                <button type="submit" disabled={isSubmitting || redirecting || (selected.partner && paymentsOff && (quote === null || quote.total > 0))} className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
+                  <span>
+                    {redirecting
+                      ? t("booking.toChapa")
+                      : isSubmitting
+                        ? t("booking.submitting")
+                        : selected.partner
+                          ? t("booking.payAndBook")
+                          : t("booking.submit")}
+                  </span>
                 </button>
               </div>
             </form>
@@ -555,12 +582,6 @@ export default function BookingView({ patientId, onToast, onOpenWallet, preset, 
                 <span className="text-slate-400">{t("booking.reference")}</span>
                 <span className="font-mono font-bold text-slate-800">{booked.appointment_id.slice(0, 8).toUpperCase()}</span>
               </div>
-              {paid && (
-                <div className="flex justify-between gap-3" data-purpose="booked-paid">
-                  <span className="text-slate-400">{t("booking.paid")}</span>
-                  <span className="font-bold text-slate-800">{formatBirr(paid.total, locale)}</span>
-                </div>
-              )}
             </div>
             {booked.hospital_booking?.state === "awaiting_doctor" && (
               <p className="text-xs text-sky-800 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2 mb-4" data-purpose="booked-awaiting-doctor">

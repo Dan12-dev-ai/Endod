@@ -142,10 +142,10 @@ def _refund_text(amount: Any, language: str) -> str:
         santim = 0
     if santim <= 0:
         return ""
-    birr = f"{santim / 100:,.2f}"
-    if language == "am":
-        return f" {birr} ብር ወደ Endod ሂሳብዎ ተመልሷል።"
-    return f" {birr} birr is back in your Endod balance."
+    # No Endod balance: the money goes back through Chapa to how they paid.
+    from dedan_platform.booking_payments import refund_sentence
+
+    return " " + refund_sentence(santim, "am" if language == "am" else "en")
 
 
 def _ahead_text(ahead: Any, language: str) -> str:

@@ -7,6 +7,9 @@ import {
   ACTIVE_STATUSES,
   type Appointment,
   appointmentPlace,
+  type BookingPaymentCheck,
+  CHAPA_CHECKOUT_ORIGIN,
+  type PaymentsStatus,
   appointmentTitle,
   browserTimezone,
   departmentLabel,
@@ -15,6 +18,7 @@ import {
   formatWhen,
   initials,
   localDateTimeToIso,
+  safeCheckoutUrl,
   TIME_WINDOWS,
 } from "./data";
 import { RowBones, Skeleton } from "../components/skeleton";
@@ -90,6 +94,18 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
   const [formWindow, setFormWindow] = useState<Appointment["time_window"]>("exact");
   const [facilities, setFacilities] = useState<FacilityList["facilities"]>([]);
 
+  // Where "Pay now" may lead (Chapa's checkout; see safeCheckoutUrl).
+  const [checkoutOrigins, setCheckoutOrigins] = useState<string[]>([CHAPA_CHECKOUT_ORIGIN]);
+  useEffect(() => {
+    let cancelled = false;
+    api<PaymentsStatus>("users/me/payments/status")
+      .then((status) => !cancelled && setCheckoutOrigins(status.checkout_origins))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const load = useCallback(async () => {
     try {
       setAppointments(await api<Appointment[]>("users/me/appointments", { query: { limit: 200 } }));
@@ -104,6 +120,50 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch
     void load();
   }, [load]);
+
+  // Back from Chapa (?payment=<tx_ref>): the backend checks the payment with
+  // Chapa itself (the address proves nothing), a few times while Chapa has
+  // not confirmed it yet.
+  useEffect(() => {
+    const txRef = new URL(window.location.href).searchParams.get("payment");
+    if (!txRef) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = async (attempt: number) => {
+      let result: BookingPaymentCheck | null = null;
+      try {
+        result = await api<BookingPaymentCheck>(`users/me/booking-payments/${encodeURIComponent(txRef)}`);
+      } catch {
+        result = null;
+      }
+      if (cancelled) return;
+      if (attempt === 0) {
+        // Handled here: a refresh does not check (and toast) again.
+        const url = new URL(window.location.href);
+        url.searchParams.delete("payment");
+        window.history.replaceState({}, "", url);
+      }
+      await load();
+      if (cancelled) return;
+      const booked = result?.status === "paid" && result.appointment.hospital_booking?.payment.status === "paid";
+      if (booked) {
+        onToast(t("appointments.paymentToast.paidTitle"), t("appointments.paymentToast.paid"));
+      } else if (result && result.status !== "pending") {
+        // Expired, not matching, or paid after the time was released: refunded (shown on the card).
+        onToast(t("appointments.paymentToast.failedTitle"), t("appointments.paymentToast.failed"));
+      } else if (attempt < 4) {
+        timer = setTimeout(() => void check(attempt + 1), 3000);
+      } else {
+        onToast(t("appointments.paymentToast.pendingTitle"), t("appointments.paymentToast.pending"));
+      }
+    };
+    void check(0);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival from Chapa
+  }, []);
 
   // Keep "upcoming" and "past" honest on a page left open.
   useEffect(() => {
@@ -259,7 +319,11 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
     const timeWindowLabel = TIME_WINDOWS.find((w) => w.value === a.time_window);
     // Booked and paid at an Endod partner hospital.
     const hb = a.hospital_booking ?? null;
-    const refunded = hb && (hb.state === "rejected" || hb.state === "cancelled");
+    const payment = hb?.payment.status ?? null;
+    const closed = hb && (hb.state === "rejected" || hb.state === "cancelled" || hb.state === "payment_expired");
+    const unpaid = hb?.state === "awaiting_payment";
+    const payNow = unpaid ? safeCheckoutUrl(hb.payment.checkout_url, checkoutOrigins) : null;
+    const amount = hb ? formatBirr(hb.total, locale) : "";
     return (
       <div
         key={a.appointment_id}
@@ -286,18 +350,39 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                 <span
                   className={`text-[11px] font-semibold rounded px-1.5 py-0.5 ${
                     hb.state === "confirmed" || hb.state === "completed" ? "bg-emerald-50 text-emerald-700"
-                      : refunded ? "bg-rose-50 text-rose-700" : "bg-sky-50 text-sky-700"
+                      : closed ? "bg-rose-50 text-rose-700"
+                      : unpaid ? "bg-amber-50 text-amber-800" : "bg-sky-50 text-sky-700"
                   }`}
                   data-purpose="hospital-state"
                 >
                   {t(`appointments.hospital.${hb.state}` as TranslationKey)}
                 </span>
-                <span className="text-[11px] text-slate-500">
-                  {refunded ? t("appointments.refunded", { amount: formatBirr(hb.total, locale) })
-                    : t("appointments.paid", { amount: formatBirr(hb.total, locale) })}
+                <span className="text-[11px] text-slate-500" data-purpose="payment-status" data-status={payment ?? undefined}>
+                  {payment === "awaiting_payment"
+                    ? t("appointments.payment.awaiting", {
+                        amount,
+                        time: hb.payment.due_at
+                          ? new Date(hb.payment.due_at).toLocaleTimeString(locale, { timeStyle: "short" })
+                          : "",
+                      })
+                    : payment === "refund_pending" ? t("appointments.payment.refundPending", { amount })
+                    : payment === "refunded" ? t("appointments.refunded", { amount })
+                    : payment === "expired" ? t("appointments.payment.expired")
+                    : t("appointments.paid", { amount })}
                 </span>
-                {hb.reason && refunded && <span className="text-[11px] text-slate-500">· {hb.reason}</span>}
+                {hb.reason && closed && hb.state !== "payment_expired" && (
+                  <span className="text-[11px] text-slate-500">· {hb.reason}</span>
+                )}
               </div>
+            )}
+            {payNow && tabOf(a, now) === "upcoming" && (
+              <a
+                className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold"
+                data-purpose="pay-now"
+                href={payNow}
+              >
+                {t("appointments.payNow")}
+              </a>
             )}
             {hb?.video_ready && tabOf(a, now) === "upcoming" && (
               <a
@@ -319,7 +404,8 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
           confirmCancelId === a.appointment_id ? (
             <div className="flex items-center gap-2 flex-shrink-0" data-purpose="cancel-confirm">
               <span className="text-xs text-slate-600">
-                {hb ? t("appointments.cancelRefund", { amount: formatBirr(hb.total, locale) }) : t("appointments.cancelThis")}
+                {unpaid ? t("appointments.cancelUnpaid")
+                  : hb ? t("appointments.cancelRefund", { amount }) : t("appointments.cancelThis")}
               </span>
               <button type="button" disabled={busyId === a.appointment_id} onClick={() => cancelAppointment(a)} className="px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition">
                 {t("appointments.yesCancel")}
