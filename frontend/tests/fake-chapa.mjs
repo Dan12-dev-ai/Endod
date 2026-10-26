@@ -4,11 +4,14 @@
 // GET  /v1/transaction/verify/:ref  Chapa's record of the payment (404 if unknown)
 // GET  /checkout/:ref               the "payment page": marks it paid (or failed with ?fail=1)
 //                                   and sends the browser back to the return URL, as Chapa does
+// POST /v1/refund/:ref              refunds a paid payment (once per reference)
+// GET  /v1/refund/:ref_id/verify    a refund's progress (always "refunded" here)
 import http from 'node:http';
 
 const PORT = Number(process.env.FAKE_CHAPA_PORT ?? 8012);
 const KEY = 'Bearer CHASECK_TEST-e2e';
 const payments = new Map();
+const refunds = new Map();
 
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -47,6 +50,36 @@ http
           message: 'Hosted Link',
           data: { checkout_url: `http://127.0.0.1:${PORT}/checkout/${body.tx_ref}` },
         });
+      });
+      return;
+    }
+
+    const refundCheck = url.pathname.match(/^\/v1\/refund\/([\w-]+)\/verify$/);
+    if (req.method === 'GET' && refundCheck) {
+      const refund = refunds.get(refundCheck[1]);
+      if (!refund) return send(res, 404, { status: 'failed', message: 'Refund not found', data: null });
+      return send(res, 200, { status: 'success', data: { ...refund, status: 'refunded' } });
+    }
+
+    const refund = url.pathname.match(/^\/v1\/refund\/([\w-]+)$/);
+    if (req.method === 'POST' && refund) {
+      let raw = '';
+      req.on('data', (chunk) => (raw += chunk));
+      req.on('end', () => {
+        let body;
+        try {
+          body = JSON.parse(raw || '{}');
+        } catch {
+          return send(res, 400, { message: 'Invalid JSON' });
+        }
+        const payment = payments.get(refund[1]);
+        if (!payment || payment.status !== 'success') return send(res, 400, { status: 'failed', message: 'Not refundable' });
+        if ([...refunds.values()].some((r) => r.reference === body.reference)) {
+          return send(res, 400, { status: 'failed', message: 'Duplicate reference' });
+        }
+        const refId = `REF-${refunds.size + 1}-${refund[1].slice(-6)}`;
+        refunds.set(refId, { tx_ref: refund[1], amount: body.amount, reference: body.reference });
+        send(res, 200, { status: 'success', message: 'Refund initiated successfully', data: { ref_id: refId } });
       });
       return;
     }

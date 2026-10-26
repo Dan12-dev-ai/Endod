@@ -2,6 +2,9 @@
 
     python seed.py partner                         list the test partner hospital (as the hospital service would)
     python seed.py confirm <id> [room]             the hospital confirms a booking (a video one with a room)
+    python seed.py reject <id>                     the hospital declines a booking (it is refunded through Chapa)
+    python seed.py refunds                         send due refunds to Chapa and follow them (the events worker's job)
+    python seed.py expire <id>                     the booking's 30-minute payment hold runs out (the events worker's job)
     python seed.py records <dedan_id> <tag>        the hospital publishes records (titles end with <tag>),
                                                    then their files are downloaded from tests/fake-hospital.mjs
     python seed.py records-arriving <dedan_id> <tag>
@@ -30,7 +33,9 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.getcwd())
 
-from dedan_platform import hospital_bookings, partners, patient_history, prescriptions, record_files  # noqa: E402
+from dedan_platform import (  # noqa: E402
+    booking_payments, hospital_bookings, partners, patient_history, prescriptions, record_files,
+)
 from dedan_platform.db import create_all, session_scope  # noqa: E402
 
 PARTNER_ID = "e2e0" * 8
@@ -110,6 +115,31 @@ def _dispense(tag, pharmacy, amount):
                            items=[{"item_index": 0, "amount": float(amount), "complete": False}])
 
 
+def _expire(appointment_id):
+    from sqlalchemy import update
+
+    from dedan_platform.models import Appointment, BookingPayment
+
+    past = datetime.now(timezone.utc) - timedelta(minutes=1)
+    with session_scope() as session:
+        session.execute(update(BookingPayment).where(BookingPayment.appointment_id == appointment_id)
+                        .values(expires_at=past))
+        session.execute(update(Appointment).where(Appointment.id == appointment_id).values(payment_due_at=past))
+    booking_payments.expire_holds()
+
+
+def _refunds():
+    """Send due refunds, then (as if the worker came back later) ask Chapa how they went."""
+    from sqlalchemy import update
+
+    from dedan_platform.models import BookingRefund
+
+    booking_payments.process_refunds()
+    with session_scope() as session:
+        session.execute(update(BookingRefund).values(next_attempt_at=datetime.now(timezone.utc)))
+    booking_payments.process_refunds()
+
+
 def _link(session, dedan):
     user = patient_history._user_by_dedan(session, dedan)
     if user is not None:
@@ -122,8 +152,13 @@ def main(argv):
     with session_scope() as session:
         if argv[0] in ("records", "records-arriving", "follow-up", "queue", "prescription"):
             _link(session, argv[1])
-        if argv[0] in ("download", "dispense"):
+        if argv[0] in ("download", "dispense", "refunds", "expire"):
             pass
+        elif argv[0] == "reject":
+            hospital_bookings.on_rejected(session, {
+                "appointment_id": argv[1], "hospital_id": PARTNER_ID, "status": "rejected",
+                "reason": "No doctor available",
+            })
         elif argv[0] == "prescription":
             patient_history.on_record_published(session, _prescription(argv[1], argv[2]))
         elif argv[0] == "partner":
@@ -157,6 +192,10 @@ def main(argv):
         action()
     if argv[0] == "dispense":
         _dispense(argv[1], argv[2], argv[3])
+    if argv[0] == "expire":
+        _expire(argv[1])
+    if argv[0] in ("reject", "refunds"):
+        _refunds()
     if argv[0] in ("records", "download"):
         # What the events worker's download thread does.
         record_files.download_due()

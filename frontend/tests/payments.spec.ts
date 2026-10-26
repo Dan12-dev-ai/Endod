@@ -1,10 +1,11 @@
-import { test, expect, BLANK_PNG, type Page } from './fixtures';
-import { createAppointment, futureSlot, openSection, PARTNER_ID, seed } from './helpers';
+import { test, expect, BLANK_PNG, type Locator, type Page } from './fixtures';
+import { createAppointment, futureSlot, openSection, PARTNER_ID, payBooking, seed } from './helpers';
 
-// The Endod balance (through tests/fake-chapa.mjs, which behaves like Chapa's
-// checkout), paid bookings at a partner hospital (listed by tests/seed.py),
-// video visits (Jitsi's script stubbed) and the emergency panel (map tiles
-// stubbed). The tests build on each other, so they run in order.
+// Paying for each partner-hospital booking through Chapa (tests/fake-chapa.mjs,
+// which behaves like Chapa's checkout and refund API), with partner hospitals
+// listed by tests/seed.py, video visits (Jitsi's script stubbed) and the
+// emergency panel (map tiles stubbed). The tests build on each other, so they
+// run in order.
 
 test.describe.configure({ mode: 'serial' });
 // Patients and partner hospitals are in Ethiopia: times are entered in Addis Ababa time
@@ -12,11 +13,6 @@ test.describe.configure({ mode: 'serial' });
 test.use({ timezoneId: 'Africa/Addis_Ababa' });
 
 const PARTNER = `[data-purpose="hospital-${PARTNER_ID}"]`;
-
-async function balanceText(page: Page) {
-  await openSection(page, 'Balance', 'wallet-view');
-  return page.locator('[data-purpose="wallet-amount"]');
-}
 
 async function openPartnerBooking(page: Page) {
   await openSection(page, 'Booking', 'booking-view');
@@ -29,74 +25,127 @@ async function openPartnerBooking(page: Page) {
   await expect(page.locator('[data-purpose="booking-modal"]')).toBeVisible();
 }
 
-test.describe('Endod balance and paid bookings', () => {
-  test('without money, a partner booking shows the price and asks to add money', async ({ page }) => {
+async function fillVisit(page: Page, days: number, note: string) {
+  const slot = futureSlot(days, 9, 30);
+  await page.locator('#booking-date').fill(slot.date);
+  await page.locator('#booking-time').fill(slot.time);
+  await page.locator('[data-purpose="time-window"]').selectOption('morning');
+  await page.locator('#booking-note').fill(note);
+}
+
+/** A partner booking's card in Appointments, on the tab given (by id, or the first). */
+async function partnerCard(page: Page, tab: 'upcoming' | 'cancelled', id?: string): Promise<Locator> {
+  await openSection(page, 'Appointment', 'appointment-view');
+  if (tab === 'cancelled') await page.locator('[data-purpose="appointment-tab-cancelled"]').click();
+  return id
+    ? page.locator(`[data-purpose="appointment-card-${id}"]`)
+    : page.locator(`[data-purpose="appointment-${tab}-list"] > *`, { hasText: 'Endod Test General' }).first();
+}
+
+async function cardId(card: Locator) {
+  return ((await card.getAttribute('data-purpose')) ?? '').replace('appointment-card-', '');
+}
+
+test.describe('Paying for each booking through Chapa', () => {
+  test('a partner booking shows the price breakdown and "Pay and book"; there is no balance', async ({ page }) => {
     await openPartnerBooking(page);
     const quote = page.locator('[data-purpose="booking-quote"]');
     await expect(quote).toContainText('200.00');
     await expect(quote).toContainText('5.00');
     await expect(quote.locator('[data-purpose="quote-total"]')).toHaveText('ETB 205.00');
-    await expect(page.locator('[data-purpose="needs-money"]')).toBeVisible();
+    await expect(quote).not.toContainText('balance');
+    await expect(page.locator('[data-purpose="pay-hint"]')).toContainText('telebirr, CBE Birr, M-Pesa, a bank or a card');
+    await expect(page.getByRole('button', { name: 'Pay and book' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add money' })).toHaveCount(0);
 
     // The visit type changes the price: a video visit here is 120 birr.
     await page.locator('[data-purpose="visit-mode"]').getByText('Video').click();
     await expect(quote.locator('[data-purpose="quote-total"]')).toHaveText('ETB 125.00');
     await expect(page.locator('[data-purpose="visit-mode"]')).toContainText('A doctor at the hospital approves');
 
-    await page.getByRole('button', { name: 'Add money' }).click();
-    await expect(page.locator('[data-purpose="wallet-view"]')).toBeVisible();
-    await expect(page.locator('[data-purpose="wallet-empty"]')).toBeVisible();
+    // No balance section any more.
+    await expect(page.locator('aside').getByRole('link', { name: 'Balance' })).toHaveCount(0);
+    await page.goto('/interview?section=wallet', { waitUntil: 'networkidle' });
+    await expect(page.locator('[data-purpose="wallet-view"]')).toHaveCount(0);
   });
 
-  test('adding money goes through Chapa and comes back credited', async ({ page }) => {
-    await openSection(page, 'Balance', 'wallet-view');
-    await expect(page.locator('[data-purpose="wallet-amount"]')).toHaveText('ETB 0.00');
-
-    await page.locator('#deposit-amount').fill('5');
-    await page.locator('[data-purpose="deposit-submit"]').click();
-    // Below the 10 birr minimum: the form does not submit.
-    expect(await page.locator('#deposit-amount').evaluate((el: HTMLInputElement) => el.validity.rangeUnderflow)).toBe(true);
-    // The open section is kept in the address, so a refresh stays on the wallet.
-    await expect(page).toHaveURL(/\/interview(\?section=wallet)?$/);
-
-    await page.locator('#deposit-amount').fill('500');
-    await page.locator('[data-purpose="deposit-submit"]').click();
-    // Out to the (fake) Chapa checkout, which pays and returns to the app.
-    await page.waitForURL(/\/interview\?section=wallet&deposit=/);
-    await expect(page.locator('[data-purpose="wallet-amount"]')).toHaveText('ETB 500.00');
-    await expect(page.locator('[data-purpose="wallet-entry-deposit"]')).toContainText('500.00');
-    await expect(page.getByText('ETB 500.00 was added to your balance.')).toBeVisible();
-  });
-
-  test('an in-person booking pays, shows in Appointments, and cancelling refunds it', async ({ page }) => {
+  test('booking goes out to Chapa and comes back paid, with the hospital waiting', async ({ page }) => {
     await openPartnerBooking(page);
-    await expect(page.locator('[data-purpose="needs-money"]')).toHaveCount(0);
-    const slot = futureSlot(6, 9, 30);
-    await page.locator('#booking-date').fill(slot.date);
-    await page.locator('#booking-time').fill(slot.time);
-    await page.locator('[data-purpose="time-window"]').selectOption('morning');
-    await page.locator('#booking-note').fill('Paid booking test');
-    await page.getByRole('button', { name: 'Submit Booking' }).click();
+    await fillVisit(page, 6, 'Paid booking test');
+    await page.getByRole('button', { name: 'Pay and book' }).click();
+    // Out to the (fake) Chapa checkout, which takes the payment and sends the patient back.
+    await page.waitForURL(/\/interview\?section=appointment/);
+    await expect(page.locator('[data-purpose="toast-notification"]')).toContainText('Payment received');
+    await expect(page).not.toHaveURL(/payment=/);
 
-    const success = page.locator('[data-purpose="success-modal"]');
-    await expect(success).toBeVisible();
-    await expect(success.locator('[data-purpose="booked-paid"]')).toContainText('205.00');
-    await page.getByRole('button', { name: 'Done' }).click();
-
-    await expect(await balanceText(page)).toHaveText('ETB 295.00');
-    await expect(page.locator('[data-purpose="wallet-entry-payment"]')).toContainText('200.00');
-    await expect(page.locator('[data-purpose="wallet-entry-service_fee"]')).toContainText('5.00');
-
-    await page.locator('aside').getByRole('link', { name: 'Appointment' }).click();
     const row = page.locator('[data-purpose="appointment-upcoming-list"] > *', { hasText: 'Endod Test General' }).first();
     await expect(row.locator('[data-purpose="hospital-state"]')).toHaveText('Waiting for the hospital');
-    await expect(row.locator('[data-purpose="hospital-booking"]')).toContainText('Paid ETB 205.00');
-    await row.getByRole('button', { name: 'Cancel' }).click();
-    await expect(row.locator('[data-purpose="cancel-confirm"]')).toContainText('ETB 205.00 will go back to your Endod balance.');
-    await row.getByRole('button', { name: 'Yes, cancel' }).click();
+    await expect(row.locator('[data-purpose="payment-status"]')).toHaveText('Paid ETB 205.00');
+    await expect(row.locator('[data-purpose="pay-now"]')).toHaveCount(0);
+  });
 
-    await expect(await balanceText(page)).toHaveText('ETB 500.00');
-    await expect(page.locator('[data-purpose="wallet-entry-refund"]')).toContainText('205.00');
+  test('cancelling a paid visit refunds it to the payment method', async ({ page }) => {
+    const row = await partnerCard(page, 'upcoming');
+    const id = await cardId(row);
+    await row.getByRole('button', { name: 'Cancel' }).click();
+    await expect(row.locator('[data-purpose="cancel-confirm"]')).toContainText(
+      'ETB 205.00 will be refunded to your payment method (it can take a few days).',
+    );
+    await row.getByRole('button', { name: 'Yes, cancel' }).click();
+    await expect(page.locator('[data-purpose="toast-notification"]')).toContainText('Appointment Cancelled');
+
+    let cancelled = await partnerCard(page, 'cancelled', id);
+    await expect(cancelled.locator('[data-purpose="payment-status"]')).toHaveText(
+      'Refund pending: ETB 205.00 to your payment method',
+    );
+    // The events worker sends it to Chapa, which returns it to the payer.
+    seed('refunds');
+    cancelled = await partnerCard(page, 'cancelled', id);
+    await expect(cancelled.locator('[data-purpose="payment-status"]')).toHaveText('ETB 205.00 refunded to your payment method');
+  });
+
+  test('a booking the hospital declines is refunded and shown so', async ({ page }) => {
+    const booking = await createAppointment(page.request, {
+      scheduled_at: futureSlot(11, 9, 30).iso, timezone: 'Africa/Addis_Ababa', facility_id: PARTNER_ID,
+      visit_mode: 'in_person', department: 'general_medicine', time_window: 'morning',
+    });
+    await payBooking(page.request, booking.payment!);
+    let card = await partnerCard(page, 'upcoming', booking.appointment_id);
+    await expect(card.locator('[data-purpose="payment-status"]')).toHaveText('Paid ETB 205.00');
+
+    seed('reject', booking.appointment_id);
+    card = await partnerCard(page, 'cancelled', booking.appointment_id);
+    await expect(card.locator('[data-purpose="hospital-state"]')).toHaveText('Declined by the hospital');
+    await expect(card).toContainText('No doctor available');
+    await expect(card.locator('[data-purpose="payment-status"]')).toHaveText('ETB 205.00 refunded to your payment method');
+
+    await openSection(page, 'Notification', 'notification-view');
+    await expect(page.getByText('205.00 birr is being refunded to your payment method (it can take a few days).').first())
+      .toBeVisible();
+  });
+
+  test('an abandoned payment holds the time with "Pay now", then expires', async ({ page }) => {
+    // The patient leaves Chapa's page without paying.
+    await page.route('http://127.0.0.1:8012/checkout/**', (route) =>
+      route.fulfill({ contentType: 'text/html', body: '<p data-purpose="fake-checkout">Chapa</p>' }),
+    );
+    await openPartnerBooking(page);
+    await fillVisit(page, 13, 'Abandoned payment test');
+    await page.getByRole('button', { name: 'Pay and book' }).click();
+    await expect(page.locator('[data-purpose="fake-checkout"]')).toBeVisible();
+
+    const card = await partnerCard(page, 'upcoming');
+    await expect(card.locator('[data-purpose="hospital-state"]')).toHaveText('Awaiting payment');
+    const id = await cardId(card);
+    await expect(card.locator('[data-purpose="payment-status"]')).toContainText('ETB 205.00 to pay by');
+    await expect(card.locator('[data-purpose="pay-now"]')).toHaveAttribute('href', /^http:\/\/127\.0\.0\.1:8012\/checkout\//);
+
+    // Thirty minutes on, unpaid: the time is released.
+    seed('expire', id);
+    const expired = await partnerCard(page, 'cancelled', id);
+    await expect(expired.locator('[data-purpose="hospital-state"]')).toHaveText('Payment not completed');
+    await expect(expired.locator('[data-purpose="payment-status"]')).toHaveText('Not paid in time; nothing was charged');
+    await expect(expired.locator('[data-purpose="pay-now"]')).toHaveCount(0);
   });
 
   test('a video visit waits for the doctor, then opens in Endod with a signed token', async ({ page }) => {
@@ -105,6 +154,7 @@ test.describe('Endod balance and paid bookings', () => {
       scheduled_at: at.toISOString(), timezone: 'Africa/Addis_Ababa', facility_id: PARTNER_ID,
       visit_mode: 'telehealth', department: 'general_medicine',
     });
+    await payBooking(page.request, appointment.payment!);
     await openSection(page, 'Appointment', 'appointment-view');
     const row = page.locator('[data-purpose="appointment-upcoming-list"] > *', { hasText: 'Endod Test General' }).first();
     await expect(row.locator('[data-purpose="hospital-state"]')).toHaveText('Waiting for a doctor');

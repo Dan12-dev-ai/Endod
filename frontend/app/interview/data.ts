@@ -63,7 +63,11 @@ export type Appointment = {
 };
 
 export type HospitalBookingState =
+  | "awaiting_payment" | "payment_expired"
   | "awaiting_hospital" | "awaiting_doctor" | "confirmed" | "rejected" | "cancelled" | "completed";
+
+/** Where the patient's payment (through Chapa) for a booking is. */
+export type PaymentStatus = "awaiting_payment" | "paid" | "expired" | "refund_pending" | "refunded";
 
 export type HospitalBooking = {
   hospital_id: string;
@@ -74,6 +78,13 @@ export type HospitalBooking = {
   total: number;
   reason: string | null;
   video_ready: boolean;
+  payment: {
+    status: PaymentStatus;
+    /** While awaiting payment: when the hold on the time ends. */
+    due_at: string | null;
+    /** While awaiting payment: Chapa's checkout page ("Pay now"). */
+    checkout_url: string | null;
+  };
 };
 
 /** GET /users/me/hospital-bookings/quote (santim). */
@@ -83,9 +94,40 @@ export type Quote = {
   price: number;
   service_fee: number;
   total: number;
-  balance: number;
-  enough: boolean;
 };
+
+/** POST /users/me/appointments for a partner hospital: the hold and its checkout. */
+export type BookingPayment = {
+  price: number;
+  service_fee: number;
+  total: number;
+  status: PaymentStatus;
+  checkout_url: string | null;
+  tx_ref: string | null;
+  expires_at: string | null;
+};
+
+/** GET /users/me/booking-payments/{tx_ref}: the payment, checked with Chapa. */
+export type BookingPaymentCheck = {
+  tx_ref: string;
+  status: "pending" | "paid" | "expired" | "mismatch";
+  appointment: Appointment;
+};
+
+/**
+ * Only an https page may be opened for payment (never javascript: and the
+ * like); plain http only on this machine (the browser tests' stand-in Chapa).
+ */
+export function safeCheckoutUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const local = parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost";
+    return parsed.protocol === "https:" || (parsed.protocol === "http:" && local) ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Santim as birr for display, e.g. 15050 -> "150.50 ብር" / "ETB 150.50". */
 export function formatBirr(santim: number, locale: string): string {

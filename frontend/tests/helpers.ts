@@ -20,6 +20,9 @@ export function seed(...args: string[]) {
       RECORD_FILES_DIR: process.env.E2E_RECORDS ?? '',
       HOSPITAL_API_URL: 'http://127.0.0.1:8013',
       PLATFORM_ADMIN_KEY: 'e2e-platform-key',
+      // Refunds and expired holds talk to tests/fake-chapa.mjs, as the backend does.
+      CHAPA_SECRET_KEY: 'CHASECK_TEST-e2e',
+      CHAPA_BASE_URL: 'http://127.0.0.1:8012/v1',
     },
     stdio: 'inherit',
   });
@@ -49,5 +52,21 @@ export function futureSlot(days: number, hour = 10, minute = 30) {
 export async function createAppointment(request: APIRequestContext, body: Record<string, unknown>) {
   const response = await request.post('/api/backend/users/me/appointments', { data: body });
   expect(response.status(), await response.text()).toBe(201);
-  return (await response.json()).appointment as { appointment_id: string; scheduled_at: string };
+  const json = await response.json();
+  return {
+    ...(json.appointment as { appointment_id: string; scheduled_at: string }),
+    payment: (json.payment ?? null) as { checkout_url: string; tx_ref: string } | null,
+  };
+}
+
+/**
+ * Pay a partner booking on tests/fake-chapa.mjs (its checkout page marks it
+ * paid), then come back as the app does: the backend checks with Chapa.
+ */
+export async function payBooking(request: APIRequestContext, payment: { checkout_url: string; tx_ref: string }) {
+  const paid = await request.get(payment.checkout_url, { maxRedirects: 0 });
+  expect(paid.status()).toBe(302);
+  const back = await request.get(`/api/backend/users/me/booking-payments/${payment.tx_ref}`);
+  expect(back.status(), await back.text()).toBe(200);
+  expect((await back.json()).status).toBe('paid');
 }
