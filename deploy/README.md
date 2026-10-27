@@ -157,3 +157,20 @@ internal API checks) and calls only the platform's internal API on endod-bus.
 The shared nginx sends it `pharmacy.endod-health.com` and sets
 `X-Endod-Client-IP` (Cloudflare's header only for Cloudflare's addresses), the
 only client address the site trusts for rate limits.
+
+## Encrypted backups
+
+`deploy/backup/backup.sh` runs nightly (`endod-backup.timer`, 01:30 Addis
+Ababa) and backs up all four databases (platform, hospital, admin,
+organisation) and the uploaded-file volumes into `/opt/endod-backups/<time>/`.
+Every part is streamed straight into `age`, encrypted to
+`deploy/backup/recipient.pub`; nothing unencrypted is written to disk. The
+private key is kept offline by Endod: without it the backups cannot be read,
+so keep two safe copies of it. 14 days are kept on the server; set `OFFSITE`
+(an rclone remote) in `/opt/endod/deploy/backup/backup.env` for an off-site copy.
+
+Install: `apt install age`, copy `deploy/backup` to `/opt/endod/deploy/backup`,
+then `cp endod-backup.service endod-backup.timer /etc/systemd/system/ &&
+systemctl daemon-reload && systemctl enable --now endod-backup.timer`.
+
+Restore a part: `age -d -i endod-backup-key db-platform.gz.age | gunzip > platform.sql`.

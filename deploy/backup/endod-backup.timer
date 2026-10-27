@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly encrypted backup of Endod (01:30 Addis Ababa, 22:30 UTC)
+
+[Timer]
+OnCalendar=*-*-* 22:30:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target
