@@ -432,8 +432,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{t("settings.title")}</h1>
-            <p className="text-sm text-slate-500 mt-1">{t("settings.subtitle")}</p>
-          </div>
+            </div>
         </div>
 
         {/* Personal information */}

@@ -456,7 +456,6 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                   {t("appointments.scheduledCount", { count: counts.upcoming })}
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">{t("appointments.subtitle")}</p>
             </div>
             <button type="button" onClick={openBook} className="hidden lg:inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition self-start md:self-auto">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">

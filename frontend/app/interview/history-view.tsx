@@ -128,16 +128,15 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t("history.title")}</h1>
-            <p className="text-sm text-slate-500 mt-1">{t("history.subtitle")}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 self-start">
-            <button type="button" data-purpose="add-record" onClick={() => setAdding(true)} className="px-3.5 py-2 rounded-full text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
+            </div>
+          <div className="flex flex-nowrap gap-2 overflow-x-auto sm:flex-wrap sm:items-center self-start pb-1 -mb-1">
+            <button type="button" data-purpose="add-record" onClick={() => setAdding(true)} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
               {t("records.addVisit")}
             </button>
-            <button type="button" data-purpose="share-records" onClick={() => setSharing(true)} disabled={!items.length} className="px-3.5 py-2 rounded-full text-xs font-semibold border border-emerald-300 text-emerald-800 bg-white hover:bg-emerald-50 disabled:opacity-50">
+            <button type="button" data-purpose="share-records" onClick={() => setSharing(true)} disabled={!items.length} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-emerald-300 text-emerald-800 bg-white hover:bg-emerald-50 disabled:opacity-50">
               {t("history.share")}
             </button>
-            <Link data-purpose="download-records" href="/history/print" target="_blank" rel="noopener" className="px-3.5 py-2 rounded-full text-xs font-semibold border border-slate-200 text-slate-700 bg-white hover:bg-slate-50">
+            <Link data-purpose="download-records" href="/history/print" target="_blank" rel="noopener" className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-slate-200 text-slate-700 bg-white hover:bg-slate-50">
               {t("history.download")}
             </Link>
           </div>
