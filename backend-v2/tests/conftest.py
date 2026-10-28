@@ -26,6 +26,21 @@ os.environ.setdefault("DEBUG", "false")
 os.environ.setdefault("GEMINI_API_KEY", "")
 os.environ.setdefault("OPENAI_API_KEY", "")
 
+# A real master key file (32 random bytes) for the encryption of health data,
+# as deployments mount one (dedan_platform/crypto.py). Without it, tests that
+# run with ENVIRONMENT=production would be refused, as production is.
+if not os.environ.get("PLATFORM_MASTER_KEY_FILE"):
+    import atexit
+    import shutil
+    import tempfile
+
+    _key_dir = tempfile.mkdtemp(prefix="endod-test-key-")
+    atexit.register(shutil.rmtree, _key_dir, ignore_errors=True)
+    _key_path = os.path.join(_key_dir, "master.key")
+    with open(_key_path, "wb") as _key_file:
+        _key_file.write(os.urandom(32))
+    os.environ["PLATFORM_MASTER_KEY_FILE"] = _key_path
+
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
