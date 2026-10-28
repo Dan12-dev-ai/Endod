@@ -50,7 +50,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import secrets
 import socket
 import time
@@ -318,12 +317,12 @@ def _already_processed(event_id: str) -> bool:
         return session.get(ProcessedEvent, event_id) is not None
 
 
-#: Pydantic (and similar) errors quote the offending input: removed.
-_INPUT_VALUE = re.compile(r"input_value=.*?(?=, input_type=|\]|$)", re.S)
-
-
 def redact_error(why: str) -> str:
-    return _INPUT_VALUE.sub("input_value=<removed>", why)[:500]
+    """The error without the values it quotes (input values, DETAIL lines,
+    statement parameters): log_safety.sanitize."""
+    from dedan_platform import log_safety
+
+    return log_safety.sanitize(why)[:500]
 
 
 def redacted(fields: Dict[str, str]) -> Dict[str, str]:

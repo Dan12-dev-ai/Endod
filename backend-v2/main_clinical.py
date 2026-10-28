@@ -108,6 +108,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # The mounted master key must be the one this database's data keys are
+    # wrapped with (recorded on first install): no start with another one.
+    from dedan_platform import crypto
+
+    crypto.verify_master_key()
     settings = get_settings()
     logger.info(f"Starting DEDAN Health Clinical API v{settings.APP_VERSION} in {settings.ENVIRONMENT} mode")
 

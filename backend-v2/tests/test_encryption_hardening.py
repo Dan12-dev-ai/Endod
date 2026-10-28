@@ -12,7 +12,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from test_encryption import (  # noqa: F401 -- fixtures (client, bus, patient, hospital_files, master_key) and helpers
@@ -258,7 +258,7 @@ class TestRollback:
 
         other = register(client, email="b@example.com", phone=None)
         taken = add_event(patient["id"])["event_id"]
-        with session_scope() as session:  # a patient with no data key yet
+        with crypto.key_admin(), session_scope() as session:  # a patient with no data key yet
             session.execute(UserKey.__table__.delete().where(UserKey.user_id == other["id"]))
         crypto.clear_cache()
 
@@ -319,7 +319,7 @@ class TestFailClosed:
         with pytest.raises(crypto.MasterKeyError):
             crypto.require_master_key()
 
-    def test_the_three_services_log_the_same_key_fingerprint(self, monkeypatch, caplog):
+    def test_the_three_services_log_the_same_key_fingerprint(self, client, monkeypatch, caplog):
         import main_clinical
         import main_internal
 
@@ -340,3 +340,147 @@ class TestFailClosed:
         ident = crypto.key_id()
         for service in ("backend", "internal-api", "events-worker"):
             assert f"master_key_in_use service={service} id={ident}" in caplog.text
+
+
+# --- 7. the master key is the database's ---------------------------------------------------------------
+
+def _use_key(monkeypatch, path, key=None):
+    from dedan_platform import crypto
+
+    path.write_bytes(key or os.urandom(32))
+    monkeypatch.setenv("PLATFORM_MASTER_KEY_FILE", str(path))
+    crypto.reset()
+
+
+class TestMasterKeyCheck:
+    def test_first_install_records_the_key_and_another_key_is_refused(self, client, patient, tmp_path,
+                                                                      monkeypatch, master_key):
+        import main_internal
+
+        from dedan_platform import crypto, events_worker
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import PlatformSetting, UserKey
+
+        right = master_key.read_bytes()
+        ident = crypto.verify_master_key()
+        with session_scope() as session:
+            stored = {s.key: s.value for s in session.scalars(select(PlatformSetting))}
+        assert stored[crypto.MASTER_KEY_ID] == ident and len(stored[crypto.MASTER_KEY_CHECK]) == 64
+        assert right.hex() not in json.dumps(stored)
+
+        _use_key(monkeypatch, tmp_path / "wrong.key")  # the wrong file mounted
+        with pytest.raises(crypto.MasterKeyError) as error:
+            crypto.verify_master_key()
+        assert ident in str(error.value)
+        monkeypatch.setenv("INTERNAL_ALLOWED_HOSTS", "testserver")
+        with pytest.raises(crypto.MasterKeyError):
+            main_internal.create_app()
+        with pytest.raises(crypto.MasterKeyError):
+            events_worker.main()
+        # Nor is a new patient's key wrapped under it (verified before any is made).
+        newcomer = register(client, email="new@example.com", phone=None)
+        with session_scope() as session:
+            assert session.scalar(select(UserKey).where(UserKey.user_id == newcomer["id"])) is None
+        with pytest.raises(crypto.MasterKeyError):
+            add_event(newcomer["id"])
+        with session_scope() as session:
+            assert session.scalar(select(UserKey).where(UserKey.user_id == newcomer["id"])) is None
+
+        _use_key(monkeypatch, tmp_path / "right.key", right)  # the right key is back
+        assert crypto.verify_master_key() == ident
+        assert load_event(add_event(newcomer["id"], description="Anaemia")["event_id"])[1] == "Anaemia"
+
+    def test_keys_from_before_the_check_must_open_with_the_mounted_key(self, client, patient, tmp_path,
+                                                                       monkeypatch, master_key):
+        from dedan_platform import crypto
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import PlatformSetting
+
+        add_event(patient["id"])
+        with session_scope() as session:  # a database from before the check
+            session.execute(PlatformSetting.__table__.delete())
+        right = master_key.read_bytes()
+        _use_key(monkeypatch, tmp_path / "wrong.key")
+        with pytest.raises(crypto.MasterKeyError):
+            crypto.verify_master_key()
+        _use_key(monkeypatch, tmp_path / "right.key", right)
+        assert crypto.verify_master_key() == crypto.key_id()
+
+
+# --- 8. keys are never overwritten ---------------------------------------------------------------------
+
+class TestKeyTableGuard:
+    def test_wrapped_keys_cannot_be_overwritten_or_deleted(self, client, patient):
+        from dedan_platform import crypto
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import UserKey
+
+        add_event(patient["id"])
+        with pytest.raises(crypto.KeyTableGuardError), session_scope() as session:
+            session.execute(update(UserKey).where(UserKey.user_id == patient["id"]).values(wrapped_key="x"))
+        with pytest.raises(crypto.KeyTableGuardError), session_scope() as session:
+            session.execute(UserKey.__table__.delete().where(UserKey.user_id == patient["id"]))
+        with pytest.raises(crypto.KeyTableGuardError), session_scope() as session:
+            session.scalar(select(UserKey).where(UserKey.user_id == patient["id"])).wrapped_key = "x"
+        with session_scope() as session:  # the active flag (rotate-key) may change
+            session.execute(update(UserKey).where(UserKey.user_id == patient["id"]).values(active=True))
+        assert load_event(add_event(patient["id"], description="Gout")["event_id"])[1] == "Gout"
+
+
+# --- 9. enforcement can be turned off for a rollback ------------------------------------------------------
+
+class TestEnforcementIsReread:
+    def test_turning_it_off_reaches_running_processes(self, client, patient):
+        from dedan_platform import crypto, tools
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import PlatformSetting
+
+        assert tools.enforce(**QUIET) == 0 and crypto.enforced()
+        with session_scope() as session:  # as decrypt-existing does, from another process
+            session.execute(PlatformSetting.__table__.delete().where(
+                PlatformSetting.key == crypto.ENFORCED_SETTING))
+        assert crypto.enforced()  # cached ...
+        crypto._enforced_until = 0.0  # ... until the next read (every ENFORCED_RECHECK_SECONDS)
+        assert not crypto.enforced()
+
+    def test_decrypt_existing_refuses_while_services_are_connected(self, client, patient, monkeypatch):
+        from dedan_platform import crypto, tools
+
+        event = add_event(patient["id"], description="Hepatitis B")
+        tools.enforce(**QUIET)
+        monkeypatch.setattr(tools, "_running_services", lambda: ["endod-events-worker"])
+        assert tools.main(["decrypt-existing", "--yes"]) == 1
+        assert CIPHERTEXT.match(raw("health_events", "description", event["event_id"]))
+        crypto._enforced_until = 0.0
+        assert crypto.enforced()
+
+
+# --- 10. no data in errors and logs -------------------------------------------------------------------------
+
+class TestSanitizedErrors:
+    def test_database_errors_carry_no_parameters(self, client):
+        from dedan_platform.db import get_engine
+        from dedan_platform.models import PlatformSetting
+
+        row = {"key": "probe", "value": "Sensitive-Value-123", "updated_at": datetime.now(timezone.utc)}
+        with get_engine().begin() as conn:
+            conn.execute(PlatformSetting.__table__.insert().values(**row))
+        with pytest.raises(IntegrityError) as error, get_engine().begin() as conn:
+            conn.execute(PlatformSetting.__table__.insert().values(**row))
+        assert "Sensitive-Value-123" not in str(error.value)
+
+    def test_logs_and_dead_letters_lose_detail_lines_and_parameters(self, client, caplog):
+        from dedan_platform import eventbus, log_safety
+
+        message = ('(psycopg.errors.UniqueViolation) duplicate key value violates unique constraint "users_email"\n'
+                   'DETAIL:  Key (email)=(almaz@example.com) already exists.\n'
+                   "[SQL: INSERT INTO users (email) VALUES (%(email)s)]\n"
+                   "[parameters: {'email': 'almaz@example.com'}]")
+        log_safety.install()
+        with caplog.at_level(logging.ERROR):
+            try:
+                raise RuntimeError(message)
+            except RuntimeError:
+                logging.getLogger("dedan.events").exception("event_failed %s", message)
+        assert "almaz@example.com" not in caplog.text and "duplicate key" in caplog.text
+        assert "almaz@example.com" not in eventbus.redact_error(message)

@@ -64,6 +64,8 @@ services:
       # The pharmacy API is internal-api's only: the patient API never holds its key.
       PHARMACY_API_KEY: ""
       PLATFORM_MASTER_KEY_FILE: /run/secrets/platform_master_key
+      # Names its database connections (tools decrypt-existing waits for none).
+      DEDAN_DB_APPLICATION_NAME: endod-backend
     volumes:
       - records:/data/records
       - *master-key
@@ -96,6 +98,7 @@ services:
       RX_SIGNING_KEY: ${RX_SIGNING_KEY:-}
       # Decrypts prescriptions for pharmacies and shared files for hospitals.
       PLATFORM_MASTER_KEY_FILE: /run/secrets/platform_master_key
+      DEDAN_DB_APPLICATION_NAME: endod-internal-api
     volumes:
       # Serves files only; the events worker writes them.
       - records:/data/records:ro
@@ -236,6 +239,7 @@ services:
       RX_SIGNING_KEY: ""
       # Encrypts the records, files and follow-ups hospitals send.
       PLATFORM_MASTER_KEY_FILE: /run/secrets/platform_master_key
+      DEDAN_DB_APPLICATION_NAME: endod-events-worker
     volumes:
       - records:/data/records
       - *master-key

@@ -46,6 +46,8 @@ def create_app() -> FastAPI:
     # It decrypts records for pharmacies and shared files for hospitals: no
     # production start without the master key (dedan_platform/crypto.py).
     crypto.require_master_key("internal-api")
+    # ... and must be the key this database's data keys are wrapped with.
+    crypto.verify_master_key()
 
     app = FastAPI(title="Endod internal API", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())

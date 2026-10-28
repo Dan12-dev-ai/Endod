@@ -67,6 +67,24 @@ binding would not stop them: they would put back the old counter too.
 Database write access is what guards against this (credentials only in
 `deploy/.env`, Postgres not published outside the Compose network).
 
+**The key must be the database's.** On first start the database records a
+check value of the master key and its fingerprint (`platform_settings`). Every
+service checks the mounted key against it at start, and again before wrapping
+any new patient's key, and refuses another key: a wrong file mounted once
+would otherwise wrap new keys that no longer open once the right one is back.
+The fix is to mount the right file (from its offline backup), never to clear
+the check.
+
+**Keys are never overwritten.** The platform's services share one database
+role, so this is enforced in the code, not by grants: no statement may change
+`user_keys` beyond its `active` flag, or delete from it, except
+`tools purge-old-keys` (deleting old versions nothing uses); anything else is
+refused before it reaches the database.
+
+**No data in logs.** Statement parameters are hidden from database errors,
+and every log line and dead letter is stripped of PostgreSQL `DETAIL` lines,
+SQL parameter blocks and quoted input values.
+
 **Isolation.** First data keys are created inside the request's own
 transaction; this relies on READ COMMITTED, PostgreSQL's default, which the
 platform uses (nothing sets REPEATABLE READ or SERIALIZABLE). Under a
@@ -138,7 +156,8 @@ sudo sha256sum /opt/endod/deploy/keys/master.key   # the noted fingerprint
    values stored before stay readable until `enforce`. `enforce` runs the
    check again and refuses if anything is left; once it succeeds, a value or
    file that is not encrypted is refused (logged with its table, column and
-   row, never its content) instead of being read.
+   row, never its content) instead of being read. Running services read the
+   setting again every 30 seconds.
 
 A patient's data key can be replaced (re-encrypting their data):
 `docker compose exec backend python -m dedan_platform.tools rotate-key --user DE123456`.
@@ -153,7 +172,9 @@ To a release from before encryption, which cannot read encrypted values:
 
 ```sh
 docker compose stop backend internal-api events-worker
-# Turns enforcement off, then writes everything back in plaintext.
+# Refuses while any of the three is still connected to the database; then
+# turns enforcement off and writes every value and file back in plaintext.
+# It deletes no key: keep the master key, the backups need it.
 docker compose run --rm --no-deps backend python -m dedan_platform.tools decrypt-existing --yes
 git checkout <the previous release>
 docker compose -f docker-compose.yml -f shared-nginx/docker-compose.override.yml --env-file .env up -d --build

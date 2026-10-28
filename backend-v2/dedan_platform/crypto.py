@@ -27,6 +27,21 @@ few thousand values one patient's key encrypts), and associated data binding
 the table, column, row id and user id. A ciphertext copied into another row,
 column or patient's account fails to decrypt instead of showing there.
 
+Master key check. On first install the database stores a check value of the
+master key (an HMAC of a constant under it) and its fingerprint
+(``platform_settings``: ``master_key_check``, ``master_key_id``). The services
+verify the mounted key against it at start (:func:`verify_master_key`) and
+before any new data key is wrapped, and refuse a different key: a wrong key
+mounted once would otherwise wrap new patients' keys that no longer open
+once the right key is back.
+
+Keys are never overwritten. Only rotate-key (marking older versions
+inactive) and purge-old-keys (deleting unused old versions) change
+``user_keys``; any other UPDATE of it beyond ``active``, or any DELETE, is
+refused in-process (:func:`key_admin`). The platform uses one database role
+for all its services, so this is a code guarantee, not a database grant
+(deploy/README.md).
+
 Plaintext from before encryption is read as it is until
 ``python -m dedan_platform.tools enforce`` records that every value has been
 encrypted (``platform_settings``: ``encryption_enforced``). From then on a
@@ -54,18 +69,22 @@ from __future__ import annotations
 
 import base64
 import binascii
+import contextlib
+import contextvars
 import hashlib
+import hmac
 import logging
 import os
 import threading
 import time
-from typing import Dict, Optional, Tuple, Union
+from typing import Dict, Iterator, Optional, Set, Tuple, Union
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from sqlalchemy import func, select
-from sqlalchemy.engine import Connection
+from sqlalchemy import event, func, select
+from sqlalchemy.engine import Connection, Engine
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.dml import Delete, Update
 
 logger = logging.getLogger(__name__)
 
@@ -202,34 +221,153 @@ def require_master_key(service: str = "") -> str:
 
 
 def reset() -> None:
-    """Forget the loaded master key, every cached data key and the cached
-    enforcement state (tests; after a key change)."""
+    """Forget the loaded master key, every cached data key, the verified
+    master keys and the cached enforcement state (tests; after a key change)."""
     global _master, _enforced_until, _enforced
     with _master_lock:
         _master = None
     _enforced, _enforced_until = False, 0.0
+    _verified.clear()
     clear_cache()
+
+
+# --- the master key, checked against the database ------------------------------------------------
+
+MASTER_KEY_CHECK = "master_key_check"
+MASTER_KEY_ID = "master_key_id"
+#: (master key id, database url) already verified in this process.
+_verified: Set[Tuple[str, str]] = set()
+
+
+def _check_value(kek: bytes) -> str:
+    return hmac.new(kek, b"endod master key check v1", hashlib.sha256).hexdigest()
+
+
+def _settings_insert(conn: Connection, key: str, value: str) -> None:
+    from dedan_platform.models import PlatformSetting, utcnow
+
+    table = PlatformSetting.__table__
+    values = {"key": key, "value": value, "updated_at": utcnow()}
+    if conn.dialect.name == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as dialect_insert
+    else:
+        from sqlalchemy.dialects.sqlite import insert as dialect_insert
+    conn.execute(dialect_insert(table).values(**values).on_conflict_do_nothing())
+
+
+def _verify(conn: Connection, kek: bytes) -> str:
+    from dedan_platform.models import PlatformSetting
+
+    kid = key_id(kek)
+    marker = (kid, str(conn.engine.url))
+    if marker in _verified:
+        return kid
+    table = PlatformSetting.__table__
+    stored = dict(conn.execute(select(table.c.key, table.c.value).where(
+        table.c.key.in_([MASTER_KEY_CHECK, MASTER_KEY_ID]))).all())
+    if MASTER_KEY_CHECK not in stored:
+        # First install (or a database from before the check): any data key
+        # already there must open with this key before it is recorded.
+        keys = _keys_table()
+        row = conn.execute(select(keys.c.user_id, keys.c.version, keys.c.wrapped_key).limit(1)).first()
+        if row is not None:
+            try:
+                unwrap_key(row[2], row[0], int(row[1]), kek)
+            except DecryptionError:
+                raise MasterKeyError(
+                    f"the mounted master key (id {kid}) does not open the data keys already in the database; "
+                    "mount the master key file they were made with (deploy/README.md)."
+                ) from None
+        _settings_insert(conn, MASTER_KEY_CHECK, _check_value(kek))
+        _settings_insert(conn, MASTER_KEY_ID, kid)
+        stored = dict(conn.execute(select(table.c.key, table.c.value).where(
+            table.c.key.in_([MASTER_KEY_CHECK, MASTER_KEY_ID]))).all())
+    if not hmac.compare_digest(stored.get(MASTER_KEY_CHECK, ""), _check_value(kek)):
+        raise MasterKeyError(
+            f"the mounted master key (id {kid}) is not the one this database's data keys are wrapped with "
+            f"(id {stored.get(MASTER_KEY_ID, '?')}); refusing to start rather than make keys no one can open. "
+            "Mount the right master key file (deploy/README.md, 'The OFFLINE backup of the master key')."
+        )
+    _verified.add(marker)
+    return kid
+
+
+def verify_master_key(bind: Optional[Bind] = None) -> str:
+    """Check the mounted master key against the database (recording it on
+    first install). Raises MasterKeyError if it is another key. Returns its id."""
+    kek = master_key()
+    if bind is not None:
+        return _verify(_connection(bind), kek)
+    from dedan_platform.db import get_engine
+    from dedan_platform.models import PlatformSetting, UserKey
+
+    engine = get_engine()
+    PlatformSetting.__table__.create(engine, checkfirst=True)
+    UserKey.__table__.create(engine, checkfirst=True)
+    with engine.begin() as conn:
+        return _verify(conn, kek)
+
+
+# --- user_keys is never overwritten --------------------------------------------------------------
+
+_key_admin: contextvars.ContextVar[bool] = contextvars.ContextVar("endod_key_admin", default=False)
+
+
+@contextlib.contextmanager
+def key_admin() -> Iterator[None]:
+    """Allow changing ``user_keys`` beyond ``active`` (purge-old-keys deletes
+    unused old versions in it; tests age keys in it). Nothing else uses it."""
+    token = _key_admin.set(True)
+    try:
+        yield
+    finally:
+        _key_admin.reset(token)
+
+
+class KeyTableGuardError(CryptoError):
+    """A statement would overwrite or delete data keys outside key administration."""
+
+
+def _updated_columns(statement, multiparams, params) -> Set[str]:
+    names = {getattr(k, "key", k) for k in (getattr(statement, "_values", None) or {})}
+    for batch in list(multiparams or ()) + ([params] if params else []):
+        rows = batch if isinstance(batch, (list, tuple)) else [batch]
+        for row in rows:
+            if isinstance(row, dict):
+                names.update(str(k) for k in row)
+    return names
+
+
+@event.listens_for(Engine, "before_execute")
+def _guard_user_keys(conn, statement, multiparams, params, execution_options) -> None:
+    if not isinstance(statement, (Update, Delete)):
+        return
+    table = getattr(statement, "table", None)
+    if getattr(table, "name", None) != "user_keys" or _key_admin.get():
+        return
+    if isinstance(statement, Delete):
+        raise KeyTableGuardError("data keys are deleted only by purge-old-keys")
+    if _updated_columns(statement, multiparams, params) - {"active"}:
+        raise KeyTableGuardError("data keys are never overwritten (only their 'active' flag changes)")
 
 
 # --- enforcement ---------------------------------------------------------------------------------
 
 ENFORCED_SETTING = "encryption_enforced"
-#: While not enforced, the setting is read again this often (once on, it stays on).
+#: The enforcement setting is read again this often.
 ENFORCED_RECHECK_SECONDS = 30.0
 _enforced = False
 _enforced_until = 0.0
 
 
 def enforced(bind: Optional[Bind] = None) -> bool:
-    """Whether plaintext is refused (``tools enforce`` was run). Once seen on,
-    remembered for the life of the process: the switch only goes off with
-    ``decrypt-existing``, which is run with the services stopped."""
+    """Whether plaintext is refused (``tools enforce`` was run). Read again
+    every :data:`ENFORCED_RECHECK_SECONDS`, either way: switched off for a
+    rollback (decrypt-existing), it reaches running processes too."""
     global _enforced, _enforced_until
-    if _enforced:
-        return True
     now = time.monotonic()
     if now < _enforced_until:
-        return False
+        return _enforced
     from dedan_platform.models import PlatformSetting
 
     table = PlatformSetting.__table__
@@ -363,8 +501,11 @@ def _insert_key(conn: Connection, user_id: str, version: Optional[int] = None) -
     if version is None:
         latest = conn.execute(select(func.max(table.c.version)).where(table.c.user_id == user_id)).scalar()
         version = int(latest or 0) + 1
+    kek = master_key()
+    # Never wrap a new key under a master key the database does not know.
+    _verify(conn, kek)
     values = {"user_id": user_id, "version": version, "created_at": utcnow(), "active": True,
-              "wrapped_key": wrap_key(os.urandom(KEY_BYTES), user_id, version)}
+              "wrapped_key": wrap_key(os.urandom(KEY_BYTES), user_id, version, kek)}
     dialect = conn.dialect.name
     if dialect == "postgresql":
         from sqlalchemy.dialects.postgresql import insert as dialect_insert

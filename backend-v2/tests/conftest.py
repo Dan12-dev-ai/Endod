@@ -40,6 +40,10 @@ if not os.environ.get("PLATFORM_MASTER_KEY_FILE"):
     with open(_key_path, "wb") as _key_file:
         _key_file.write(os.urandom(32))
     os.environ["PLATFORM_MASTER_KEY_FILE"] = _key_path
+    # The key is new on every run, and the database records which key its data
+    # keys are wrapped with: tests that use the default database get a fresh
+    # one per run too, not ./dedan_platform.db from an earlier run.
+    os.environ.setdefault("DEDAN_DATABASE_URL", f"sqlite:///{os.path.join(_key_dir, 'default.db')}")
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 if str(BACKEND_ROOT) not in sys.path:

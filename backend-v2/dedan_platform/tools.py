@@ -42,8 +42,10 @@ The deploy order (deploy/README.md) is::
 ``decrypt-existing --yes``
     For a rollback to a release from before encryption only (deploy/README.md):
     turns enforcement off, then writes every value and file back in
-    plaintext. Run it with the services that write health data stopped, then
-    deploy the older release at once.
+    plaintext. It refuses while backend, internal-api or events-worker are
+    connected to the database (PostgreSQL's pg_stat_activity, by their
+    application_name), so nothing writes ciphertext meanwhile; deploy the older
+    release at once after it. It never deletes a key.
 
 Nothing these commands print or log contains health data or keys.
 """
@@ -52,11 +54,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from datetime import timedelta
 from typing import Dict, Iterator, List, Optional, Tuple
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, text
 
 from dedan_platform import crypto, eventbus, field_encryption, file_crypto, record_files
 from dedan_platform.db import create_all, ensure_aware, session_scope
@@ -298,8 +301,9 @@ def purge_old_keys(identifier: str, out=print) -> int:
         if remaining:
             out(f"Refused: {remaining} value(s) or file(s) still use an old key; run rotate-key again first.")
             return 1
-        deleted = conn.execute(UserKey.__table__.delete().where(
-            UserKey.user_id == user_id, UserKey.active.is_(False))).rowcount
+        with crypto.key_admin():
+            deleted = conn.execute(UserKey.__table__.delete().where(
+                UserKey.user_id == user_id, UserKey.active.is_(False))).rowcount
     crypto.evict(user_id)
     out(f"deleted {deleted} older key version(s): {old}")
     return 0
@@ -333,8 +337,30 @@ def _unenforce() -> None:
 
 # --- decrypt-existing (rollback only) ----------------------------------------------------------------
 
-def decrypt_existing(batch: int = DEFAULT_BATCH, out=print) -> Dict[str, int]:
-    """Write every encrypted value and file back in plaintext (see the module doc)."""
+#: The services' application_name (DEDAN_DB_APPLICATION_NAME in deploy/docker-compose.yml).
+SERVICE_APPLICATION_NAMES = ("endod-backend", "endod-internal-api", "endod-events-worker")
+
+
+def _running_services() -> List[str]:
+    """The services connected to the database now (PostgreSQL; SQLite cannot tell)."""
+    with session_scope() as session:
+        conn = session.connection()
+        if conn.dialect.name != "postgresql":
+            return []
+        return sorted(conn.execute(text(
+            "SELECT DISTINCT application_name FROM pg_stat_activity "
+            "WHERE datname = current_database() AND pid <> pg_backend_pid() AND application_name = ANY(:names)"),
+            {"names": list(SERVICE_APPLICATION_NAMES)}).scalars())
+
+
+def decrypt_existing(batch: int = DEFAULT_BATCH, out=print) -> Optional[Dict[str, int]]:
+    """Write every encrypted value and file back in plaintext (see the module
+    doc). None, with nothing changed, if a service is still running."""
+    running = _running_services()
+    if running:
+        out(f"Refused: {', '.join(running)} still connected to the database. Stop backend, internal-api and "
+            "events-worker first (docker compose stop backend internal-api events-worker).")
+        return None
     # First, or the plaintext written below would be refused.
     _unenforce()
     totals: Dict[str, int] = {}
@@ -352,6 +378,8 @@ def decrypt_existing(batch: int = DEFAULT_BATCH, out=print) -> Dict[str, int]:
     files = _rewrite_files(record_files.TO_PLAINTEXT)
     totals["record files"] = files["done"]
     out(f"record files: decrypted {files['done']}, failed their check {files['failed']}")
+    if files["failed"]:
+        out("Some files failed their check and stay encrypted; the keys are kept (they are never deleted here).")
     return totals
 
 
@@ -377,6 +405,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     crypto.require_master_key("tools")
+    from dedan_platform import db
+
+    if db.database_url().startswith("postgresql"):
+        # Not one of the services decrypt-existing waits for, even when run
+        # in the backend's container (which names its connections endod-backend).
+        os.environ["DEDAN_DB_APPLICATION_NAME"] = "endod-tools"
+        db.reset_engine()
+    create_all()
+    crypto.verify_master_key()
     if args.command == "encrypt-existing":
         encrypt_existing(batch=max(1, args.batch))
         return 0
@@ -393,9 +430,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if not args.yes:
             print("decrypt-existing stores health data in plaintext; it is for a rollback only. Add --yes.")
             return 2
-        create_all()
-        decrypt_existing(batch=max(1, args.batch))
-        return 0
+        return 0 if decrypt_existing(batch=max(1, args.batch)) is not None else 1
     create_all()
     return rotate_key(args.user, batch=max(1, args.batch))
 

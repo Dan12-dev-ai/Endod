@@ -175,7 +175,9 @@ def age_keys(user_id, hours):
     from dedan_platform.db import session_scope
     from dedan_platform.models import UserKey
 
-    with session_scope() as session:
+    from dedan_platform import crypto
+
+    with crypto.key_admin(), session_scope() as session:
         session.execute(update(UserKey).where(UserKey.user_id == user_id).values(
             created_at=datetime.now(timezone.utc) - timedelta(hours=hours)))
 

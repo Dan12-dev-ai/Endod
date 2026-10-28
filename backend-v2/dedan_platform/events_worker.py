@@ -133,6 +133,8 @@ def main() -> int:
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
     create_all()
+    # The mounted key must be the database's (refuses a wrong one).
+    crypto.verify_master_key()
     from dedan_platform import partner_config
 
     logger.info("events_worker_started record_file_downloads=%s master_key_id=%s",
