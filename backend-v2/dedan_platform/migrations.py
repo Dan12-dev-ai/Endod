@@ -84,6 +84,11 @@ _COLUMN_MIGRATIONS: Tuple[ColumnMigration, ...] = (
     # Tokens issued before this instant are rejected (password change signs
     # out other sessions). NULL for existing rows means "no cutoff yet".
     ColumnMigration("credentials", "password_changed_at", "TIMESTAMP WITH TIME ZONE"),
+    # Suspended by an Endod admin; sessions signed out by one (api_admin.py).
+    ColumnMigration("users", "suspended_at", "TIMESTAMP WITH TIME ZONE"),
+    ColumnMigration("users", "suspended_reason", "VARCHAR(500)"),
+    ColumnMigration("users", "suspended_by", "VARCHAR(254)"),
+    ColumnMigration("users", "sessions_revoked_at", "TIMESTAMP WITH TIME ZONE"),
     # Proof the patient holds the phone; only verified phones sign in.
     ColumnMigration("profiles", "phone_verified_at", "TIMESTAMP WITH TIME ZONE"),
     # Onboarding and settings fields used by the Next.js frontend.

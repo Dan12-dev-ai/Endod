@@ -74,6 +74,14 @@ def pharmacy_api_key() -> Optional[str]:
     return _get("PHARMACY_API_KEY")
 
 
+def superadmin_api_key() -> Optional[str]:
+    """Shared with the Endod super admin's API only: required as
+    ``X-Superadmin-Key`` on internal-api's /internal/admin endpoints
+    (api_admin.py). Its own key: never ADMIN_API_KEY (the session secret),
+    PLATFORM_ADMIN_KEY or PHARMACY_API_KEY. Unset: refused."""
+    return _get("SUPERADMIN_API_KEY")
+
+
 def rx_signing_key() -> Optional[str]:
     """Signs prescription QR tokens (docs/pharmacy.md section 1). Separate from
     the card key. Unset: no QR is issued and every token is refused (the

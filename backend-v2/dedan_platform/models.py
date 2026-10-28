@@ -79,6 +79,16 @@ class User(Base):
     # Soft delete: health records must be retained for audit even when the
     # account closes, so the row is deactivated rather than dropped.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    #: Suspended by an Endod admin (the super admin, through internal-api's
+    #: /internal/admin): no sign-in and no session works until reactivated.
+    #: Separate from ``is_active`` (a closed account), and reversible.
+    suspended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    suspended_reason: Mapped[Optional[str]] = mapped_column(String(500))
+    #: The admin's email, as the super admin sent it.
+    suspended_by: Mapped[Optional[str]] = mapped_column(String(254))
+    #: Tokens issued before this are rejected (an admin signed the account
+    #: out); see credentials.tokens_valid_from.
+    sessions_revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     credential: Mapped[Optional["Credential"]] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"

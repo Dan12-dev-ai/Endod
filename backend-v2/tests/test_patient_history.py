@@ -1097,9 +1097,13 @@ class TestInternalApi:
 
         import main_internal
 
-        # Plus the pharmacy site's two routes (docs/pharmacy.md; test_pharmacy.py).
+        # Plus the pharmacy site's two routes (docs/pharmacy.md; test_pharmacy.py) and the super admin's.
         assert all_paths(main_internal.create_app().routes) == {
-            "/health", "/internal/shares/{share_id}/files/{file_id}", "/pharmacy/lookup", "/pharmacy/dispense"}
+            "/health", "/internal/shares/{share_id}/files/{file_id}", "/pharmacy/lookup", "/pharmacy/dispense",
+            # The super admin's (test_admin_api.py), behind their own key.
+            "/internal/admin/stats", "/internal/admin/users", "/internal/admin/users/{dedan_id}",
+            "/internal/admin/users/{dedan_id}/suspend", "/internal/admin/users/{dedan_id}/reactivate",
+            "/internal/admin/cards/{dedan_id}", "/internal/admin/health"}
         internal = self.internal()
         assert internal.get("/health").json()["status"] == "healthy"
         for path in sorted(all_paths(auth_router.routes) | all_paths(profile_router.routes)

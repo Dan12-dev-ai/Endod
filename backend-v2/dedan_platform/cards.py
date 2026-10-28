@@ -81,7 +81,7 @@ def verify_card(dedan_user_id: str, signature: str) -> Optional[Dict[str, Any]]:
     if not hmac.compare_digest(card_signature(dedan_user_id).encode("ascii"), signature.encode("ascii")):
         return None
     user = identity.get_user_by_dedan_id(dedan_user_id)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.suspended_at is not None:
         return None
     profile = user.profile
     names = [getattr(profile, part, None) for part in ("first_name", "middle_name", "last_name")]

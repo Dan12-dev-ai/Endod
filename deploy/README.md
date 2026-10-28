@@ -329,6 +329,25 @@ The shared nginx sends it `pharmacy.endod-health.com` and sets
 `X-Endod-Client-IP` (Cloudflare's header only for Cloudflare's addresses), the
 only client address the site trusts for rate limits.
 
+## Super admin (admin.endod-health.com)
+
+The Endod super admin's API (github.com/Habtamu-Semagn/endod-superadmin)
+calls `internal-api` on endod-bus (`http://endod-platform-api:8000`) at
+`/internal/admin/...` with `X-Superadmin-Key`: account counts and search, suspend
+and reactivate (signs the patient out and refuses sign-in, by password or a
+reset by phone, until reactivated), card checks and a health report
+(database, Redis, the events worker's heartbeat, dead letters, the outbox
+backlog). Account data only: never health data.
+
+- Set `SUPERADMIN_API_KEY` in `deploy/.env` (`openssl rand -base64 48`; at
+  least 32 characters, and a new value: not that of `ADMIN_API_KEY`, which
+  is the platform's session secret, nor of any other key) and the same value
+  as `SUPERADMIN_API_KEY` in the super admin's `.env`.
+  Compose gives it to `internal-api` only. Unset, every `/internal/admin`
+  request is refused (503).
+- Then `docker compose up -d internal-api events-worker backend` (the new
+  `users` columns are added on start; the worker starts its heartbeat).
+
 ## Encrypted backups
 
 `deploy/backup/backup.sh` runs nightly (`endod-backup.timer`, 01:30 Addis
