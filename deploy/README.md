@@ -339,6 +339,10 @@ reset by phone, until reactivated), card checks and a health report
 (database, Redis, the events worker's heartbeat, dead letters, the outbox
 backlog). Account data only: never health data.
 
+Suspending signs the patient out and blocks sign-in and new hospital links;
+prescriptions and existing hospital links keep working (continuity of care;
+docs/history-events.md).
+
 - Set `SUPERADMIN_API_KEY` in `deploy/.env` (`openssl rand -base64 48`; at
   least 32 characters, and a new value: not that of `ADMIN_API_KEY`, which
   is the platform's session secret, nor of any other key) and the same value

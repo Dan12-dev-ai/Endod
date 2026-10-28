@@ -688,3 +688,19 @@ def test_item_index_is_the_hospitals_position_end_to_end(client, patient, bus, p
     body = lookup(pharmacy, {"token": token(record_id)}).json()
     assert [(i["item_index"], i["drug"], i["given_total"]) for i in body["items"]] == [
         (0, "Amoxicillin", None), (2, "Zinc", 4)]
+
+
+def test_a_suspended_patients_prescription_still_works(client, patient, bus, pharmacy):
+    """The owner's decision: suspending an account (Endod admin) does not stop
+    its prescriptions at pharmacies."""
+    from dedan_platform.db import session_scope
+    from dedan_platform.models import User
+
+    record_id = publish(bus, patient)
+    with session_scope() as session:
+        session.execute(update(User).where(User.id == patient["id"]).values(suspended_at=datetime.now(timezone.utc)))
+    found = lookup(pharmacy, {"token": token(record_id)})
+    assert found.status_code == 200 and found.json()["status"] == "open"
+    given = dispense(pharmacy, give(record_id, (0, 21, True)))
+    assert given.status_code == 200, given.text
+
