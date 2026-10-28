@@ -72,6 +72,10 @@ jobs:
           echo "AI_PROVIDER_MODE=${AI_PROVIDER_MODE} — running against the offline provider"
 
       - name: Verify the application imports
+        # No master key file here: only an explicit test (or development)
+        # environment may run on the published development key.
+        env:
+          ENVIRONMENT: test
         run: python -c "import main_clinical; print('main_clinical imported OK')"
 
       - name: Run backend tests
