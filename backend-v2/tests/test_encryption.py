@@ -170,6 +170,16 @@ def add_event(user_id, title="Visit", description="Asthma flare-up"):
                         metadata={"record": {"facility_name": "Black Lion", "diagnosis": description}})
 
 
+def age_keys(user_id, hours):
+    """As if the user's keys (and so the last rotation) were made ``hours`` ago."""
+    from dedan_platform.db import session_scope
+    from dedan_platform.models import UserKey
+
+    with session_scope() as session:
+        session.execute(update(UserKey).where(UserKey.user_id == user_id).values(
+            created_at=datetime.now(timezone.utc) - timedelta(hours=hours)))
+
+
 def load_event(event_id):
     from dedan_platform.db import session_scope
     from dedan_platform.models import HealthEvent
@@ -290,11 +300,12 @@ class TestKeys:
         with pytest.raises(crypto.MasterKeyError):
             crypto.master_key()
 
-    def test_outside_production_without_a_key_file_the_development_key_is_used(self, monkeypatch):
+    @pytest.mark.parametrize("environment", ["development", "test", "Development"])
+    def test_only_development_or_test_may_use_the_development_key(self, monkeypatch, environment):
         from dedan_platform import crypto
 
         monkeypatch.setenv("PLATFORM_MASTER_KEY_FILE", "")  # unset (settings may hold one)
-        monkeypatch.setenv("ENVIRONMENT", "development")
+        monkeypatch.setenv("ENVIRONMENT", environment)
         crypto.reset()
         assert crypto.master_key() == crypto._DEVELOPMENT_KEY
 
@@ -931,12 +942,14 @@ class TestCommands:
         assert crypto.key_version(raw("health_events", "description",
                                       add_event(patient["id"])["event_id"])) == 2
 
-        # The old key goes only once nothing uses it.
-        assert tools.main(["rotate-key", "--user", patient["id"], "--purge-old"]) == 0
+        # The old key goes only after the grace period (test_encryption_hardening.py).
+        assert tools.main(["purge-old-keys", "--user", patient["id"]]) == 1
+        age_keys(patient["id"], hours=25)
+        assert tools.main(["purge-old-keys", "--user", patient["id"]]) == 0
         with session_scope() as session:
             versions = sorted(k.version for k in session.scalars(select(UserKey).where(
                 UserKey.user_id == patient["id"])))
-        assert versions == [3]
+        assert versions == [2]
         assert load_event(mine["event_id"])[1] == "Hepatitis B"
         assert tools.main(["rotate-key", "--user", "DE000000"]) == 2
 
@@ -965,7 +978,9 @@ class TestCommands:
         from dedan_platform.models import UserKey
 
         add_event(patient["id"])
-        monkeypatch.setattr(tools, "_old_values", lambda user_id, version: 1)  # written meanwhile
-        assert tools.rotate_key(patient["id"], purge_old=True, out=lambda _line: None) == 1
+        tools.rotate_key(patient["id"], out=lambda _line: None)
+        age_keys(patient["id"], hours=25)
+        monkeypatch.setattr(tools, "_old_values", lambda conn, user_id, version: 1)  # written meanwhile
+        assert tools.purge_old_keys(patient["id"], out=lambda _line: None) == 1
         with session_scope() as session:
             assert session.scalar(select(UserKey).where(UserKey.user_id == patient["id"], UserKey.version == 1))

@@ -6,10 +6,12 @@ Keys
   ``PLATFORM_MASTER_KEY_FILE``. deploy/docker-compose.yml mounts it read-only
   into ``backend``, ``internal-api`` and ``events-worker`` only. It is never
   in the database, the repository or a backup of either, so a copy of the
-  database (or of the record files) alone reveals no health data. Production
-  refuses to start without it (:func:`require_master_key`). Elsewhere, with
-  the variable unset, a fixed development key is used, with a warning: data
-  written that way is not protected (tests, local runs, CI).
+  database (or of the record files) alone reveals no health data. The
+  services refuse to start without a usable key file (:func:`require_master_key`)
+  unless ``ENVIRONMENT`` is explicitly ``development`` or ``test``: then, with
+  no key file, a fixed development key is used, with a warning (data written
+  that way is not protected). Staging, production, an unknown or an unset
+  environment all need the key file.
 * Each patient has a **data key** (DEK, 32 random bytes) in ``user_keys``,
   wrapped with AES-256-GCM under the master key, its user id and version as
   associated data. New data uses the patient's highest active version; older
@@ -24,6 +26,25 @@ with a fresh random 96-bit nonce per value (well inside GCM's limit for the
 few thousand values one patient's key encrypts), and associated data binding
 the table, column, row id and user id. A ciphertext copied into another row,
 column or patient's account fails to decrypt instead of showing there.
+
+Plaintext from before encryption is read as it is until
+``python -m dedan_platform.tools enforce`` records that every value has been
+encrypted (``platform_settings``: ``encryption_enforced``). From then on a
+stored value without a valid ``enc:v1:`` envelope is refused (:func:`enforced`).
+
+Residual risk, accepted: someone with write access to the database can put
+back an *older* ciphertext of the same row and column (it carries the same
+associated data, so it decrypts). A per-row write counter in the associated
+data would not stop them either: they would put back the old counter with
+the old value. Detecting that needs a record of versions kept outside the
+database's reach, which this does not attempt; database write access is
+guarded instead (deploy/README.md).
+
+First keys are made inside the caller's transaction with
+``INSERT ... ON CONFLICT DO NOTHING`` and read back: this needs READ COMMITTED
+(the PostgreSQL default, which db.py keeps; nothing here sets REPEATABLE READ
+or SERIALIZABLE). Under a stricter level a lost race ends in a CryptoError
+and the transaction is retried by its caller; it never yields a wrong key.
 
 Nothing here logs or raises with a plaintext, a ciphertext or a key: errors
 name the table, column, row and user only.
@@ -79,16 +100,24 @@ class DecryptionError(CryptoError):
 
 # --- the master key ------------------------------------------------------------------------
 
+#: The only environments that may run without a key file (on the development key).
+KEYLESS_ENVIRONMENTS = ("development", "test")
+
+
 def _environment() -> str:
+    """ENVIRONMENT as set explicitly (process environment, or .env through the
+    settings); "" when it is not set at all. The settings' own default
+    ("development") does not count: unset is not development."""
     env = os.getenv("ENVIRONMENT")
     if env is None:
         try:
             from app.core.config import get_settings
 
-            env = get_settings().ENVIRONMENT
-        except Exception:  # noqa: BLE001 -- settings unavailable: not production
-            env = "development"
-    return (env or "development").strip().lower()
+            settings = get_settings()
+            env = settings.ENVIRONMENT if "ENVIRONMENT" in settings.model_fields_set else ""
+        except Exception:  # noqa: BLE001 -- settings unavailable: not set
+            env = ""
+    return (env or "").strip().lower()
 
 
 def _key_path() -> str:
@@ -131,10 +160,12 @@ def master_key() -> bytes:
     global _master
     path = _key_path()
     if not path:
-        if _environment() == "production":
+        env = _environment()
+        if env not in KEYLESS_ENVIRONMENTS:
             raise MasterKeyError(
-                f"{KEY_FILE_ENV} must be set in production: it names the master key file that "
-                "encrypts health data (deploy/README.md, 'Encryption of health data')."
+                f"{KEY_FILE_ENV} must be set (ENVIRONMENT={env or 'unset'}): it names the master key file "
+                "that encrypts health data. Only ENVIRONMENT=development or test may run without it "
+                "(deploy/README.md, 'Encryption of health data')."
             )
         if _master is None or _master[0] != "":
             logger.warning("master_key_development_fallback: %s is not set, so health data is encrypted "
@@ -155,24 +186,73 @@ def key_id(kek: Optional[bytes] = None) -> str:
     return hashlib.sha256(b"endod-master-key-id:" + (kek or master_key())).hexdigest()[:12]
 
 
-def require_master_key() -> str:
-    """Startup check for the services that hold the key: raises if production
-    has none (or any configured key file is unusable). Returns the key's id."""
+def require_master_key(service: str = "") -> str:
+    """Startup check for the services that hold the key: raises without a
+    usable key (see :func:`master_key`). Logs the key's fingerprint, at
+    WARNING so it shows whatever the logging setup, for the three services to
+    be compared: they must all print the same id. Returns the id."""
     kek = master_key()
     ident = key_id(kek)
     if kek == _DEVELOPMENT_KEY:
-        logger.warning("master_key_is_the_development_key id=%s", ident)
+        logger.warning("master_key_in_use service=%s id=%s (the published DEVELOPMENT key: never for real data)",
+                       service or "-", ident)
     else:
-        logger.info("master_key_loaded id=%s", ident)
+        logger.warning("master_key_in_use service=%s id=%s", service or "-", ident)
     return ident
 
 
 def reset() -> None:
-    """Forget the loaded master key and every cached data key (tests; after a key change)."""
-    global _master
+    """Forget the loaded master key, every cached data key and the cached
+    enforcement state (tests; after a key change)."""
+    global _master, _enforced_until, _enforced
     with _master_lock:
         _master = None
+    _enforced, _enforced_until = False, 0.0
     clear_cache()
+
+
+# --- enforcement ---------------------------------------------------------------------------------
+
+ENFORCED_SETTING = "encryption_enforced"
+#: While not enforced, the setting is read again this often (once on, it stays on).
+ENFORCED_RECHECK_SECONDS = 30.0
+_enforced = False
+_enforced_until = 0.0
+
+
+def enforced(bind: Optional[Bind] = None) -> bool:
+    """Whether plaintext is refused (``tools enforce`` was run). Once seen on,
+    remembered for the life of the process: the switch only goes off with
+    ``decrypt-existing``, which is run with the services stopped."""
+    global _enforced, _enforced_until
+    if _enforced:
+        return True
+    now = time.monotonic()
+    if now < _enforced_until:
+        return False
+    from dedan_platform.models import PlatformSetting
+
+    table = PlatformSetting.__table__
+    query = select(table.c.value).where(table.c.key == ENFORCED_SETTING)
+    try:
+        if bind is not None:
+            value = _connection(bind).execute(query).scalar()
+        else:
+            from dedan_platform.db import get_engine
+
+            with get_engine().connect() as conn:
+                value = conn.execute(query).scalar()
+    except Exception:  # noqa: BLE001 -- e.g. the table not made yet: not enforced
+        return False
+    _enforced = value == "yes"
+    _enforced_until = now + ENFORCED_RECHECK_SECONDS
+    return _enforced
+
+
+def plaintext_refused(where: str) -> DecryptionError:
+    """The error (logged) for a plaintext value met while enforced. Never the value."""
+    logger.error("plaintext_refused %s: encryption is enforced and the stored value is not encrypted", where)
+    return DecryptionError(f"{where} is not encrypted, and encryption is enforced")
 
 
 # --- data keys --------------------------------------------------------------------------------
@@ -214,6 +294,14 @@ def _evict(kid: str, user_id: str, version: int) -> None:
         _cache.pop((kid, user_id, version), None)
 
 
+def evict(user_id: str, version: Optional[int] = None) -> None:
+    """Forget the cached data keys of a user (one version, or all): the next
+    use reads them from the database again."""
+    with _cache_lock:
+        for cached in [k for k in _cache if k[1] == user_id and (version is None or k[2] == version)]:
+            del _cache[cached]
+
+
 def _wrap_aad(user_id: str, version: int) -> bytes:
     return f"endod:user-key:v1|{user_id}|{version}".encode("utf-8")
 
@@ -248,11 +336,12 @@ def _keys_table():
     return UserKey.__table__
 
 
-def data_key(bind: Bind, user_id: str, version: int) -> bytes:
-    """The user's data key of this version (cached briefly)."""
+def data_key(bind: Bind, user_id: str, version: int, fresh: bool = False) -> bytes:
+    """The user's data key of this version (cached briefly; ``fresh`` reads
+    it from the database whatever the cache holds)."""
     kek = master_key()
     kid = key_id(kek)
-    cached = _cache_get(kid, user_id, version)
+    cached = None if fresh else _cache_get(kid, user_id, version)
     if cached is not None:
         return cached
     table = _keys_table()
@@ -288,6 +377,11 @@ def _insert_key(conn: Connection, user_id: str, version: Optional[int] = None) -
     return version
 
 
+#: session.info key: (user id, version) of the keys made in this session's
+#: transaction, forgotten from the cache if it rolls back (field_encryption.py).
+CREATED_KEYS = "endod_created_keys"
+
+
 def active_key(bind: Bind, user_id: str, create: bool = True) -> Tuple[int, bytes]:
     """(version, data key) to encrypt the user's new data with; made on first use.
 
@@ -309,8 +403,21 @@ def active_key(bind: Bind, user_id: str, create: bool = True) -> Tuple[int, byte
             return version, dek
         if not create:
             break
-        _insert_key(conn, user_id)
+        made = _insert_key(conn, user_id)
+        if isinstance(bind, Session):
+            bind.info.setdefault(CREATED_KEYS, set()).add((user_id, made))
     raise CryptoError(f"user {user_id} has no active data key")
+
+
+def lock_user_keys(bind: Bind, user_id: str) -> None:
+    """Lock the user's key rows until the transaction ends (PostgreSQL; SQLite
+    has one writer at a time anyway). Taken by rotate_user_key, by the purge
+    of old keys and by a file download's storing step, so none of them sees
+    the others half done."""
+    conn = _connection(bind)
+    if conn.dialect.name == "postgresql":
+        table = _keys_table()
+        conn.execute(select(table.c.version).where(table.c.user_id == user_id).with_for_update())
 
 
 def rotate_user_key(bind: Bind, user_id: str) -> int:
@@ -318,9 +425,7 @@ def rotate_user_key(bind: Bind, user_id: str) -> int:
     still readable). Returns the new version."""
     conn = _connection(bind)
     table = _keys_table()
-    if conn.dialect.name == "postgresql":
-        # One rotation at a time per user.
-        conn.execute(select(table.c.version).where(table.c.user_id == user_id).with_for_update())
+    lock_user_keys(conn, user_id)  # one rotation at a time per user
     version = _insert_key(conn, user_id)
     conn.execute(table.update().where(table.c.user_id == user_id, table.c.version != version).values(active=False))
     return version
@@ -374,23 +479,37 @@ def encrypt_field(bind: Bind, *, table: str, column: str, row_id: str, user_id: 
     return encrypt_value(plaintext, key=key, version=version, aad=value_aad(table, column, row_id, user_id))
 
 
-def decrypt_field(bind: Bind, *, table: str, column: str, row_id: object, user_id: object, value: str) -> str:
-    """The plaintext of a stored value; plaintext (legacy) is returned as is."""
+def parses(value: object) -> bool:
+    """Whether a value is a well-formed envelope (a plaintext that merely
+    starts with ``enc:v1:`` is not)."""
     if not is_encrypted(value):
-        return value
+        return False
+    try:
+        _parse(value)
+    except DecryptionError:
+        return False
+    return True
+
+
+def decrypt_field(bind: Bind, *, table: str, column: str, row_id: object, user_id: object, value: str) -> str:
+    """The plaintext of a stored value. A value from before encryption (no
+    well-formed envelope) is returned as it is, until encryption is enforced;
+    then it is refused."""
     where = f"{table}.{column} of row {row_id}"
+    if not parses(value):
+        if enforced(bind):
+            raise plaintext_refused(where)
+        return value
     if not user_id:
         raise DecryptionError(f"{where} has no owner to decrypt it with")
     version, _raw = _parse(value)
     aad = value_aad(table, column, row_id, user_id)
-    kek = master_key()
-    for attempt in (1, 2):
-        key = data_key(bind, str(user_id), version)
+    for fresh in (False, True):
+        # A cached key may be one a rolled-back transaction made: on failure,
+        # read it from the database once more.
+        key = data_key(bind, str(user_id), version, fresh=fresh)
         try:
             return decrypt_value(value, key=key, aad=aad)
         except DecryptionError:
-            if attempt == 2:
-                break
-            # A cached key may be one a rolled-back transaction made: read it again.
-            _evict(key_id(kek), str(user_id), version)
+            continue
     raise DecryptionError(f"{where} does not decrypt (wrong key, tampered, or moved from another row or user)")

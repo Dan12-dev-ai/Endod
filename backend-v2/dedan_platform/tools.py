@@ -1,10 +1,11 @@
 """One-off commands for encrypted health data (see crypto.py).
 
-Run them where the master key is mounted, e.g. in the backend container::
+Run them where the master key is mounted, e.g. in the backend container.
+The deploy order (deploy/README.md) is::
 
-    docker compose exec backend python -m dedan_platform.tools check
     docker compose exec backend python -m dedan_platform.tools encrypt-existing
-    docker compose exec backend python -m dedan_platform.tools rotate-key --user DE123456
+    docker compose exec backend python -m dedan_platform.tools check     # exit 0
+    docker compose exec backend python -m dedan_platform.tools enforce
 
 ``encrypt-existing``
     Encrypts every clinical value still stored in plaintext (written before
@@ -14,18 +15,35 @@ Run them where the master key is mounted, e.g. in the backend container::
     is replaced only if it is still the one read, so a concurrent change is
     never overwritten. Plaintext stays readable meanwhile.
 
+    A value that only looks encrypted (starts with ``enc:v1:`` but is not a
+    well-formed envelope) counts as plaintext.
+
 ``check``
     Reports what is still in plaintext. Exits 1 if anything is, else 0.
+
+``enforce``
+    Runs ``check`` and, only if nothing is left in plaintext, records
+    ``encryption_enforced``: from then on every service refuses a stored value
+    or file that is not encrypted (crypto.enforced), instead of reading it.
 
 ``rotate-key --user <DEDAN ID or internal id>``
     Gives the patient a new data key and re-encrypts their values and files
     with it. The old key stays (inactive) to read anything written under it
-    meanwhile; ``--purge-old`` then deletes it, but only once nothing uses it.
+    meanwhile.
+
+``purge-old-keys --user <DEDAN ID or internal id>``
+    Deletes the patient's inactive key versions, once that is safe: the
+    rotation is older than :data:`PURGE_GRACE` (longer than any request or
+    download that could still be writing under the old key), no file of
+    theirs is being downloaded or waiting to be, and no value or stored file
+    uses an old version. The check and the delete are one transaction, with
+    the patient's keys locked (as a download's storing step locks them).
 
 ``decrypt-existing --yes``
     For a rollback to a release from before encryption only (deploy/README.md):
-    writes every value and file back in plaintext. Run it with the services
-    that write health data stopped, then deploy the older release at once.
+    turns enforcement off, then writes every value and file back in
+    plaintext. Run it with the services that write health data stopped, then
+    deploy the older release at once.
 
 Nothing these commands print or log contains health data or keys.
 """
@@ -35,17 +53,22 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from datetime import timedelta
 from typing import Dict, Iterator, List, Optional, Tuple
 
 from sqlalchemy import and_, func, select
 
 from dedan_platform import crypto, eventbus, field_encryption, file_crypto, record_files
-from dedan_platform.db import create_all, session_scope
-from dedan_platform.models import OutboxEvent, RecordFile, RecordFileStatus, User, UserKey
+from dedan_platform.db import create_all, ensure_aware, session_scope
+from dedan_platform.models import OutboxEvent, PlatformSetting, RecordFile, RecordFileStatus, User, UserKey, utcnow
 
 logger = logging.getLogger("dedan.tools")
 
 DEFAULT_BATCH = 500
+#: Old keys are deleted only this long after the rotation: far longer than a
+#: request, a transaction or a file download (record_files.DOWNLOAD_DEADLINE_SECONDS
+#: plus its HTTP timeouts) that began before it and may still be writing under it.
+PURGE_GRACE = timedelta(hours=24)
 
 
 def _columns() -> Iterator[Tuple[object, object]]:
@@ -58,6 +81,19 @@ def _columns() -> Iterator[Tuple[object, object]]:
 
 def _plaintext(column):
     return and_(column.is_not(None), ~column.startswith(crypto.PREFIX, autoescape=True))
+
+
+def _needs_encryption(value: object) -> bool:
+    """Plaintext, including a plaintext that merely starts with ``enc:v1:``."""
+    return isinstance(value, str) and not crypto.parses(value)
+
+
+def _count_plaintext(conn, table, column) -> int:
+    count = int(conn.execute(select(func.count()).select_from(table).where(_plaintext(column))).scalar() or 0)
+    # Values with the prefix: counted only if they are not a real envelope.
+    for (value,) in conn.execute(select(column).where(column.startswith(crypto.PREFIX, autoescape=True))):
+        count += _needs_encryption(value)
+    return count
 
 
 def _batches(table, column, where, batch: int) -> Iterator[Tuple[object, List[tuple]]]:
@@ -96,9 +132,11 @@ def encrypt_existing(batch: int = DEFAULT_BATCH, out=print) -> Dict[str, int]:
     for table, column in _columns():
         name = f"{table.name}.{column.name}"
         done = without_owner = 0
-        for conn, rows in _batches(table, column, _plaintext(column), batch):
+        for conn, rows in _batches(table, column, column.is_not(None), batch):
             keys: Dict[str, Tuple[int, bytes]] = {}
             for row_id, user_id, value in rows:
+                if not _needs_encryption(value):
+                    continue
                 if not user_id:
                     without_owner += 1
                     continue
@@ -139,8 +177,7 @@ def check(out=print) -> Dict[str, int]:
     with session_scope() as session:
         conn = session.connection()
         for table, column in _columns():
-            report[f"{table.name}.{column.name}"] = int(conn.execute(
-                select(func.count()).select_from(table).where(_plaintext(column))).scalar() or 0)
+            report[f"{table.name}.{column.name}"] = _count_plaintext(conn, table, column)
         report["outbox_events.payload (sent)"] = int(conn.execute(select(func.count()).select_from(
             OutboxEvent.__table__).where(OutboxEvent.published_at.is_not(None),
                                          OutboxEvent.payload != eventbus.PURGED)).scalar() or 0)
@@ -179,27 +216,26 @@ def _resolve_user(identifier: str) -> Optional[str]:
         return user.id if user is not None else None
 
 
-def _old_values(user_id: str, version: int) -> int:
-    """How many of the user's values are not under ``version`` (plaintext included)."""
+def _old_values(conn, user_id: str, version: int) -> int:
+    """How many of the user's values and stored files are encrypted under a
+    version other than ``version``. Plaintext needs no key, so it is not counted."""
     count = 0
-    with session_scope() as session:
-        conn = session.connection()
-        for table, column in _columns():
-            for (value,) in conn.execute(select(column).where(table.c.user_id == user_id, column.is_not(None))):
-                if crypto.key_version(value) != version:
-                    count += 1
-    for row_id in _stored_file_ids(user_id):
-        with session_scope() as session:
-            row = session.get(RecordFile, row_id)
-            path = record_files.stored_path(row.record_id, row.file_id, row.copy_id) if row else None
+    for table, column in _columns():
+        for (value,) in conn.execute(select(column).where(table.c.user_id == user_id, column.is_not(None))):
+            if crypto.parses(value) and crypto.key_version(value) != version:
+                count += 1
+    for row in conn.execute(select(RecordFile.record_id, RecordFile.file_id, RecordFile.copy_id).where(
+            RecordFile.user_id == user_id, RecordFile.status == RecordFileStatus.STORED)):
+        path = record_files.stored_path(row[0], row[1], row[2])
         if path is not None and path.is_file():
             with open(path, "rb") as handle:
-                if file_crypto.read_header(handle) != version:
-                    count += 1
+                stored_version = file_crypto.read_header(handle)
+            if stored_version is not None and stored_version != version:
+                count += 1
     return count
 
 
-def rotate_key(identifier: str, purge_old: bool = False, batch: int = DEFAULT_BATCH, out=print) -> int:
+def rotate_key(identifier: str, batch: int = DEFAULT_BATCH, out=print) -> int:
     user_id = _resolve_user(identifier)
     if user_id is None:
         out("No such account.")
@@ -212,7 +248,7 @@ def rotate_key(identifier: str, purge_old: bool = False, batch: int = DEFAULT_BA
         for conn, rows in _batches(table, column, and_(table.c.user_id == user_id, column.is_not(None)), batch):
             keys: Dict[str, Tuple[int, bytes]] = {}
             for row_id, owner, value in rows:
-                if crypto.key_version(value) == version:
+                if crypto.parses(value) and crypto.key_version(value) == version:
                     continue
                 plaintext = crypto.decrypt_field(conn, table=table.name, column=column.name, row_id=row_id,
                                                  user_id=owner, value=value)
@@ -222,29 +258,92 @@ def rotate_key(identifier: str, purge_old: bool = False, batch: int = DEFAULT_BA
             out(f"{table.name}.{column.name}: re-encrypted {done}")
     files = _rewrite_files(record_files.TO_ACTIVE_KEY, user_id)
     out(f"record files: re-encrypted {files['done']}, failed their check {files['failed']}")
-    remaining = _old_values(user_id, version)
-    if not purge_old:
-        out(f"older key versions kept (inactive); {remaining} value(s) or file(s) still use them")
-        return 0
-    if remaining:
-        out(f"older key versions NOT deleted: {remaining} value(s) or file(s) still use them; run again")
+    with session_scope() as session:
+        remaining = _old_values(session.connection(), user_id, version)
+    out(f"older key versions kept (inactive); {remaining} value(s) or file(s) still use them. "
+        f"Delete them with purge-old-keys, no sooner than {int(PURGE_GRACE.total_seconds() // 3600)}h from now.")
+    return 0
+
+
+def purge_old_keys(identifier: str, out=print) -> int:
+    """Delete the user's inactive key versions if it is safe (see the module doc).
+    0 deleted (or nothing to delete), 1 refused, 2 no such account."""
+    user_id = _resolve_user(identifier)
+    if user_id is None:
+        out("No such account.")
+        return 2
+    with session_scope() as session:
+        conn = session.connection()
+        crypto.lock_user_keys(conn, user_id)  # held to the delete: nothing is stored under a key meanwhile
+        keys = conn.execute(select(UserKey.version, UserKey.active, UserKey.created_at).where(
+            UserKey.user_id == user_id).order_by(UserKey.version.desc())).all()
+        active = [k for k in keys if k.active]
+        old = [k.version for k in keys if not k.active]
+        if not active or not old:
+            out("Nothing to delete.")
+            return 0
+        current = active[0]
+        age = utcnow() - ensure_aware(current.created_at)
+        if age < PURGE_GRACE:
+            out(f"Refused: the rotation to version {current.version} is {age} old; wait until it is "
+                f"{PURGE_GRACE} old, so nothing begun before it is still writing under an old key.")
+            return 1
+        in_flight = int(conn.execute(select(func.count()).select_from(RecordFile).where(
+            RecordFile.user_id == user_id,
+            RecordFile.status.in_([RecordFileStatus.PENDING, RecordFileStatus.DOWNLOADING]))).scalar() or 0)
+        if in_flight:
+            out(f"Refused: {in_flight} file(s) of this patient are being downloaded or waiting to be; run again later.")
+            return 1
+        remaining = _old_values(conn, user_id, current.version)
+        if remaining:
+            out(f"Refused: {remaining} value(s) or file(s) still use an old key; run rotate-key again first.")
+            return 1
+        deleted = conn.execute(UserKey.__table__.delete().where(
+            UserKey.user_id == user_id, UserKey.active.is_(False))).rowcount
+    crypto.evict(user_id)
+    out(f"deleted {deleted} older key version(s): {old}")
+    return 0
+
+
+# --- enforce ------------------------------------------------------------------------------------------
+
+def enforce(out=print) -> int:
+    """Turn enforcement on, only if ``check`` finds no plaintext. 0 on, 1 refused."""
+    report = check(out=out)
+    if any(report.values()):
+        out("Refused: plaintext is left (above). Run encrypt-existing, then enforce again.")
         return 1
     with session_scope() as session:
-        deleted = session.execute(UserKey.__table__.delete().where(
-            UserKey.user_id == user_id, UserKey.version != version)).rowcount
-    out(f"deleted {deleted} older key version(s)")
+        row = session.get(PlatformSetting, crypto.ENFORCED_SETTING)
+        if row is None:
+            session.add(PlatformSetting(key=crypto.ENFORCED_SETTING, value="yes"))
+        else:
+            row.value, row.updated_at = "yes", utcnow()
+    crypto.reset()
+    out("encryption enforced: values and files that are not encrypted are now refused")
     return 0
+
+
+def _unenforce() -> None:
+    with session_scope() as session:
+        session.execute(PlatformSetting.__table__.delete().where(
+            PlatformSetting.key == crypto.ENFORCED_SETTING))
+    crypto.reset()
 
 
 # --- decrypt-existing (rollback only) ----------------------------------------------------------------
 
 def decrypt_existing(batch: int = DEFAULT_BATCH, out=print) -> Dict[str, int]:
     """Write every encrypted value and file back in plaintext (see the module doc)."""
+    # First, or the plaintext written below would be refused.
+    _unenforce()
     totals: Dict[str, int] = {}
     for table, column in _columns():
         done = 0
         for conn, rows in _batches(table, column, column.startswith(crypto.PREFIX, autoescape=True), batch):
             for row_id, user_id, value in rows:
+                if not crypto.parses(value):
+                    continue  # already plaintext
                 plaintext = crypto.decrypt_field(conn, table=table.name, column=column.name, row_id=row_id,
                                                  user_id=user_id, value=value)
                 done += _replace(conn, table, column, row_id, value, plaintext)
@@ -265,23 +364,31 @@ def main(argv: Optional[List[str]] = None) -> int:
     existing = commands.add_parser("encrypt-existing", help="encrypt what is still stored in plaintext")
     existing.add_argument("--batch", type=int, default=DEFAULT_BATCH)
     commands.add_parser("check", help="report what is still in plaintext (exit 1 if anything is)")
+    commands.add_parser("enforce", help="after a clean check: refuse plaintext from now on")
     rotate = commands.add_parser("rotate-key", help="give a patient a new data key and re-encrypt their data")
     rotate.add_argument("--user", required=True, help="DEDAN ID or internal user id")
-    rotate.add_argument("--purge-old", action="store_true", help="then delete the old key versions, if unused")
     rotate.add_argument("--batch", type=int, default=DEFAULT_BATCH)
+    purge = commands.add_parser("purge-old-keys", help="delete a patient's old key versions, once safe")
+    purge.add_argument("--user", required=True, help="DEDAN ID or internal user id")
     decrypt = commands.add_parser("decrypt-existing",
                                   help="rollback only: write everything back in plaintext (services stopped)")
     decrypt.add_argument("--yes", action="store_true", help="confirm: health data will be stored in plaintext")
     decrypt.add_argument("--batch", type=int, default=DEFAULT_BATCH)
     args = parser.parse_args(argv)
 
-    crypto.require_master_key()
+    crypto.require_master_key("tools")
     if args.command == "encrypt-existing":
         encrypt_existing(batch=max(1, args.batch))
         return 0
     if args.command == "check":
         create_all()
         return 1 if any(check().values()) else 0
+    if args.command == "enforce":
+        create_all()
+        return enforce()
+    if args.command == "purge-old-keys":
+        create_all()
+        return purge_old_keys(args.user)
     if args.command == "decrypt-existing":
         if not args.yes:
             print("decrypt-existing stores health data in plaintext; it is for a rollback only. Add --yes.")
@@ -290,7 +397,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         decrypt_existing(batch=max(1, args.batch))
         return 0
     create_all()
-    return rotate_key(args.user, purge_old=args.purge_old, batch=max(1, args.batch))
+    return rotate_key(args.user, batch=max(1, args.batch))
 
 
 if __name__ == "__main__":  # pragma: no cover - operational entrypoint

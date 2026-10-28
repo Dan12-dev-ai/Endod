@@ -34,9 +34,12 @@ from sqlalchemy.orm.attributes import set_committed_value
 from dedan_platform import crypto
 from dedan_platform.db import Base, new_uuid
 
-#: session.info keys.
-_PRODUCED = "endod_encrypted_values"  # {(id(obj), column): ciphertext this session wrote}
-_RESTORE = "endod_restore_plaintext"  # [(obj, column, plaintext)] until the flush is done
+#: session.info key: [(obj, column, plaintext, ciphertext)] for values this
+#: session's flushes encrypted, until the transaction ends. After the flush the
+#: object reads the plaintext again; if the transaction (or a savepoint) rolls
+#: back, values the failed flush left as ciphertext are put back to plaintext,
+#: so the next flush encrypts them again, under a key that exists.
+_WRITTEN = "endod_encrypted_writes"
 
 
 def encrypted_models() -> List[type]:
@@ -85,7 +88,6 @@ def _row_id(obj: Any) -> str:
 
 
 def _pending_values(session: Session) -> List[Tuple[Any, str, str]]:
-    produced: Dict[Tuple[int, str], str] = session.info.setdefault(_PRODUCED, {})
     work = []
     for obj in list(session.new) + list(session.dirty):
         columns: Iterable[str] = getattr(type(obj), "__encrypted__", ())
@@ -100,8 +102,6 @@ def _pending_values(session: Session) -> List[Tuple[Any, str, str]]:
             value = state.dict[column]
             if not isinstance(value, str):
                 continue
-            if produced.get((id(obj), column)) == value:
-                continue  # our own ciphertext, from a flush whose savepoint rolled back
             if is_new or moved or _modified(state, column):
                 work.append((obj, column, value))
     return work
@@ -113,8 +113,7 @@ def _encrypt_before_flush(session: Session, _flush_context, _instances) -> None:
     if not work:
         return
     keys: Dict[str, Tuple[int, bytes]] = {}
-    produced = session.info.setdefault(_PRODUCED, {})
-    restore = session.info.setdefault(_RESTORE, [])
+    written = session.info.setdefault(_WRITTEN, [])
     with session.no_autoflush:
         for obj, column, plaintext in work:
             row_id = _row_id(obj)
@@ -125,15 +124,34 @@ def _encrypt_before_flush(session: Session, _flush_context, _instances) -> None:
             ciphertext = crypto.encrypt_value(plaintext, key=key, version=version,
                                               aad=crypto.value_aad(table_of(obj), column, row_id, user_id))
             setattr(obj, column, ciphertext)
-            produced[(id(obj), column)] = ciphertext
-            restore.append((obj, column, plaintext))
+            written.append((obj, column, plaintext, ciphertext))
 
 
 @event.listens_for(Session, "after_flush_postexec")
 def _restore_after_flush(session: Session, _flush_context) -> None:
-    for obj, column, plaintext in session.info.pop(_RESTORE, []):
-        # As if loaded: the object reads plaintext, and it is not "changed".
-        set_committed_value(obj, column, plaintext)
+    for obj, column, plaintext, ciphertext in session.info.get(_WRITTEN, []):
+        if obj.__dict__.get(column) == ciphertext:
+            # As if loaded: the object reads plaintext, and it is not "changed".
+            set_committed_value(obj, column, plaintext)
+
+
+@event.listens_for(Session, "after_soft_rollback")
+def _undo_after_rollback(session: Session, _previous_transaction) -> None:
+    """A flush failed, or a transaction or savepoint rolled back: whatever it
+    encrypted may name a data key that rolled back with it. Values still
+    holding that ciphertext become plaintext again (still to be written), and
+    keys made in this session are dropped from the cache."""
+    for obj, column, plaintext, ciphertext in session.info.pop(_WRITTEN, []):
+        if obj.__dict__.get(column) == ciphertext:
+            setattr(obj, column, plaintext)
+    for user_id, version in session.info.pop(crypto.CREATED_KEYS, set()):
+        crypto.evict(user_id, version)
+
+
+@event.listens_for(Session, "after_commit")
+def _forget_after_commit(session: Session) -> None:
+    session.info.pop(_WRITTEN, None)
+    session.info.pop(crypto.CREATED_KEYS, None)
 
 
 def decrypt_object(obj: Any, session: Session, only: Optional[Iterable[str]] = None) -> None:
@@ -143,11 +161,13 @@ def decrypt_object(obj: Any, session: Session, only: Optional[Iterable[str]] = N
         if wanted is not None and column not in wanted:
             continue
         value = obj.__dict__.get(column)
-        if not crypto.is_encrypted(value):
+        if not isinstance(value, str):
             continue
+        # Plaintext too: returned as it is, or refused once encryption is enforced.
         plaintext = crypto.decrypt_field(session, table=table_of(obj), column=column, row_id=obj.__dict__.get("id"),
                                          user_id=obj.__dict__.get("user_id"), value=value)
-        set_committed_value(obj, column, plaintext)
+        if plaintext is not value:
+            set_committed_value(obj, column, plaintext)
 
 
 def _on_load(target: Any, context) -> None:

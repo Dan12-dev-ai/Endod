@@ -14,7 +14,9 @@ account without failing. The SHA-256 the hospital announced stays the hash
 of the plaintext; it is checked again on every read, before any byte is sent.
 
 Copies stored before encryption (no header) are read as they are, until
-``python -m dedan_platform.tools encrypt-existing`` encrypts them.
+``python -m dedan_platform.tools encrypt-existing`` encrypts them; once
+encryption is enforced (``tools enforce``) the caller passes
+``allow_plaintext=False`` and such a copy is refused.
 """
 
 from __future__ import annotations
@@ -39,6 +41,10 @@ READ_SIZE = 64 * 1024
 
 class FileCryptoError(RuntimeError):
     """A stored copy does not decrypt, or is not the file the hospital announced."""
+
+
+class PlaintextRefused(FileCryptoError):
+    """A copy without encryption, while encryption is enforced."""
 
 
 @dataclass(frozen=True)
@@ -127,9 +133,13 @@ def decrypt_chunks(handle: BinaryIO, *, key_for_version: Callable[[int], bytes],
 
 
 def plaintext_chunks(handle: BinaryIO, *, key_for_version: Callable[[int], bytes],
-                     binding: FileBinding) -> Iterator[bytes]:
-    """The file's plaintext: decrypted, or read as is for a copy from before encryption."""
+                     binding: FileBinding, allow_plaintext: bool = True) -> Iterator[bytes]:
+    """The file's plaintext: decrypted, or read as is for a copy from before
+    encryption (refused unless ``allow_plaintext``)."""
     if read_header(handle) is None:
+        if not allow_plaintext:
+            raise PlaintextRefused(f"file {binding.file_id} of record {binding.record_id} is not encrypted, "
+                                   "and encryption is enforced")
         handle.seek(0)
         while True:
             piece = handle.read(READ_SIZE)
@@ -141,11 +151,12 @@ def plaintext_chunks(handle: BinaryIO, *, key_for_version: Callable[[int], bytes
 
 
 def verify(handle: BinaryIO, *, key_for_version: Callable[[int], bytes], binding: FileBinding,
-           sha256: str, size: Optional[int] = None) -> int:
+           sha256: str, size: Optional[int] = None, allow_plaintext: bool = True) -> int:
     """Check the whole copy decrypts to the announced SHA-256 (and size).
     Returns the plaintext size."""
     digest, total = hashlib.sha256(), 0
-    for piece in plaintext_chunks(handle, key_for_version=key_for_version, binding=binding):
+    for piece in plaintext_chunks(handle, key_for_version=key_for_version, binding=binding,
+                                  allow_plaintext=allow_plaintext):
         digest.update(piece)
         total += len(piece)
     if digest.hexdigest() != sha256 or (size is not None and total != size):
@@ -154,20 +165,22 @@ def verify(handle: BinaryIO, *, key_for_version: Callable[[int], bytes], binding
 
 
 def open_verified(path, *, key_for_version: Callable[[int], bytes], binding: FileBinding, sha256: str,
-                  size: Optional[int] = None):
+                  size: Optional[int] = None, allow_plaintext: bool = True):
     """(plaintext stream, size) of a stored copy, checked in full first: nothing
     is streamed from a copy that fails to decrypt or to match its SHA-256.
     The plaintext is never written to disk."""
     handle = open(path, "rb")
     try:
-        total = verify(handle, key_for_version=key_for_version, binding=binding, sha256=sha256, size=size)
+        total = verify(handle, key_for_version=key_for_version, binding=binding, sha256=sha256, size=size,
+                       allow_plaintext=allow_plaintext)
     except BaseException:
         handle.close()
         raise
 
     def stream() -> Iterator[bytes]:
         try:
-            yield from plaintext_chunks(handle, key_for_version=key_for_version, binding=binding)
+            yield from plaintext_chunks(handle, key_for_version=key_for_version, binding=binding,
+                                        allow_plaintext=allow_plaintext)
         finally:
             handle.close()
 

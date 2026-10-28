@@ -1289,6 +1289,21 @@ class UserKey(Base):
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
+class PlatformSetting(Base):
+    """Platform-wide switches set by operators' commands (not by the app).
+
+    ``encryption_enforced`` = "yes": set by ``python -m dedan_platform.tools
+    enforce`` once every value is encrypted; from then on plaintext is refused
+    (crypto.enforced).
+    """
+
+    __tablename__ = "platform_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 # Encrypts and decrypts the ``__encrypted__`` columns above on every flush and
 # load. Imported last: it reads the classes defined here.
 from dedan_platform import field_encryption  # noqa: E402,F401

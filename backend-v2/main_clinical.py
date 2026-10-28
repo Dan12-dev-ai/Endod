@@ -299,7 +299,7 @@ def create_app(settings = None) -> FastAPI:
     # production start without it (dedan_platform/crypto.py).
     from dedan_platform import crypto
 
-    crypto.require_master_key()
+    crypto.require_master_key("backend")
 
     # Request body cap. `SessionMiddleware` below signs cookies, so a
     # wildcard-with-credentials CORS policy would be the worst possible pairing
