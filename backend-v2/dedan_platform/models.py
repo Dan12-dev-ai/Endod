@@ -241,6 +241,9 @@ class HealthProfile(Base):
     """
 
     __tablename__ = "health_profiles"
+    #: Encrypted per user (dedan_platform/field_encryption.py). Demographics
+    #: (date of birth, sex, age range) and the emergency contact stay plain.
+    __encrypted__ = ("allergies", "medications", "conditions", "blood_type")
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
     user_id: Mapped[str] = mapped_column(
@@ -259,7 +262,8 @@ class HealthProfile(Base):
     conditions: Mapped[Optional[str]] = mapped_column(Text)
     emergency_contact_name: Mapped[Optional[str]] = mapped_column(String(120))
     emergency_contact_phone: Mapped[Optional[str]] = mapped_column(String(32))
-    blood_type: Mapped[Optional[str]] = mapped_column(String(8))
+    #: Text, not VARCHAR(8): it holds ciphertext.
+    blood_type: Mapped[Optional[str]] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
@@ -408,13 +412,15 @@ class HealthEvent(Base):
     """
 
     __tablename__ = "health_events"
+    #: Encrypted per user: every free-text part of a timeline entry.
+    __encrypted__ = ("title", "description", "metadata_json")
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
     user_id: Mapped[str] = mapped_column(
         String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False,
     )
     event_type: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(16), default=EventStatus.COMPLETED, nullable=False)
     source: Mapped[str] = mapped_column(String(32), default="dedan", nullable=False)
@@ -451,6 +457,9 @@ class Appointment(Base):
     """
 
     __tablename__ = "appointments"
+    #: Encrypted per user: what the patient wrote about it (often symptoms),
+    #: the department or service it is for, and the hospital's free-text reason.
+    __encrypted__ = ("notes", "department", "hospital_reason")
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
     user_id: Mapped[str] = mapped_column(
@@ -470,7 +479,7 @@ class Appointment(Base):
     meeting_url: Mapped[Optional[str]] = mapped_column(String(500))
     #: "in_person" or "telehealth" (None on rows from before the column).
     visit_mode: Mapped[Optional[str]] = mapped_column(String(16))
-    department: Mapped[Optional[str]] = mapped_column(String(120))
+    department: Mapped[Optional[str]] = mapped_column(Text)
     #: "exact" or an arrival window ("morning", "afternoon", "evening").
     time_window: Mapped[Optional[str]] = mapped_column(String(16))
     #: A facility in the care directory (care_navigation.DIRECTORY).
@@ -500,7 +509,7 @@ class Appointment(Base):
     service_fee: Mapped[Optional[int]] = mapped_column(Integer)
     #: The video room on Endod's Jitsi server, once a doctor approved.
     meeting_room: Mapped[Optional[str]] = mapped_column(String(64))
-    hospital_reason: Mapped[Optional[str]] = mapped_column(String(300))
+    hospital_reason: Mapped[Optional[str]] = mapped_column(Text)
     #: The patient's payment for it (booking_payments.PaymentState); None on
     #: rows paid from the old Endod balance.
     payment_status: Mapped[Optional[str]] = mapped_column(String(24))
@@ -683,6 +692,8 @@ class InboxItem(Base):
     """
 
     __tablename__ = "inbox_items"
+    #: Encrypted per user: titles and bodies can name a record or a diagnosis.
+    __encrypted__ = ("title", "body")
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
     user_id: Mapped[str] = mapped_column(
@@ -692,7 +703,7 @@ class InboxItem(Base):
     category: Mapped[str] = mapped_column(String(16), nullable=False)
     #: What happened, e.g. "appointment_booked", "password_changed".
     kind: Mapped[str] = mapped_column(String(48), nullable=False)
-    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
     body: Mapped[Optional[str]] = mapped_column(Text)
     #: Where tapping the item should take the patient, e.g. "appointment".
     link_screen: Mapped[Optional[str]] = mapped_column(String(32))
@@ -1009,6 +1020,8 @@ class HospitalRecord(Base):
     """
 
     __tablename__ = "hospital_records"
+    #: Encrypted per user: the title ("Type 2 diabetes") is as revealing as the details.
+    __encrypted__ = ("title", "details_json", "retracted_reason")
     __table_args__ = (Index("ix_hospital_records_user_occurred", "user_id", "occurred_at"),)
 
     #: The hospital's record id (32 hex).
@@ -1019,14 +1032,14 @@ class HospitalRecord(Base):
     hospital_name: Mapped[str] = mapped_column(String(160), nullable=False)
     visit_id: Mapped[Optional[str]] = mapped_column(String(32))
     category: Mapped[str] = mapped_column(String(16), nullable=False)
-    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
     details_json: Mapped[Optional[str]] = mapped_column(Text)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     recorded_by: Mapped[Optional[str]] = mapped_column(String(160))
     source: Mapped[str] = mapped_column(String(8), nullable=False, default="portal")
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     retracted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    retracted_reason: Mapped[Optional[str]] = mapped_column(String(300))
+    retracted_reason: Mapped[Optional[str]] = mapped_column(Text)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
@@ -1047,6 +1060,9 @@ class RecordFile(Base):
     """A file attached to a hospital record, and the platform's copy of it."""
 
     __tablename__ = "record_files"
+    #: Encrypted per user (a name like "hiv-test.pdf" says what is inside).
+    #: The file itself is encrypted on disk (file_crypto.py); sha256 is of the plaintext.
+    __encrypted__ = ("filename",)
     __table_args__ = (
         UniqueConstraint("record_id", "file_id", name="uq_record_files_record_file"),
         Index("ix_record_files_due", "status", "next_attempt_at"),
@@ -1057,7 +1073,7 @@ class RecordFile(Base):
     #: The hospital's file id (32 hex).
     file_id: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
     user_id: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
-    filename: Mapped[str] = mapped_column(String(200), nullable=False)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
     content_type: Mapped[str] = mapped_column(String(32), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1076,6 +1092,7 @@ class FollowUp(Base):
     """A follow-up visit a hospital doctor set (contract section 3)."""
 
     __tablename__ = "follow_ups"
+    __encrypted__ = ("note",)
     __table_args__ = (UniqueConstraint("hospital_id", "visit_id", name="uq_follow_ups_visit"),)
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
@@ -1086,7 +1103,7 @@ class FollowUp(Base):
     visit_id: Mapped[str] = mapped_column(String(32), nullable=False)
     #: YYYY-MM-DD (the hospital's calendar day).
     follow_up_on: Mapped[str] = mapped_column(String(10), nullable=False)
-    note: Mapped[Optional[str]] = mapped_column(String(500))
+    note: Mapped[Optional[str]] = mapped_column(Text)
     doctor_name: Mapped[Optional[str]] = mapped_column(String(120))
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     #: When the hospital sent the newest change applied (the envelope time),
@@ -1188,13 +1205,17 @@ class PrescriptionItem(Base):
     """One medicine on a prescription, matched to the record's items by index."""
 
     __tablename__ = "prescription_items"
+    #: Encrypted per user. Drug names and doses live in the record's details_json.
+    __encrypted__ = ("quantity_text",)
     __table_args__ = (UniqueConstraint("rx_id", "item_index", name="uq_prescription_items_index"),)
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
     rx_id: Mapped[str] = mapped_column(
         String(32), ForeignKey("prescriptions.id", ondelete="CASCADE"), index=True, nullable=False)
     item_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    quantity_text: Mapped[Optional[str]] = mapped_column(String(40))
+    #: The patient (the prescription's), for the encryption key and its binding.
+    user_id: Mapped[Optional[str]] = mapped_column(String(32), index=True)
+    quantity_text: Mapped[Optional[str]] = mapped_column(Text)
     quantity_total: Mapped[Optional[float]] = mapped_column(Float)
     given_total: Mapped[Optional[float]] = mapped_column(Float)
     #: A pharmacist marked it given ("complete"), whatever the count.
@@ -1209,11 +1230,15 @@ class PrescriptionDispense(Base):
     """Medicine given at a pharmacy (contract section 2, ``/pharmacy/dispense``)."""
 
     __tablename__ = "prescription_dispenses"
+    #: Encrypted per user: the stored answer repeats the medicines and the patient.
+    __encrypted__ = ("response_json",)
 
     #: dispense_id (32 hex), sent to the hospital.
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
     rx_id: Mapped[str] = mapped_column(
         String(32), ForeignKey("prescriptions.id", ondelete="CASCADE"), index=True, nullable=False)
+    #: The patient (the prescription's), for the encryption key and its binding.
+    user_id: Mapped[Optional[str]] = mapped_column(String(32), index=True)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     #: As the pharmacist typed it (not verified).
     pharmacy_name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -1235,3 +1260,50 @@ class ThrottleHit(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
     bucket: Mapped[str] = mapped_column(String(120), nullable=False)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True, nullable=False)
+
+
+# ===========================================================================
+# Encryption keys for health data (crypto.py, field_encryption.py)
+# ===========================================================================
+
+class UserKey(Base):
+    """One patient's data key (DEK), wrapped under the master key (KEK).
+
+    The master key is a file mounted into the API, internal-api and the events
+    worker only (``PLATFORM_MASTER_KEY_FILE``); it is never in the database,
+    so a copy of the database alone reveals no health data. ``wrapped_key`` is
+    AES-256-GCM (nonce, ciphertext and tag, base64) with the user id and
+    version as associated data, so a wrapped key cannot be moved to another
+    user or version. New data is encrypted under the highest ``active``
+    version; older versions stay to read what they encrypted until it is
+    re-encrypted (``python -m dedan_platform.tools rotate-key``).
+    """
+
+    __tablename__ = "user_keys"
+
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    wrapped_key: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class PlatformSetting(Base):
+    """Platform-wide switches set by operators' commands (not by the app).
+
+    ``encryption_enforced`` = "yes": set by ``python -m dedan_platform.tools
+    enforce`` once every value is encrypted; from then on plaintext is refused
+    (crypto.enforced).
+    """
+
+    __tablename__ = "platform_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+# Encrypts and decrypts the ``__encrypted__`` columns above on every flush and
+# load. Imported last: it reads the classes defined here.
+from dedan_platform import field_encryption  # noqa: E402,F401

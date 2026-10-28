@@ -20,6 +20,171 @@ browser ──HTTPS──> Cloudflare ──tunnel──> cloudflared ──> fr
    `/opt/endod` and create `deploy/.env` from `deploy/.env.example`
    (secrets: `openssl rand -base64 48`).
 
+## Encryption of health data
+
+Clinical data is encrypted by the application before it reaches the database
+or the `records` volume (`backend-v2/dedan_platform/crypto.py`): each patient
+has a data key, and those keys are encrypted ("wrapped") with one **master
+key** that lives only in a file on this server. A copy of the database or of
+the volume, a backup or a leaked dump is unreadable without that file.
+
+What is encrypted, per patient (AES-256-GCM, each value bound to its table,
+column, row and patient):
+
+- hospital records: title, details, retraction reason; their files (on disk,
+  in 64 KiB chunks) and file names;
+- self-reported visits, AI consultations and every other timeline entry:
+  title, description and details;
+- the health profile: conditions, allergies, medications, blood type;
+- appointments: the patient's notes (often symptoms), the department and the
+  hospital's reason on a booking;
+- follow-up notes; prescription quantities and the stored pharmacy answer
+  (drug names and doses are in the record's details);
+- inbox titles and bodies.
+
+Not encrypted: account data needed to sign in, link and search (names, phone,
+email, Endod ID, address), date of birth, sex and age range (age rules and
+the pharmacy's view), emergency contacts, dates, statuses, categories, and
+hospital and doctor names. Events sent to the hospital service keep their
+payload only until Redis has them: a sent outbox row is emptied at once.
+
+**Events in Redis are in plaintext while in flight.** The hospital service
+(another system) reads event payloads as they are, so bookings, shared
+records and records from hospitals cross Redis unencrypted. They stay only
+until acknowledged: the events worker deletes each stream entry as soon as
+every consumer group has acknowledged it (an entry never acknowledged, the
+other side being down, at most 7 days). Dead letters keep no clinical content
+(the event's id, type, identifiers and the error, input values removed) and
+are capped at 10 000. On disk Redis keeps only its append-only file (no RDB
+snapshots), which `redis/redis.sh` rewrites every hour, so deleted entries do
+not linger in it beyond that.
+
+**Accepted residual risk: replay.** Each value is bound to its table, column,
+row and patient, so it cannot be moved. But someone able to *write* to the
+database can put back an older ciphertext of the same row and column (an
+earlier version of that note), and it decrypts. A per-row counter in the
+binding would not stop them: they would put back the old counter too.
+Database write access is what guards against this (credentials only in
+`deploy/.env`, Postgres not published outside the Compose network).
+
+**The key must be the database's.** On first start the database records a
+check value of the master key and its fingerprint (`platform_settings`). Every
+service checks the mounted key against it at start, and again before wrapping
+any new patient's key, and refuses another key: a wrong file mounted once
+would otherwise wrap new keys that no longer open once the right one is back.
+The fix is to mount the right file (from its offline backup), never to clear
+the check.
+
+**Keys are never overwritten.** The platform's services share one database
+role, so this is enforced in the code, not by grants: no statement may change
+`user_keys` beyond its `active` flag, or delete from it, except
+`tools purge-old-keys` (deleting old versions nothing uses); anything else is
+refused before it reaches the database.
+
+**No data in logs.** Statement parameters are hidden from database errors,
+and every log line and dead letter is stripped of PostgreSQL `DETAIL` lines,
+SQL parameter blocks and quoted input values.
+
+**Isolation.** First data keys are created inside the request's own
+transaction; this relies on READ COMMITTED, PostgreSQL's default, which the
+platform uses (nothing sets REPEATABLE READ or SERIALIZABLE). Under a
+stricter level a lost race would fail that request, never use a wrong key.
+
+### The master key (once, before the first deploy with encryption)
+
+```sh
+K=/opt/endod/deploy/keys/master.key
+sudo install -d -m 0700 -o root -g root /opt/endod/deploy/keys
+sudo sh -c "umask 077 && openssl rand -out $K 32"
+# The services run as uid 10001 (the image's "dedan" user), never root, and a
+# mounted file keeps its owner and mode: owned by that uid, read-only.
+sudo chown 10001:10001 $K && sudo chmod 0400 $K
+sudo sha256sum $K      # note this fingerprint with the offline backup
+```
+
+The directory is root-only (0700): on the host, only root reaches the key.
+`deploy/keys/` is in `.gitignore`; never commit it, mail it, paste it or keep
+it in a cloud drive. Compose mounts it read-only at
+`/run/secrets/platform_master_key` in `backend`, `internal-api` and
+`events-worker` only, and refuses to start them if the file is missing.
+They also refuse to start without a usable key file in any environment
+except an explicit `ENVIRONMENT=development` or `test` (staging, production,
+anything else and an unset `ENVIRONMENT` all need it); in development or test
+with no key file, a published development key is used (never for real data).
+Each logs its key fingerprint at start (`master_key_in_use service=... id=...`).
+
+### The OFFLINE backup of the master key
+
+**Losing the master key means losing the health data**: the database backups
+cannot be read without it. Keep two offline copies, apart from the database
+backups (a backup that contains both the data and its key protects nothing):
+
+```sh
+sudo base64 /opt/endod/deploy/keys/master.key   # 44 characters
+```
+
+Write them on paper (or put them on a USB stick) kept in two safe places,
+with the date and the `sha256sum` fingerprint. Do not store it with the
+nightly backups. To restore it:
+
+```sh
+echo '<the 44 characters>' | base64 -d | sudo tee /opt/endod/deploy/keys/master.key >/dev/null
+sudo chown 10001:10001 /opt/endod/deploy/keys/master.key && sudo chmod 0400 /opt/endod/deploy/keys/master.key
+sudo sha256sum /opt/endod/deploy/keys/master.key   # the noted fingerprint
+```
+
+### Deploying encryption
+
+1. Make the master key and its offline backup (above).
+2. Back up the database and the `records` volume (Backups, below).
+3. Deploy as usual (Deploy / update, below). The three services must log
+   the same key id:
+
+   ```sh
+   docker compose logs backend internal-api events-worker | grep master_key_in_use
+   ```
+4. Encrypt what was stored before, check that nothing is left, then enforce
+   -- in this order:
+
+   ```sh
+   docker compose exec backend python -m dedan_platform.tools encrypt-existing
+   docker compose exec backend python -m dedan_platform.tools check      # every line "ok", exit 0
+   docker compose exec backend python -m dedan_platform.tools enforce
+   ```
+
+   `encrypt-existing` works in batches and can be run again at any time;
+   values stored before stay readable until `enforce`. `enforce` runs the
+   check again and refuses if anything is left; once it succeeds, a value or
+   file that is not encrypted is refused (logged with its table, column and
+   row, never its content) instead of being read. Running services read the
+   setting again every 30 seconds.
+
+A patient's data key can be replaced (re-encrypting their data):
+`docker compose exec backend python -m dedan_platform.tools rotate-key --user DE123456`.
+The old key stays (inactive) for anything begun before the rotation; delete
+it at least 24 hours later with `tools purge-old-keys --user DE123456`, which
+refuses while anything (a value, a stored file, a file being downloaded) may
+still need it.
+
+### Rollback of encryption
+
+To a release from before encryption, which cannot read encrypted values:
+
+```sh
+docker compose stop backend internal-api events-worker
+# Refuses while any of the three is still connected to the database; then
+# turns enforcement off and writes every value and file back in plaintext.
+# It deletes no key: keep the master key, the backups need it.
+docker compose run --rm --no-deps backend python -m dedan_platform.tools decrypt-existing --yes
+git checkout <the previous release>
+docker compose -f docker-compose.yml -f shared-nginx/docker-compose.override.yml --env-file .env up -d --build
+```
+
+(Or restore the backups from step 2, losing what was written since.) The
+schema changes are additive (`user_keys`, `platform_settings`, two `user_id`
+columns, wider text columns), so the older release runs on it. Keep the master key and its
+backup: the backups taken while encryption was on need it.
+
 ## Deploy / update
 
 ```sh
@@ -39,11 +204,11 @@ appointment reminders (`REMINDER_CHANNELS=sms`; there is no email). The
 patient app has no AI agent, so no model key is configured
 (`AI_PROVIDER_MODE=offline`).
 
-`ENVIRONMENT=staging` works before the SMS Ethiopia key exists: codes are
-written to the API log (`docker compose logs backend | grep -i code`).
-Switch to `ENVIRONMENT=production` once `SMSETHIOPIA_API_KEY` is set
-(production refuses to fake a send), and turn on
-`NOTIFICATION_WORKER_ENABLED=true` at the same time so reminders go out.
+`.env.example` sets `ENVIRONMENT=production`, which refuses to fake an SMS
+send: set `SMSETHIOPIA_API_KEY`, and turn on `NOTIFICATION_WORKER_ENABLED=true`
+so reminders go out. Only before the SMS Ethiopia key exists,
+`ENVIRONMENT=staging` writes codes to the API log instead
+(`docker compose logs backend | grep -i code`). Both need the master key file.
 
 ## Backups
 
@@ -51,10 +216,16 @@ Switch to `ENVIRONMENT=production` once `SMSETHIOPIA_API_KEY` is set
 docker compose exec -T postgres pg_dump -U endod endod | gzip > endod-$(date +%F).sql.gz
 ```
 
+Health data in these dumps (and in the `records` volume) is encrypted:
+reading a restored copy needs the master key, from its offline backup. Never
+add `deploy/keys/` to these backups.
+
 ## Rollback
 
 Check out the previous commit in `/opt/endod` and run the deploy command again.
-Database changes are additive, so an older API runs on a newer schema.
+Database changes are additive, so an older API runs on a newer schema. To a
+release from before the encryption of health data, decrypt first (see
+"Rollback of encryption").
 
 ## Events, payments and video (with the hospital service)
 

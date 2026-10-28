@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Literal, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -378,9 +378,13 @@ def on_record_published(session: Session, payload: Dict[str, Any]) -> None:
                                    filename=meta.filename, content_type=meta.content_type, size=meta.size,
                                    sha256=meta.sha256, status=RecordFileStatus.PENDING, next_attempt_at=utcnow()))
             continue
+        # A copy is encrypted with its patient's key: moved to another patient,
+        # it is fetched again (and encrypted with theirs).
+        moved = current.user_id != user.id
         current.user_id = user.id
         current.filename = meta.filename
-        changed = (current.sha256, current.size, current.content_type) != (meta.sha256, meta.size, meta.content_type)
+        changed = moved or (current.sha256, current.size, current.content_type) != (
+            meta.sha256, meta.size, meta.content_type)
         if changed or current.status == RecordFileStatus.REMOVED:
             if current.status == RecordFileStatus.STORED:
                 _forget_file_later(session, current)
@@ -464,23 +468,22 @@ class FollowUpEvent(BaseModel):
 REMINDER_HOUR = 9
 
 
-def _follow_up_marker(follow_up: FollowUp) -> str:
-    return json.dumps({"follow_up_id": follow_up.id})[1:-1]
+def _follow_up_events(session: Session, follow_up: FollowUp, user_id: str) -> List[HealthEvent]:
+    from dedan_platform.timeline import events_with_metadata
+
+    return events_with_metadata(session, user_id, HealthEventType.FOLLOW_UP, "follow_up_id", follow_up.id)
 
 
 def _drop_follow_up_from(session: Session, follow_up: FollowUp, user_id: str) -> None:
     """The hospital moved this follow-up to another patient (it was set on the
     wrong one): it leaves the first account entirely, with its texts."""
-    session.execute(delete(HealthEvent).where(
-        HealthEvent.user_id == user_id, HealthEvent.event_type == HealthEventType.FOLLOW_UP,
-        HealthEvent.metadata_json.contains(_follow_up_marker(follow_up))).execution_options(synchronize_session=False))
+    for event in _follow_up_events(session, follow_up, user_id):
+        session.delete(event)
     patient_sms.cancel_prefix(session, f"sms:followup:{follow_up.id}:")
 
 
 def _follow_up_timeline(session: Session, follow_up: FollowUp, zone: ZoneInfo, cancelled: bool) -> None:
-    event = session.scalar(select(HealthEvent).where(
-        HealthEvent.user_id == follow_up.user_id, HealthEvent.event_type == HealthEventType.FOLLOW_UP,
-        HealthEvent.metadata_json.contains(_follow_up_marker(follow_up))))
+    event = next(iter(_follow_up_events(session, follow_up, follow_up.user_id)), None)
     when = datetime.combine(date.fromisoformat(follow_up.follow_up_on), time(REMINDER_HOUR), zone)
     if cancelled:
         if event is not None:

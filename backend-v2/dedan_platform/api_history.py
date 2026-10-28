@@ -21,10 +21,10 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from dedan_platform import history, partner_config, partners, shares
+from dedan_platform import history, partner_config, partners, record_files, shares
 from dedan_platform.api_profile import current_user_id
 
 router = APIRouter(tags=["history"])
@@ -33,7 +33,14 @@ internal_router = APIRouter(prefix="/internal", tags=["internal"], include_in_sc
 _HEX32 = re.compile(r"^[0-9a-f]{32}$")
 
 
-def _file_response(path, content_type: str, filename: str, download: bool) -> FileResponse:
+def _file_response(stored: record_files.StoredFile, download: bool) -> StreamingResponse:
+    """The file decrypted as it is sent, after a full check (decryption and
+    SHA-256): a copy that fails it is refused, never sent in part."""
+    try:
+        body, size = record_files.open_stored(stored)
+    except record_files.StoredFileUnavailable:
+        raise HTTPException(status_code=503, detail="The file is not available.") from None
+    content_type, filename = stored.content_type, stored.filename
     # The name as the patient will see it, ASCII-safe for the plain parameter.
     ascii_name = re.sub(r"[^A-Za-z0-9._ -]", "_", filename)[:120] or "file"
     disposition = "attachment" if download else "inline"
@@ -41,12 +48,13 @@ def _file_response(path, content_type: str, filename: str, download: bool) -> Fi
         "Content-Disposition": f"{disposition}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename, safe='')}",
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, no-store",
+        "Content-Length": str(size),
     }
     if content_type.startswith("image/"):
         # Opened on its own, an image may not run or load anything. (Not for
         # PDFs: a sandboxed PDF does not open in the browser's viewer.)
         headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
-    return FileResponse(path, media_type=content_type, headers=headers)
+    return StreamingResponse(body, media_type=content_type, headers=headers)
 
 
 @router.get("/users/me/history")
@@ -56,13 +64,13 @@ def read_history(user_id: str = Depends(current_user_id)) -> Dict[str, Any]:
 
 @router.get("/users/me/history/records/{record_id}/files/{file_id}")
 def read_record_file(record_id: str, file_id: str, download: bool = False,
-                     user_id: str = Depends(current_user_id)) -> FileResponse:
+                     user_id: str = Depends(current_user_id)) -> StreamingResponse:
     if not (_HEX32.match(record_id) and _HEX32.match(file_id)):
         raise HTTPException(status_code=404, detail="File not found.")
     found = history.file_for_patient(user_id, record_id, file_id)
     if found is None:
         raise HTTPException(status_code=404, detail="File not found.")
-    return _file_response(*found, download=download)
+    return _file_response(found, download=download)
 
 
 @router.get("/users/me/follow-ups")
@@ -123,10 +131,10 @@ def require_platform_key(x_platform_key: Optional[str] = Header(default=None)) -
 
 
 @internal_router.get("/shares/{share_id}/files/{file_id}", dependencies=[Depends(require_platform_key)])
-def shared_file(share_id: str, file_id: str) -> FileResponse:
+def shared_file(share_id: str, file_id: str) -> StreamingResponse:
     try:
-        path, content_type, filename = shares.file_for_hospital(share_id, file_id)
+        stored = shares.file_for_hospital(share_id, file_id)
     except shares.ShareAccessError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-    return _file_response(path, content_type, filename, download=True)
+    return _file_response(stored, download=True)
 

@@ -229,6 +229,24 @@ def delete_event(user_id: str, event_id: str) -> bool:
         return True
 
 
+def events_with_metadata(session, user_id: str, event_type: str, key: str, value: Any) -> List[HealthEvent]:
+    """The user's events of this type whose metadata has ``key == value``.
+
+    Matched in Python: metadata is stored encrypted, so the database cannot
+    search inside it. One patient's events of one type are few.
+    """
+    found = []
+    for event in session.scalars(select(HealthEvent).where(
+            HealthEvent.user_id == user_id, HealthEvent.event_type == event_type)):
+        try:
+            metadata = json.loads(event.metadata_json) if event.metadata_json else {}
+        except ValueError:
+            continue
+        if isinstance(metadata, dict) and metadata.get(key) == value:
+            found.append(event)
+    return found
+
+
 def update_appointment_event(
     session,
     user_id: str,
@@ -243,14 +261,7 @@ def update_appointment_event(
     caller's session, so the appointment and its timeline entry change in one
     transaction and cannot drift apart.
     """
-    marker = json.dumps({"appointment_id": appointment_id})[1:-1]  # '"appointment_id": "<id>"'
-    events = session.scalars(
-        select(HealthEvent).where(
-            HealthEvent.user_id == user_id,
-            HealthEvent.event_type == HealthEventType.APPOINTMENT,
-            HealthEvent.metadata_json.contains(marker),
-        )
-    ).all()
+    events = events_with_metadata(session, user_id, HealthEventType.APPOINTMENT, "appointment_id", appointment_id)
     for event in events:
         event.status = status
         if occurred_at is not None:

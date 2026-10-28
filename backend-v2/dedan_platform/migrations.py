@@ -115,6 +115,37 @@ _COLUMN_MIGRATIONS: Tuple[ColumnMigration, ...] = (
     ColumnMigration("appointments", "payment_url", "VARCHAR(500)"),
     ColumnMigration("booking_refunds", "maybe_accepted", "BOOLEAN"),
     ColumnMigration("booking_refunds", "in_flight_since", "TIMESTAMP WITH TIME ZONE"),
+    # The patient, on rows encrypted with their key (filled from the
+    # prescription by _DERIVED_BACKFILLS).
+    ColumnMigration("prescription_items", "user_id", "VARCHAR(32)"),
+    ColumnMigration("prescription_dispenses", "user_id", "VARCHAR(32)"),
+)
+
+#: Columns that now hold ciphertext ("enc:v1:..."), longer than the plaintext
+#: they were sized for: widened to TEXT on PostgreSQL (SQLite does not enforce
+#: lengths). Widening keeps every value, and older code reads TEXT as before.
+_TEXT_COLUMNS: Tuple[Tuple[str, str], ...] = (
+    ("health_events", "title"),
+    ("health_profiles", "blood_type"),
+    ("appointments", "department"),
+    ("appointments", "hospital_reason"),
+    ("inbox_items", "title"),
+    ("hospital_records", "title"),
+    ("hospital_records", "retracted_reason"),
+    ("record_files", "filename"),
+    ("follow_ups", "note"),
+    ("prescription_items", "quantity_text"),
+)
+
+#: (table, column, statement): fills a column derived from another table,
+#: where it is still empty. Cheap when nothing is missing; runs every start.
+_DERIVED_BACKFILLS: Tuple[Tuple[str, str, str], ...] = (
+    ("prescription_items", "user_id",
+     "UPDATE prescription_items SET user_id = (SELECT p.user_id FROM prescriptions p "
+     "WHERE p.id = prescription_items.rx_id) WHERE user_id IS NULL"),
+    ("prescription_dispenses", "user_id",
+     "UPDATE prescription_dispenses SET user_id = (SELECT p.user_id FROM prescriptions p "
+     "WHERE p.id = prescription_dispenses.rx_id) WHERE user_id IS NULL"),
 )
 
 #: (index name, table, columns). Created only if absent.
@@ -301,12 +332,39 @@ def apply_migrations(engine=None, now=None) -> List[str]:
             )
             raise
 
+    applied.extend(widen_text_columns(engine))
+    for table, column, statement in _DERIVED_BACKFILLS:
+        if column in _existing_columns(engine, table) and _has_nulls(engine, table, column):
+            _execute(engine, statement)
+            applied.append(statement)
+            logger.info("schema_backfill_applied", extra={"statement": statement})
+
     if ensure_unique_email_index(engine):
         applied.append(UNIQUE_EMAIL_INDEX)
     if ensure_unique_phone_index(engine):
         applied.append(UNIQUE_PHONE_INDEX)
     applied.extend(apply_data_migrations(engine))
     backfill_appointment_links()
+    return applied
+
+
+def widen_text_columns(engine) -> List[str]:
+    """ALTER the encrypted columns that are still VARCHAR to TEXT (PostgreSQL only)."""
+    if engine.dialect.name != "postgresql":
+        return []
+    applied = []
+    for table, column in _TEXT_COLUMNS:
+        with engine.connect() as conn:
+            data_type = conn.execute(text(
+                "SELECT data_type FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name = :t AND column_name = :c"),
+                {"t": table, "c": column}).scalar()
+        if data_type != "character varying":
+            continue
+        statement = f"ALTER TABLE {table} ALTER COLUMN {column} TYPE TEXT"
+        _execute(engine, statement)
+        applied.append(statement)
+        logger.info("schema_migration_applied", extra={"statement": statement})
     return applied
 
 

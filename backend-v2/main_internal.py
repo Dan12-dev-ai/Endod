@@ -39,8 +39,15 @@ def allowed_hosts() -> List[str]:
 def create_app() -> FastAPI:
     # No middleware here reads a client's address (no proxy headers); the
     # pharmacy routes key their limits on X-Client-IP, behind their key.
+    from dedan_platform import crypto
     from dedan_platform.api_history import internal_router
     from dedan_platform.api_pharmacy import router as pharmacy_router
+
+    # It decrypts records for pharmacies and shared files for hospitals: no
+    # production start without the master key (dedan_platform/crypto.py).
+    crypto.require_master_key("internal-api")
+    # ... and must be the key this database's data keys are wrapped with.
+    crypto.verify_master_key()
 
     app = FastAPI(title="Endod internal API", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
