@@ -1142,7 +1142,7 @@ class TestInternalApi:
         assert all_paths(main_internal.create_app().routes) == {
             "/health", "/internal/shares/{share_id}/files/{file_id}", "/pharmacy/lookup", "/pharmacy/dispense",
             # The super admin's (test_admin_api.py), behind their own key.
-            "/internal/admin/stats", "/internal/admin/users", "/internal/admin/users/{dedan_id}",
+            "/internal/admin/stats", "/internal/admin/users/search", "/internal/admin/users/{dedan_id}",
             "/internal/admin/users/{dedan_id}/suspend", "/internal/admin/users/{dedan_id}/reactivate",
             "/internal/admin/cards/{dedan_id}", "/internal/admin/health"}
         internal = self.internal()

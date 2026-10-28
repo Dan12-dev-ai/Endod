@@ -14,7 +14,9 @@ queries below select plain columns of ``users``, ``profiles`` and
 ``credentials`` and count rows elsewhere.
 
 * ``GET  /internal/admin/stats``: accounts, bookings and open prescriptions.
-* ``GET  /internal/admin/users?query=``: search by name, phone, email or Endod ID.
+* ``POST /internal/admin/users/search``: ``{"query"}``; search by name, phone,
+  email or Endod ID. A POST so that what was searched (personal data) is in
+  no URL and no access log; it is never logged here either.
 * ``GET  /internal/admin/users/{dedan_id}``: one account.
 * ``POST /internal/admin/users/{dedan_id}/suspend``: ``{"reason", "actor_email"}``;
   signs the patient out everywhere and refuses sign-in until reactivated.
@@ -216,10 +218,14 @@ def stats() -> Dict[str, Any]:
 
 # --- accounts -----------------------------------------------------------------------------
 
-@router.get("/users")
-def search_users(query: str = Query(default="", max_length=100)) -> Dict[str, Any]:
+class Search(BaseModel):
+    query: str = Field(default="", max_length=100)
+
+
+@router.post("/users/search")
+def search_users(body: Search) -> Dict[str, Any]:
     """Newest first; with a query, accounts whose name, phone, email or Endod ID contains it."""
-    value = query.strip()
+    value = body.query.strip()
     statement = _account_query()
     if value:
         pattern = _like(value)

@@ -34,7 +34,7 @@ SECRET = "PENICILLIN-SENTINEL-7731"
 
 ROUTES = [
     ("GET", "/internal/admin/stats", None),
-    ("GET", "/internal/admin/users?query=a", None),
+    ("POST", "/internal/admin/users/search", {"query": "a"}),
     ("GET", "/internal/admin/users/DE123456", None),
     ("POST", "/internal/admin/users/DE123456/suspend", {"reason": "abuse", "actor_email": ACTOR}),
     ("POST", "/internal/admin/users/DE123456/reactivate", {"reason": "cleared", "actor_email": ACTOR}),
@@ -189,8 +189,8 @@ def test_no_health_data_in_any_answer(admin, patient, client):
     dedan = patient["dedan"]
     answers = [
         admin.get("/internal/admin/stats", headers=HEADERS),
-        admin.get("/internal/admin/users", headers=HEADERS),
-        admin.get("/internal/admin/users?query=Almaz", headers=HEADERS),
+        admin.post("/internal/admin/users/search", json={}, headers=HEADERS),
+        admin.post("/internal/admin/users/search", json={"query": "Almaz"}, headers=HEADERS),
         admin.get(f"/internal/admin/users/{dedan}", headers=HEADERS),
         admin.get(f"/internal/admin/cards/{dedan}", headers=HEADERS),
         admin.get("/internal/admin/health", headers=HEADERS),
@@ -204,7 +204,7 @@ def test_no_health_data_in_any_answer(admin, patient, client):
     # An account answer has exactly the account fields.
     one = admin.get(f"/internal/admin/users/{dedan}", headers=HEADERS).json()
     assert set(one) == set(api_admin.ACCOUNT_FIELDS)
-    for row in admin.get("/internal/admin/users", headers=HEADERS).json()["items"]:
+    for row in admin.post("/internal/admin/users/search", json={}, headers=HEADERS).json()["items"]:
         assert set(row) == set(api_admin.ACCOUNT_FIELDS)
     # The health profile is still there (and encrypted), untouched.
     assert client.get("/users/me/health-profile", headers=patient["auth"]).status_code == 401  # signed out
@@ -256,7 +256,7 @@ def test_search_by_name_phone_email_and_id(admin, client):
                  linked=False)
 
     def found(query):
-        resp = admin.get("/internal/admin/users", params={"query": query}, headers=HEADERS)
+        resp = admin.post("/internal/admin/users/search", json={"query": query}, headers=HEADERS)
         assert resp.status_code == 200, resp.text
         return {row["dedan_id"] for row in resp.json()["items"]}
 
@@ -281,7 +281,7 @@ def test_search_is_not_sql(admin, client, attack):
     register(client, email="almaz@example.com", phone="+251911000001")
     register(client, email="bekele@example.com", first="Bekele", last="Girma", phone="+251911000002",
              linked=False)
-    resp = admin.get("/internal/admin/users", params={"query": attack}, headers=HEADERS)
+    resp = admin.post("/internal/admin/users/search", json={"query": attack}, headers=HEADERS)
     assert resp.status_code == 200, resp.text
     # Nobody's name, phone, email or ID contains these characters literally.
     assert resp.json()["items"] == []
@@ -298,13 +298,25 @@ def test_search_is_not_sql(admin, client, attack):
 def test_wildcards_match_literally(admin, client):
     weird = register(client, email="under_score%pct@example.com", phone=None, linked=False)
     register(client, email="plain@example.com", phone=None, linked=False)
-    resp = admin.get("/internal/admin/users", params={"query": "_score%"}, headers=HEADERS)
+    resp = admin.post("/internal/admin/users/search", json={"query": "_score%"}, headers=HEADERS)
     assert [row["dedan_id"] for row in resp.json()["items"]] == [weird["dedan"]]
 
 
 def test_search_length_is_capped(admin):
-    resp = admin.get("/internal/admin/users", params={"query": "a" * 101}, headers=HEADERS)
+    resp = admin.post("/internal/admin/users/search", json={"query": "a" * 101}, headers=HEADERS)
     assert resp.status_code == 422
+
+
+def test_search_is_a_post_and_the_query_is_never_logged(admin, client, caplog):
+    """What was searched is personal data: not in a URL, not in a log line."""
+    import logging
+
+    register(client, email="almaz@example.com", phone="+251911000001")
+    assert admin.get("/internal/admin/users", params={"query": "almaz"}, headers=HEADERS).status_code in (404, 405)
+    with caplog.at_level(logging.DEBUG):
+        resp = admin.post("/internal/admin/users/search", json={"query": "almaz-SECRET-QUERY"}, headers=HEADERS)
+    assert resp.status_code == 200
+    assert "almaz-SECRET-QUERY" not in caplog.text
 
 
 # --- suspend and reactivate --------------------------------------------------------------
