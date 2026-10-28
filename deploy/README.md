@@ -48,6 +48,30 @@ the pharmacy's view), emergency contacts, dates, statuses, categories, and
 hospital and doctor names. Events sent to the hospital service keep their
 payload only until Redis has them: a sent outbox row is emptied at once.
 
+**Events in Redis are in plaintext while in flight.** The hospital service
+(another system) reads event payloads as they are, so bookings, shared
+records and records from hospitals cross Redis unencrypted. They stay only
+until acknowledged: the events worker deletes each stream entry as soon as
+every consumer group has acknowledged it (an entry never acknowledged, the
+other side being down, at most 7 days). Dead letters keep no clinical content
+(the event's id, type, identifiers and the error, input values removed) and
+are capped at 10 000. On disk Redis keeps only its append-only file (no RDB
+snapshots), which `redis/redis.sh` rewrites every hour, so deleted entries do
+not linger in it beyond that.
+
+**Accepted residual risk: replay.** Each value is bound to its table, column,
+row and patient, so it cannot be moved. But someone able to *write* to the
+database can put back an older ciphertext of the same row and column (an
+earlier version of that note), and it decrypts. A per-row counter in the
+binding would not stop them: they would put back the old counter too.
+Database write access is what guards against this (credentials only in
+`deploy/.env`, Postgres not published outside the Compose network).
+
+**Isolation.** First data keys are created inside the request's own
+transaction; this relies on READ COMMITTED, PostgreSQL's default, which the
+platform uses (nothing sets REPEATABLE READ or SERIALIZABLE). Under a
+stricter level a lost race would fail that request, never use a wrong key.
+
 ### The master key (once, before the first deploy with encryption)
 
 ```sh
@@ -65,9 +89,11 @@ The directory is root-only (0700): on the host, only root reaches the key.
 it in a cloud drive. Compose mounts it read-only at
 `/run/secrets/platform_master_key` in `backend`, `internal-api` and
 `events-worker` only, and refuses to start them if the file is missing.
-In production (`ENVIRONMENT=production`) they also refuse to start without a
-usable key; outside production, with no key file, a published development key
-is used (never for real data).
+They also refuse to start without a usable key file in any environment
+except an explicit `ENVIRONMENT=development` or `test` (staging, production,
+anything else and an unset `ENVIRONMENT` all need it); in development or test
+with no key file, a published development key is used (never for real data).
+Each logs its key fingerprint at start (`master_key_in_use service=... id=...`).
 
 ### The OFFLINE backup of the master key
 
@@ -93,27 +119,33 @@ sudo sha256sum /opt/endod/deploy/keys/master.key   # the noted fingerprint
 
 1. Make the master key and its offline backup (above).
 2. Back up the database and the `records` volume (Backups, below).
-3. Deploy as usual (Deploy / update, below). The three services must show
+3. Deploy as usual (Deploy / update, below). The three services must log
    the same key id:
 
    ```sh
-   for s in backend internal-api events-worker; do
-     docker compose exec $s python -c "from dedan_platform import crypto; print(crypto.require_master_key())"
-   done
+   docker compose logs backend internal-api events-worker | grep master_key_in_use
    ```
-4. Encrypt what was stored before, then check that nothing is left:
+4. Encrypt what was stored before, check that nothing is left, then enforce
+   -- in this order:
 
    ```sh
    docker compose exec backend python -m dedan_platform.tools encrypt-existing
-   docker compose exec backend python -m dedan_platform.tools check    # every line "ok", exit 0
+   docker compose exec backend python -m dedan_platform.tools check      # every line "ok", exit 0
+   docker compose exec backend python -m dedan_platform.tools enforce
    ```
 
    `encrypt-existing` works in batches and can be run again at any time;
-   values stored before stay readable until it has run.
+   values stored before stay readable until `enforce`. `enforce` runs the
+   check again and refuses if anything is left; once it succeeds, a value or
+   file that is not encrypted is refused (logged with its table, column and
+   row, never its content) instead of being read.
 
 A patient's data key can be replaced (re-encrypting their data):
-`docker compose exec backend python -m dedan_platform.tools rotate-key --user DE123456`
-(add `--purge-old` to delete the old key once nothing uses it).
+`docker compose exec backend python -m dedan_platform.tools rotate-key --user DE123456`.
+The old key stays (inactive) for anything begun before the rotation; delete
+it at least 24 hours later with `tools purge-old-keys --user DE123456`, which
+refuses while anything (a value, a stored file, a file being downloaded) may
+still need it.
 
 ### Rollback of encryption
 
@@ -121,14 +153,15 @@ To a release from before encryption, which cannot read encrypted values:
 
 ```sh
 docker compose stop backend internal-api events-worker
+# Turns enforcement off, then writes everything back in plaintext.
 docker compose run --rm --no-deps backend python -m dedan_platform.tools decrypt-existing --yes
 git checkout <the previous release>
 docker compose -f docker-compose.yml -f shared-nginx/docker-compose.override.yml --env-file .env up -d --build
 ```
 
 (Or restore the backups from step 2, losing what was written since.) The
-schema changes are additive (`user_keys`, two `user_id` columns, wider text
-columns), so the older release runs on it. Keep the master key and its
+schema changes are additive (`user_keys`, `platform_settings`, two `user_id`
+columns, wider text columns), so the older release runs on it. Keep the master key and its
 backup: the backups taken while encryption was on need it.
 
 ## Deploy / update
@@ -150,11 +183,11 @@ appointment reminders (`REMINDER_CHANNELS=sms`; there is no email). The
 patient app has no AI agent, so no model key is configured
 (`AI_PROVIDER_MODE=offline`).
 
-`ENVIRONMENT=staging` works before the SMS Ethiopia key exists: codes are
-written to the API log (`docker compose logs backend | grep -i code`).
-Switch to `ENVIRONMENT=production` once `SMSETHIOPIA_API_KEY` is set
-(production refuses to fake a send), and turn on
-`NOTIFICATION_WORKER_ENABLED=true` at the same time so reminders go out.
+`.env.example` sets `ENVIRONMENT=production`, which refuses to fake an SMS
+send: set `SMSETHIOPIA_API_KEY`, and turn on `NOTIFICATION_WORKER_ENABLED=true`
+so reminders go out. Only before the SMS Ethiopia key exists,
+`ENVIRONMENT=staging` writes codes to the API log instead
+(`docker compose logs backend | grep -i code`). Both need the master key file.
 
 ## Backups
 
