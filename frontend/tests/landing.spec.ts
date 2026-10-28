@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { HOSPITAL_SIGNUP_URL } from '../app/lib/links';
+import { HOSPITAL_SIGNUP_URL, COMPANY_SIGNUP_URL } from '../app/lib/links';
 
 // The landing page's pointer for clinics and hospitals to the hospital portal.
 
@@ -14,6 +14,9 @@ test.describe('Landing page: facility sign-up', () => {
     await expect(link).toHaveText('Register your clinic or hospital');
     await expect(link).toHaveAttribute('href', HOSPITAL_SIGNUP_URL);
     await expect(page.locator('[data-purpose="facility-signup"]')).toContainText('Run a clinic or hospital?');
+    const company = page.locator('[data-purpose="company-signup-link"]');
+    await expect(company).toHaveText('Register your company');
+    await expect(company).toHaveAttribute('href', COMPANY_SIGNUP_URL);
   });
 
   test('is in Amharic too, with the same link', async ({ page, context }) => {
