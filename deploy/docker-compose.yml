@@ -9,6 +9,20 @@
 
 name: endod
 
+# The master key that encrypts health data (README.md, "Encryption of health
+# data"): a file on the host, outside the repository's tracked files and never
+# in the database or its backups. Mounted read-only into the three services
+# that read or write health data (backend, internal-api, events-worker), and
+# nowhere else. If the file is missing, Compose refuses to start them rather
+# than create an empty directory in its place.
+x-master-key: &master-key
+  type: bind
+  source: /opt/endod/deploy/keys/master.key
+  target: /run/secrets/platform_master_key
+  read_only: true
+  bind:
+    create_host_path: false
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -49,8 +63,10 @@ services:
       RX_SIGNING_KEY: ${RX_SIGNING_KEY:-}
       # The pharmacy API is internal-api's only: the patient API never holds its key.
       PHARMACY_API_KEY: ""
+      PLATFORM_MASTER_KEY_FILE: /run/secrets/platform_master_key
     volumes:
       - records:/data/records
+      - *master-key
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,9 +94,12 @@ services:
       # refused), and the key that checks the prescription QR tokens.
       PHARMACY_API_KEY: ${PHARMACY_API_KEY:-}
       RX_SIGNING_KEY: ${RX_SIGNING_KEY:-}
+      # Decrypts prescriptions for pharmacies and shared files for hospitals.
+      PLATFORM_MASTER_KEY_FILE: /run/secrets/platform_master_key
     volumes:
       # Serves files only; the events worker writes them.
       - records:/data/records:ro
+      - *master-key
     networks:
       # The database, on the project's own network.
       default: {}
@@ -215,8 +234,11 @@ services:
       # pharmacies: neither key is needed here.
       PHARMACY_API_KEY: ""
       RX_SIGNING_KEY: ""
+      # Encrypts the records, files and follow-ups hospitals send.
+      PLATFORM_MASTER_KEY_FILE: /run/secrets/platform_master_key
     volumes:
       - records:/data/records
+      - *master-key
     healthcheck:
       disable: true
     networks:

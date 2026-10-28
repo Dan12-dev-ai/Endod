@@ -20,6 +20,117 @@ browser ──HTTPS──> Cloudflare ──tunnel──> cloudflared ──> fr
    `/opt/endod` and create `deploy/.env` from `deploy/.env.example`
    (secrets: `openssl rand -base64 48`).
 
+## Encryption of health data
+
+Clinical data is encrypted by the application before it reaches the database
+or the `records` volume (`backend-v2/dedan_platform/crypto.py`): each patient
+has a data key, and those keys are encrypted ("wrapped") with one **master
+key** that lives only in a file on this server. A copy of the database or of
+the volume, a backup or a leaked dump is unreadable without that file.
+
+What is encrypted, per patient (AES-256-GCM, each value bound to its table,
+column, row and patient):
+
+- hospital records: title, details, retraction reason; their files (on disk,
+  in 64 KiB chunks) and file names;
+- self-reported visits, AI consultations and every other timeline entry:
+  title, description and details;
+- the health profile: conditions, allergies, medications, blood type;
+- appointments: the patient's notes (often symptoms), the department and the
+  hospital's reason on a booking;
+- follow-up notes; prescription quantities and the stored pharmacy answer
+  (drug names and doses are in the record's details);
+- inbox titles and bodies.
+
+Not encrypted: account data needed to sign in, link and search (names, phone,
+email, Endod ID, address), date of birth, sex and age range (age rules and
+the pharmacy's view), emergency contacts, dates, statuses, categories, and
+hospital and doctor names. Events sent to the hospital service keep their
+payload only until Redis has them: a sent outbox row is emptied at once.
+
+### The master key (once, before the first deploy with encryption)
+
+```sh
+K=/opt/endod/deploy/keys/master.key
+sudo install -d -m 0700 -o root -g root /opt/endod/deploy/keys
+sudo sh -c "umask 077 && openssl rand -out $K 32"
+# The services run as uid 10001 (the image's "dedan" user), never root, and a
+# mounted file keeps its owner and mode: owned by that uid, read-only.
+sudo chown 10001:10001 $K && sudo chmod 0400 $K
+sudo sha256sum $K      # note this fingerprint with the offline backup
+```
+
+The directory is root-only (0700): on the host, only root reaches the key.
+`deploy/keys/` is in `.gitignore`; never commit it, mail it, paste it or keep
+it in a cloud drive. Compose mounts it read-only at
+`/run/secrets/platform_master_key` in `backend`, `internal-api` and
+`events-worker` only, and refuses to start them if the file is missing.
+In production (`ENVIRONMENT=production`) they also refuse to start without a
+usable key; outside production, with no key file, a published development key
+is used (never for real data).
+
+### The OFFLINE backup of the master key
+
+**Losing the master key means losing the health data**: the database backups
+cannot be read without it. Keep two offline copies, apart from the database
+backups (a backup that contains both the data and its key protects nothing):
+
+```sh
+sudo base64 /opt/endod/deploy/keys/master.key   # 44 characters
+```
+
+Write them on paper (or put them on a USB stick) kept in two safe places,
+with the date and the `sha256sum` fingerprint. Do not store it with the
+nightly backups. To restore it:
+
+```sh
+echo '<the 44 characters>' | base64 -d | sudo tee /opt/endod/deploy/keys/master.key >/dev/null
+sudo chown 10001:10001 /opt/endod/deploy/keys/master.key && sudo chmod 0400 /opt/endod/deploy/keys/master.key
+sudo sha256sum /opt/endod/deploy/keys/master.key   # the noted fingerprint
+```
+
+### Deploying encryption
+
+1. Make the master key and its offline backup (above).
+2. Back up the database and the `records` volume (Backups, below).
+3. Deploy as usual (Deploy / update, below). The three services must show
+   the same key id:
+
+   ```sh
+   for s in backend internal-api events-worker; do
+     docker compose exec $s python -c "from dedan_platform import crypto; print(crypto.require_master_key())"
+   done
+   ```
+4. Encrypt what was stored before, then check that nothing is left:
+
+   ```sh
+   docker compose exec backend python -m dedan_platform.tools encrypt-existing
+   docker compose exec backend python -m dedan_platform.tools check    # every line "ok", exit 0
+   ```
+
+   `encrypt-existing` works in batches and can be run again at any time;
+   values stored before stay readable until it has run.
+
+A patient's data key can be replaced (re-encrypting their data):
+`docker compose exec backend python -m dedan_platform.tools rotate-key --user DE123456`
+(add `--purge-old` to delete the old key once nothing uses it).
+
+### Rollback of encryption
+
+To a release from before encryption, which cannot read encrypted values:
+
+```sh
+docker compose stop backend internal-api events-worker
+docker compose run --rm --no-deps backend python -m dedan_platform.tools decrypt-existing --yes
+git checkout <the previous release>
+docker compose -f docker-compose.yml -f shared-nginx/docker-compose.override.yml --env-file .env up -d --build
+```
+
+(Or restore the backups from step 2, losing what was written since.) The
+schema changes are additive (`user_keys`, two `user_id` columns, wider text
+columns), so the older release runs on it. Keep the master key and its
+backup: the backups taken while encryption was on need it.
+
 ## Deploy / update
 
 ```sh
@@ -51,10 +162,16 @@ Switch to `ENVIRONMENT=production` once `SMSETHIOPIA_API_KEY` is set
 docker compose exec -T postgres pg_dump -U endod endod | gzip > endod-$(date +%F).sql.gz
 ```
 
+Health data in these dumps (and in the `records` volume) is encrypted:
+reading a restored copy needs the master key, from its offline backup. Never
+add `deploy/keys/` to these backups.
+
 ## Rollback
 
 Check out the previous commit in `/opt/endod` and run the deploy command again.
-Database changes are additive, so an older API runs on a newer schema.
+Database changes are additive, so an older API runs on a newer schema. To a
+release from before the encryption of health data, decrypt first (see
+"Rollback of encryption").
 
 ## Events, payments and video (with the hospital service)
 

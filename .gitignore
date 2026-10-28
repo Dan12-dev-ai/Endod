@@ -100,3 +100,6 @@ Thumbs.db
 *_incomplete.*
 # Made on the server by sync.sh: origin certificate and the edge key.
 deploy/shared-nginx/tls/
+# The master key that encrypts health data (deploy/README.md): never committed.
+deploy/keys/
+master.key
