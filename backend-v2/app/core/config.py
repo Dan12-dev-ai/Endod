@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     # read from the process environment only, so a production Postgres URL in
     # `.env` was ignored and the app silently wrote to a local SQLite file.
     DEDAN_DATABASE_URL: Optional[str] = Field(default=None, description="SQLAlchemy database URL")
+    # The file holding the 32-byte master key that encrypts health data
+    # (dedan_platform/crypto.py). Read from the environment first, like the URL above.
+    PLATFORM_MASTER_KEY_FILE: Optional[str] = Field(default=None, description="Master key file (32 bytes)")
 
     class Config:
         env_file = ".env"

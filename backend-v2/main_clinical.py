@@ -295,6 +295,11 @@ def create_app(settings = None) -> FastAPI:
 
     # Fail closed: refuse to serve a clinical API with no credential configured.
     require_secure_configuration()
+    # Health data is encrypted with keys wrapped by the master key file: no
+    # production start without it (dedan_platform/crypto.py).
+    from dedan_platform import crypto
+
+    crypto.require_master_key()
 
     # Request body cap. `SessionMiddleware` below signs cookies, so a
     # wildcard-with-credentials CORS policy would be the worst possible pairing

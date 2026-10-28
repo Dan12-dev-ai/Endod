@@ -215,7 +215,8 @@ def _sync_items(session: Session, rx: Prescription, details: Dict[str, Any]) -> 
         quantity = medicine.get("quantity")
         item = existing.pop(index, None)
         if item is None:
-            item = PrescriptionItem(rx_id=rx.id, item_index=index, given_total=None, completed=False)
+            item = PrescriptionItem(rx_id=rx.id, user_id=rx.user_id, item_index=index, given_total=None,
+                                    completed=False)
             session.add(item)
         item.quantity_text = quantity
         item.quantity_total = parse_quantity(quantity)
@@ -512,7 +513,8 @@ def dispense(rx_id: str, *, pharmacy_name: str, pharmacist_name: Optional[str],
         _settle_status(session, rx)
         rx.updated_at = now
         row = PrescriptionDispense(
-            id=new_uuid(), rx_id=rx.id, at=now, pharmacy_name=pharmacy_name, pharmacist_name=pharmacist_name,
+            id=new_uuid(), rx_id=rx.id, user_id=rx.user_id, at=now, pharmacy_name=pharmacy_name,
+            pharmacist_name=pharmacist_name,
             items_json=json.dumps([{k: g[k] for k in ("item_index", "amount", "complete")} for g in given]),
             idempotency_key=idempotency_key or None)
         session.add(row)

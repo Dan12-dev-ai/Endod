@@ -14,6 +14,10 @@ Delivery is at least once, and handling is exactly once:
   unsent rows to Redis, in order, from one publisher at a time (a database
   lock), and marks them sent only after Redis (and, when configured, a
   replica) has them. If Redis is down, events wait in the database.
+  A sent row keeps its id, type and times, but its ``payload`` (bookings
+  with the patient's notes, shared records, dispensed medicines) is emptied
+  at once: the database keeps no second copy of clinical data that has
+  already left it. ``processed_events`` holds ids and types only.
 * **Inbox.** Each received event's id is recorded in ``processed_events`` in
   the same transaction as its effect, so a redelivered event is skipped.
 * **Retries.** A failed event stays pending in the group and is claimed again
@@ -43,7 +47,7 @@ try:
 except ImportError:  # redis is optional for offline/dev runs without a broker
     redis = None  # type: ignore[assignment]
     Sentinel = None  # type: ignore[assignment]
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -63,8 +67,10 @@ RETRY_AFTER_MS = 30_000
 MAX_DELIVERIES = 5
 #: Stream entries older than this are trimmed (well past any retry).
 KEEP_STREAM_FOR = timedelta(days=7)
-#: Sent outbox rows and handled-event ids are deleted after this.
+#: Sent outbox rows (already without payload) and handled-event ids are deleted after this.
 KEEP_RECORDS_FOR = timedelta(days=30)
+#: What a sent row's payload becomes (the column is NOT NULL).
+PURGED = ""
 #: Postgres advisory lock id: one publisher at a time keeps events in order.
 _PUBLISH_LOCK = 0x45_4E_44_4F_44  # "ENDOD"
 
@@ -172,9 +178,20 @@ def publish_pending(client: redis.Redis, batch: int = 100) -> int:
         now = utcnow()
         for row in rows:
             row.published_at = now
-        # If this commit fails, the rows are sent again and the receiver's
-        # inbox drops the duplicates.
+            # Sent: no copy of what may be clinical data stays here.
+            row.payload = PURGED
+        # If this commit fails, the rows (payloads intact) are sent again and
+        # the receiver's inbox drops the duplicates.
         return len(rows)
+
+
+def purge_sent_payloads() -> int:
+    """Empty the payload of every sent outbox row (rows sent before payloads
+    were purged on sending). Returns how many were emptied."""
+    with session_scope() as session:
+        return session.execute(update(OutboxEvent).where(
+            OutboxEvent.published_at.is_not(None), OutboxEvent.payload != PURGED,
+        ).values(payload=PURGED).execution_options(synchronize_session=False)).rowcount
 
 
 def housekeeping(client: redis.Redis) -> None:
@@ -182,6 +199,7 @@ def housekeeping(client: redis.Redis) -> None:
     cutoff_ms = int((time.time() - KEEP_STREAM_FOR.total_seconds()) * 1000)
     client.xtrim(STREAM_OUT, minid=f"{cutoff_ms}-0", approximate=True)
     cutoff = utcnow() - KEEP_RECORDS_FOR
+    purge_sent_payloads()
     with session_scope() as session:
         session.execute(delete(OutboxEvent).where(OutboxEvent.published_at.is_not(None),
                                                   OutboxEvent.published_at < cutoff))

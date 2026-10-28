@@ -119,16 +119,20 @@ def run_once(client: redis.Redis, now: float | None = None) -> int:
 
 
 def main() -> int:
+    from dedan_platform import crypto
+    from dedan_platform.db import create_all
+
+    # It encrypts the records, files and follow-ups hospitals send: no
+    # production start without the master key (crypto.py).
+    key_id = crypto.require_master_key()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
-    from dedan_platform.db import create_all
-
     create_all()
     from dedan_platform import partner_config
 
-    logger.info("events_worker_started record_file_downloads=%s",
-                "on" if partner_config.hospital_api_url() and partner_config.platform_admin_key() else "OFF")
+    logger.info("events_worker_started record_file_downloads=%s master_key_id=%s",
+                "on" if partner_config.hospital_api_url() and partner_config.platform_admin_key() else "OFF", key_id)
     # Record files are fetched on a thread of their own, so a slow hospital
     # API never holds up events.
     import threading

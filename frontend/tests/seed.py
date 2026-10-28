@@ -109,8 +109,10 @@ def _dispense(tag, pharmacy, amount):
     from dedan_platform.models import HospitalRecord, Prescription
 
     with session_scope() as session:
-        rx_id = session.scalar(select(Prescription.id).join(HospitalRecord, HospitalRecord.id == Prescription.record_id)
-                               .where(HospitalRecord.title == f"Chest infection {tag}"))
+        # Titles are stored encrypted: matched after they are read (decrypted).
+        rx_id = next(rx.id for rx, record in session.execute(
+            select(Prescription, HospitalRecord).join(HospitalRecord, HospitalRecord.id == Prescription.record_id))
+            if record.title == f"Chest infection {tag}")
     prescriptions.dispense(rx_id, pharmacy_name=pharmacy, pharmacist_name=None,
                            items=[{"item_index": 0, "amount": float(amount), "complete": False}])
 
