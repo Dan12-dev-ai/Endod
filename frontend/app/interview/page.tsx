@@ -310,8 +310,8 @@ export default function Interview() {
 
           {/* ===== Toast Notification (any screen) ===== */}
           {toast.title && (
-            <div data-purpose="toast-notification" className={`fixed top-5 right-5 z-50 flex items-center gap-3 bg-slate-900 text-white px-5 py-3.5 rounded-xl shadow-xl border border-slate-700 ${toast.visible ? "toast-visible" : "toast-hidden"}`} role="alert">
-              <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
+            <div data-purpose="toast-notification" className={`fixed top-5 right-5 z-50 flex items-center gap-3 bg-black text-white px-5 py-3.5 rounded-xl shadow-xl border border-black ${toast.visible ? "toast-visible" : "toast-hidden"}`} role="alert">
+              <div className="w-7 h-7 rounded-full bg-white/20 text-white flex items-center justify-center flex-shrink-0">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} /></svg>
               </div>
               <div>
@@ -367,7 +367,7 @@ export default function Interview() {
               <button
                 aria-current={isActive ? "page" : undefined}
                 className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-lg transition-colors ${
-                  isActive ? "text-teal-800 bg-teal-50" : "text-slate-500 hover:text-slate-800"
+                  isActive ? "text-black bg-gray-100" : "text-slate-500 hover:text-black"
                 }`}
                 data-purpose={`mobile-nav-${item.id}`}
                 key={item.id}

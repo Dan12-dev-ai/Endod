@@ -22,6 +22,13 @@ import {
   TIME_WINDOWS,
 } from "./data";
 import HospitalMap, { type MapPoint } from "./hospital-map";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 import type { BookingPreset } from "./history-data";
 import { RowBones, Skeleton } from "../components/skeleton";
 
@@ -291,43 +298,63 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t("booking.searchPlaceholder")}
-                className="w-full pl-9 pr-4 py-2 text-xs md:text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-slate-800 placeholder-slate-400"
+                className="w-full pl-9 pr-4 py-2 text-xs md:text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent text-slate-800 placeholder-slate-400"
               />
             </div>
             <div className="flex items-center space-x-2 overflow-x-auto pb-1 -mb-1">
-              <select
-                aria-label={t("booking.department")}
-                data-purpose="department-filter"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 shrink-0"
+              <Select
+                value={department === "" ? "all" : department}
+                onValueChange={(v) => setDepartment(v === "all" ? "" : v)}
               >
-                <option value="">{t("booking.allSpecialties")}</option>
-                {(directory?.departments ?? [...DEPARTMENT_KEYS]).map((d) => (
-                  <option key={d} value={d}>{departmentLabel(d, t)}</option>
-                ))}
-              </select>
-              <select
-                aria-label={t("booking.ownership")}
-                data-purpose="ownership-filter"
+                <SelectTrigger
+                  aria-label={t("booking.department")}
+                  className="text-xs shrink-0 w-auto min-w-[120px]"
+                  data-purpose="department-filter"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("booking.allSpecialties")}</SelectItem>
+                  {(directory?.departments ?? [...DEPARTMENT_KEYS]).map((d) => (
+                    <SelectItem key={d} value={d}>
+                      {departmentLabel(d, t)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
                 value={ownershipFilter}
-                onChange={(e) => setOwnershipFilter(e.target.value as "all" | "private" | "public")}
-                className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 shrink-0"
+                onValueChange={(v) => setOwnershipFilter(v as "all" | "private" | "public")}
               >
-                <option value="all">{t("booking.allFacilities")}</option>
-                <option value="private">{t("booking.private")}</option>
-                <option value="public">{t("booking.public")}</option>
-              </select>
-              <select
-                aria-label={t("booking.sort")}
-                data-purpose="sort-filter"
+                <SelectTrigger
+                  aria-label={t("booking.ownership")}
+                  className="text-xs shrink-0 w-auto min-w-[120px]"
+                  data-purpose="ownership-filter"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("booking.allFacilities")}</SelectItem>
+                  <SelectItem value="private">{t("booking.private")}</SelectItem>
+                  <SelectItem value="public">{t("booking.public")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
                 value={sort}
-                onChange={(e) => chooseSort(e.target.value)}
-                className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 shrink-0"
+                onValueChange={(v) => chooseSort(v)}
               >
-                <option value="name">{t("booking.sortName")}</option>
-                <option value="distance">{t("booking.sortDistance")}</option>
-              </select>
+                <SelectTrigger
+                  aria-label={t("booking.sort")}
+                  className="text-xs shrink-0 w-auto min-w-[120px]"
+                  data-purpose="sort-filter"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">{t("booking.sortName")}</SelectItem>
+                  <SelectItem value="distance">{t("booking.sortDistance")}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -374,10 +401,10 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
               <div
                 key={facility.id}
                 data-purpose={`hospital-${facility.id}`}
-                className="hospital-card bg-white rounded-2xl p-4 border border-slate-200 card-shadow hover:border-emerald-300 transition-all flex items-center justify-between gap-3"
+                className="hospital-card bg-white rounded-2xl p-4 border border-slate-200 card-shadow hover:border-gray-400 transition-all flex items-center justify-between gap-3"
               >
                 <div className="flex items-center space-x-4 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 flex items-center justify-center font-bold text-sm flex-shrink-0">
                     {initials(facility.name)}
                   </div>
                   <div className="min-w-0">
@@ -385,7 +412,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-0.5 text-xs text-slate-500">
                       <span>{facility.city}</span>
                       {facility.distance_km !== null && <span>{facility.distance_km} km</span>}
-                      {facility.open_hours && <span className="text-emerald-600 font-medium">{facility.open_hours}</span>}
+                      {facility.open_hours && <span className="text-black font-medium">{facility.open_hours}</span>}
                       {facility.emergency && <span className="text-rose-600 font-medium">{t("booking.emergencyCare")}</span>}
                       {!facility.verified && <span className="text-amber-600">{t("booking.unconfirmed")}</span>}
                     </div>
@@ -412,7 +439,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 <button
                   type="button"
                   onClick={() => openBooking(facility)}
-                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition shadow-sm flex-shrink-0"
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-black hover:bg-gray-800 text-white font-semibold text-xs transition shadow-sm flex-shrink-0"
                 >
                   <span>{t("booking.bookNow")}</span>
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -431,7 +458,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
             <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div>
-                <span className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">{t("booking.modalBadge")}</span>
+                <span className="text-[11px] font-semibold text-black uppercase tracking-wider">{t("booking.modalBadge")}</span>
                 <h3 className="text-lg font-bold text-slate-900 mt-0.5">{selected.name}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {[selected.address, selected.city].filter(Boolean).join(", ")}
@@ -448,7 +475,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
             <form onSubmit={submitBooking} className="space-y-4 mt-4">
               <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 flex items-center justify-between text-xs">
                 <div className="flex items-center space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-[10px]">P</div>
+                  <div className="w-6 h-6 rounded-full bg-gray-100 text-gray-900 flex items-center justify-center font-bold text-[10px]">P</div>
                   <span className="font-medium text-slate-700">{t("booking.patient", { id: patientId || "—" })}</span>
                 </div>
               </div>
@@ -462,8 +489,8 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                       return (
                         <label
                           className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
-                            visitMode === mode ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-slate-200 text-slate-600"
-                          } has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-emerald-500 ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                            visitMode === mode ? "border-black bg-gray-50 text-black" : "border-slate-200 text-slate-600"
+                          } has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-black ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                           key={mode}
                         >
                           <input
@@ -488,35 +515,65 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-date">{t("booking.selectDate")}</label>
-                <input type="date" id="booking-date" required min={todayLocal()} value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                <input type="date" id="booking-date" required min={todayLocal()} value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-black" />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-time">{t("booking.visitTime")}</label>
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                  <input type="time" id="booking-time" required value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-                  <select aria-label={t("booking.arrivalWindow")} data-purpose="time-window" value={timeWindow} onChange={(e) => setTimeWindow(e.target.value)} className="text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    {TIME_WINDOWS.map((w) => (
-                      <option key={w.value} value={w.value}>{t(w.labelKey)}</option>
-                    ))}
-                  </select>
+                  <input type="time" id="booking-time" required value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-black" />
+                  <Select
+                    value={timeWindow}
+                    onValueChange={setTimeWindow}
+                  >
+                    <SelectTrigger
+                      aria-label={t("booking.arrivalWindow")}
+                      className="text-xs md:text-sm"
+                      data-purpose="time-window"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIME_WINDOWS.map((w) => (
+                        <SelectItem key={w.value} value={w.value}>
+                          {t(w.labelKey)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <p className="text-[11px] text-slate-400">{t("booking.arrivalWindowHint")}</p>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-department">{t("booking.departmentClinic")}</label>
-                <select id="booking-department" value={bookingDepartment} onChange={(e) => setBookingDepartment(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                  {selected.departments.map((d) => (
-                    <option key={d} value={selected.partner ? d : departmentLabel(d, t)}>{departmentLabel(d, t)}</option>
-                  ))}
-                  <option value="">{t("booking.notSure")}</option>
-                </select>
+                <Select
+                  value={bookingDepartment === "" ? "not-sure" : bookingDepartment}
+                  onValueChange={(v) => setBookingDepartment(v === "not-sure" ? "" : v)}
+                >
+                  <SelectTrigger
+                    className="w-full text-xs md:text-sm"
+                    id="booking-department"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selected.departments.map((d) => (
+                      <SelectItem
+                        key={d}
+                        value={selected.partner ? d : departmentLabel(d, t)}
+                      >
+                        {departmentLabel(d, t)}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="not-sure">{t("booking.notSure")}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-note">{t("booking.reasonLabel")}</label>
-                <textarea id="booking-note" rows={2} maxLength={1000} value={bookingNote} onChange={(e) => setBookingNote(e.target.value)} placeholder={t("booking.reasonPlaceholder")} className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                <textarea id="booking-note" rows={2} maxLength={1000} value={bookingNote} onChange={(e) => setBookingNote(e.target.value)} placeholder={t("booking.reasonPlaceholder")} className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-black" />
               </div>
 
               {selected.partner && quote && (
@@ -542,7 +599,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 <button type="button" onClick={closeBooking} className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
                   {t("common.cancel")}
                 </button>
-                <button type="submit" disabled={isSubmitting || redirecting || (selected.partner && paymentsOff && (quote === null || quote.total > 0))} className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
+                <button type="submit" disabled={isSubmitting || redirecting || (selected.partner && paymentsOff && (quote === null || quote.total > 0))} className="px-5 py-2 rounded-xl bg-black hover:bg-gray-800 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
                   <span>
                     {redirecting
                       ? t("booking.toChapa")
@@ -563,7 +620,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
       {selected && booked && (
         <div id="success-modal" data-purpose="success-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-center">
-            <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4">
+            <div className="w-14 h-14 rounded-full bg-gray-100 text-black flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
@@ -583,7 +640,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
               </div>
               <div className="flex justify-between gap-3">
                 <span className="text-slate-400">{t("booking.visitTimeLabel")}</span>
-                <span className="font-bold text-emerald-600 text-right">{formatWhen(booked.scheduled_at, locale)}</span>
+                <span className="font-bold text-black text-right">{formatWhen(booked.scheduled_at, locale)}</span>
               </div>
               <div className="flex justify-between gap-3">
                 <span className="text-slate-400">{t("booking.reference")}</span>
@@ -596,7 +653,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
               </p>
             )}
 
-            <button type="button" onClick={closeBooking} className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs transition">
+            <button type="button" onClick={closeBooking} className="w-full py-2.5 rounded-xl bg-black hover:bg-gray-800 text-white font-semibold text-xs transition">
               {t("common.done")}
             </button>
           </div>

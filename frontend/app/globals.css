@@ -19,12 +19,12 @@
 
   /* ===== Sign Up page (Stitch design) brand tokens ===== */
   --color-brand-bg: #dde9e6;
-  --color-brand-primary: #173f3b;
-  --color-brand-heading: #153a37;
+  --color-brand-primary: #000000;
+  --color-brand-heading: #000000;
   --color-brand-muted: #536e6b;
   --color-brand-border: #e2e8f0;
   --color-brand-inputbg: #f8fafb;
-  --color-brand-accent: #1e5852;
+  --color-brand-accent: #000000;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -89,13 +89,13 @@ body {
 .field-input {
   background-color: #f8fafb;
   border-color: #e2e8f0;
-  color: #173f3b;
+  color: #000000;
   transition: all 0.2s ease;
 }
 .field-input:focus {
   background-color: #ffffff;
-  border-color: #1e5852;
-  box-shadow: 0 0 0 2px rgba(30, 88, 82, 0.15);
+  border-color: #000000;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
 }
 
 /* ===== Landing page: partners marquee ===== */

@@ -8,6 +8,13 @@ import {
 } from "../health-card/health-card-data";
 import { useI18n, type TranslationKey } from "../lib/i18n";
 import { Bone, FieldBones, Skeleton } from "../components/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
 
 type Profile = ProfileForCard & {
   email: string | null;
@@ -57,9 +64,9 @@ const DEFAULT_RADIUS_KM = 15;
 const RADIUS_MIN_KM = 5;
 const RADIUS_MAX_KM = 200;
 
-const inputClass = "w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-emerald-500 py-2.5 px-3.5 shadow-xs text-slate-900 border";
+const inputClass = "w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-black py-2.5 px-3.5 shadow-xs text-slate-900 border";
 const labelClass = "block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5";
-const saveClass = "px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all";
+const saveClass = "px-5 py-2.5 bg-black hover:bg-gray-800 disabled:opacity-60 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all";
 
 function message(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
@@ -82,8 +89,8 @@ const STRENGTH_LABEL_KEYS: TranslationKey[] = [
   "settings.password.strength.good",
   "settings.password.strength.strong",
 ];
-const STRENGTH_COLORS = ["text-slate-400", "text-rose-500", "text-amber-500", "text-teal-600", "text-emerald-600"];
-const STRENGTH_BARS = ["bg-slate-200", "bg-rose-500", "bg-amber-500", "bg-teal-500", "bg-emerald-500"];
+const STRENGTH_COLORS = ["text-slate-400", "text-rose-500", "text-amber-500", "text-black", "text-black"];
+const STRENGTH_BARS = ["bg-slate-200", "bg-rose-500", "bg-amber-500", "bg-black", "bg-gray-500"];
 
 /** Account settings (GET/PATCH /users/me, preferences, consent, health profile; password change). */
 export default function SettingsView({ onToast, onProfileChange }: Props) {
@@ -421,7 +428,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         checked={checked}
         disabled={busy !== null}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-1 h-4 w-4 accent-emerald-600 flex-shrink-0"
+        className="mt-1 h-4 w-4 accent-black flex-shrink-0"
       />
     </label>
   );
@@ -442,7 +449,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
               <h2 className="text-lg font-bold text-slate-900">{t("settings.personal.title")}</h2>
               <p className="text-xs sm:text-sm text-slate-500">{t("settings.personal.subtitle")}</p>
             </div>
-            <span className="self-start sm:self-auto px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-200">
+            <span className="self-start sm:self-auto px-3 py-1 bg-gray-50 text-gray-900 text-xs font-semibold rounded-full border border-gray-200">
               {profile.dedan_user_id}
             </span>
           </div>
@@ -469,13 +476,13 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                 <div className="relative">
                   <input id="phone-number" readOnly type="tel" value={profile.phone ? formatPhoneDisplay(profile.phone) : ""} placeholder={t("settings.personal.noPhone")} className="w-full text-sm rounded-xl bg-slate-50 border-slate-200 text-slate-600 py-2.5 px-3.5 pr-24 border" />
                   {profile.phone && (
-                    <span data-purpose="phone-status" className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold px-2 py-0.5 rounded-md ${phoneVerified ? "text-emerald-600 bg-emerald-50" : "text-amber-700 bg-amber-50"}`}>
+                    <span data-purpose="phone-status" className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold px-2 py-0.5 rounded-md ${phoneVerified ? "text-black bg-gray-50" : "text-amber-700 bg-amber-50"}`}>
                       {phoneVerified ? t("settings.personal.verified") : t("settings.personal.notVerified")}
                     </span>
                   )}
                 </div>
                 {phoneStep === "idle" && (
-                  <button type="button" data-purpose="change-phone" onClick={() => { setPhoneStep("number"); setNewPhone(""); setPhoneError(""); }} className="mt-1.5 text-[11px] font-semibold text-emerald-700 hover:underline">
+                  <button type="button" data-purpose="change-phone" onClick={() => { setPhoneStep("number"); setNewPhone(""); setPhoneError(""); }} className="mt-1.5 text-[11px] font-semibold text-gray-900 hover:underline">
                     {profile.phone ? (phoneVerified ? t("settings.personal.changeNumber") : t("settings.personal.verifyNumber")) : t("settings.personal.addPhone")}
                   </button>
                 )}
@@ -533,18 +540,29 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
               </div>
               <div>
                 <label className={labelClass} htmlFor="country">{t("settings.location.country")}</label>
-                <select id="country" value={country} onChange={(e) => setCountry(e.target.value)} className={inputClass}>
-                  {COUNTRIES.map((c) => <option key={c.value} value={c.value}>{t(c.labelKey)}</option>)}
-                  {!COUNTRIES.some((c) => c.value === country) && <option value={country}>{country}</option>}
-                </select>
+                <Select value={country} onValueChange={setCountry}>
+                  <SelectTrigger className="w-full text-lg" id="country">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value}>
+                        {t(c.labelKey)}
+                      </SelectItem>
+                    ))}
+                    {!COUNTRIES.some((c) => c.value === country) && (
+                      <SelectItem value={country}>{country}</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-700" htmlFor="radius-slider">{t("settings.location.radius")}</label>
-                <span className="text-xs font-semibold text-emerald-700 bg-emerald-100/70 px-2.5 py-0.5 rounded-full">{t("settings.location.within", { km: radius })}</span>
+                <span className="text-xs font-semibold text-gray-900 bg-gray-100/70 px-2.5 py-0.5 rounded-full">{t("settings.location.within", { km: radius })}</span>
               </div>
-              <input id="radius-slider" max={RADIUS_MAX_KM} min={RADIUS_MIN_KM} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-emerald-600 h-2 bg-slate-200 rounded-lg cursor-pointer" />
+              <input id="radius-slider" max={RADIUS_MAX_KM} min={RADIUS_MIN_KM} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-black h-2 bg-slate-200 rounded-lg cursor-pointer" />
               <div className="flex justify-between text-[11px] text-slate-400 mt-1">
                 <span>{t("settings.location.within", { km: RADIUS_MIN_KM })}</span>
                 <span>{t("settings.location.within", { km: 100 })}</span>
@@ -600,7 +618,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                 <label className={labelClass} htmlFor="confirm-password">{t("settings.password.confirm")}</label>
                 <input id="confirm-password" autoComplete="new-password" required type={showPasswords ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={inputClass} />
                 {confirmPassword && (
-                  <div id="match-indicator" className={`text-[11px] mt-1.5 font-semibold ${newPassword === confirmPassword ? "text-emerald-600" : "text-rose-500"}`}>
+                  <div id="match-indicator" className={`text-[11px] mt-1.5 font-semibold ${newPassword === confirmPassword ? "text-black" : "text-rose-500"}`}>
                     {newPassword === confirmPassword ? t("settings.password.match") : t("settings.password.noMatch")}
                   </div>
                 )}
@@ -608,14 +626,14 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
             </div>
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs grid grid-cols-1 sm:grid-cols-3 gap-2">
               {requirements.map((req) => (
-                <div key={req.id} data-purpose={req.id} className={`flex items-center gap-1.5 ${req.met ? "text-emerald-600" : "text-slate-400"}`}>
+                <div key={req.id} data-purpose={req.id} className={`flex items-center gap-1.5 ${req.met ? "text-black" : "text-slate-400"}`}>
                   <span>{req.met ? "✓" : "•"}</span><span>{req.label}</span>
                 </div>
               ))}
             </div>
             <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
               <label className="flex items-center gap-2 text-xs text-slate-600">
-                <input type="checkbox" checked={showPasswords} onChange={(e) => setShowPasswords(e.target.checked)} className="accent-emerald-600" />
+                <input type="checkbox" checked={showPasswords} onChange={(e) => setShowPasswords(e.target.checked)} className="accent-black" />
                 {t("settings.password.show")}
               </label>
               <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.password.update")}</button>
@@ -631,17 +649,17 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
               <p className="text-xs sm:text-sm text-slate-500">{t("settings.card.subtitle")}</p>
             </div>
             <div className="flex gap-2 self-start sm:self-auto">
-              <button type="button" onClick={() => setCardVisible(!cardVisible)} className="px-3.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold border border-emerald-200">
+              <button type="button" onClick={() => setCardVisible(!cardVisible)} className="px-3.5 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-900 text-xs font-semibold border border-gray-200">
                 {cardVisible ? t("settings.card.hidePreview") : t("settings.card.showPreview")}
               </button>
-              <Link data-purpose="open-health-card" href="/health-card" className="px-3.5 py-1.5 rounded-lg bg-[#1e5852] hover:bg-[#174640] text-white text-xs font-semibold">
+              <Link data-purpose="open-health-card" href="/health-card" className="px-3.5 py-1.5 rounded-lg bg-[#000000] hover:bg-[#174640] text-white text-xs font-semibold">
                 {t("settings.card.open")}
               </Link>
             </div>
           </div>
 
           {cardVisible && (
-            <div data-purpose="card-preview" className="relative bg-gradient-to-br from-[#1e3a2e] to-[#1e5852] rounded-2xl p-6 text-white overflow-hidden">
+            <div data-purpose="card-preview" className="relative bg-gradient-to-br from-[#1e3a2e] to-[#000000] rounded-2xl p-6 text-white overflow-hidden">
               <div className="relative mb-6"><span className="text-2xl font-extrabold tracking-tight">{t("common.endod")}</span></div>
               <div className="relative mb-4"><span className="text-xs font-semibold text-[#94e0c0] uppercase tracking-wider">{t("healthCard.digitalId")}</span></div>
               <h3 className="relative text-2xl font-bold font-serif text-white mb-1">{[firstName, lastName].filter(Boolean).join(" ") || "—"}</h3>
@@ -673,10 +691,17 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className={labelClass} htmlFor="blood-group">{t("settings.card.bloodGroupLabel")}</label>
-                  <select id="blood-group" value={bloodType} onChange={(e) => setBloodType(e.target.value)} className={inputClass}>
-                    <option value="">{t("settings.card.notSpecified")}</option>
-                    {BLOOD_TYPES.map((b) => <option key={b} value={b}>{b}</option>)}
-                  </select>
+                  <Select value={bloodType} onValueChange={setBloodType}>
+                    <SelectTrigger className="w-full text-lg" id="blood-group">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">{t("settings.card.notSpecified")}</SelectItem>
+                      {BLOOD_TYPES.map((b) => (
+                        <SelectItem key={b} value={b}>{b}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className={labelClass} htmlFor="allergies">{t("settings.card.allergiesLabel")}</label>

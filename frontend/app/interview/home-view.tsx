@@ -109,7 +109,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
               </div>
               <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row gap-2.5">
                 <button
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#1e5852] hover:bg-[#174640] text-white text-sm font-semibold transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#000000] hover:bg-[#174640] text-white text-sm font-semibold transition disabled:opacity-50"
                   data-purpose="home-show-qr"
                   disabled={!card?.qrSvg}
                   onClick={() => setQrOpen(true)}

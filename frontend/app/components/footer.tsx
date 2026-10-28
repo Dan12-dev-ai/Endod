@@ -44,7 +44,6 @@ export default function Footer() {
               {t("footer.platform")}
             </p>
             <ul className="space-y-3 text-sm text-neutral-300">
-              <li><a className="hover:text-white transition-colors" href="#build-own-lab">{t("footer.aiSymptomAssistant")}</a></li>
               <li><a className="hover:text-white transition-colors" href="#cloud-lab">{t("footer.hospitalDirectoryBooking")}</a></li>
               <li><a className="hover:text-white transition-colors" href="#pipette-hero-card">{t("footer.treatmentPlans")}</a></li>
               <li><a className="hover:text-white transition-colors" href="#pipette-hero-card">{t("footer.medicalHistory")}</a></li>
