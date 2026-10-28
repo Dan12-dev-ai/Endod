@@ -39,7 +39,7 @@ HOUSEKEEPING_EVERY = 3600
 HOLDS_EVERY = 60
 PAYMENTS_EVERY = 120
 REFUNDS_EVERY = 30
-_last = {"deposits": 0.0, "stale": 0.0, "shares": 0.0, "housekeeping": 0.0, "holds": 0.0, "payments": 0.0,
+_last = {"trim_out": 0.0, "deposits": 0.0, "stale": 0.0, "shares": 0.0, "housekeeping": 0.0, "holds": 0.0, "payments": 0.0,
          "refunds": 0.0}
 
 #: Every event this worker handles: bookings and listings, patient history,
@@ -86,6 +86,10 @@ def run_once(client: redis.Redis, now: float | None = None) -> int:
     now = time.monotonic() if now is None else now
     work = eventbus.publish_pending(client)
     work += eventbus.consume_once(client, HANDLERS, block_ms=1000)
+    if now - _last["trim_out"] >= eventbus.TRIM_OUT_EVERY:
+        _last["trim_out"] = now
+        # What the hospital service has acknowledged leaves Redis.
+        eventbus.trim_acknowledged(client, eventbus.STREAM_OUT)
     if now - _last["deposits"] >= DEPOSITS_EVERY:
         _last["deposits"] = now
         try:
@@ -124,7 +128,7 @@ def main() -> int:
 
     # It encrypts the records, files and follow-ups hospitals send: no
     # production start without the master key (crypto.py).
-    key_id = crypto.require_master_key()
+    key_id = crypto.require_master_key("events-worker")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
