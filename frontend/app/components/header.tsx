@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { logout } from "../lib/api";
 import { useI18n } from "../lib/i18n";
@@ -11,6 +12,7 @@ import { Bone } from "./skeleton";
 
 export default function Header() {
   const { t } = useI18n();
+  const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -26,7 +28,7 @@ export default function Header() {
       {/* Main Navigation Bar */}
       <nav
         className={`fixed top-0 left-0 right-0 w-full text-white backdrop-blur-md px-6 lg:px-12 py-3.5 flex items-center justify-between border-b border-white/10 z-50 transition-colors duration-300 ${
-          scrolled ? "bg-black/85" : "bg-black/30"
+          pathname !== "/" || scrolled ? "bg-black/85" : "bg-black/30"
         }`}
       >
         {/* ENDOD Health Logo */}
@@ -40,76 +42,33 @@ export default function Header() {
 
         {/* Menu links */}
         <div className="hidden md:flex items-center space-x-8 text-[14px] font-medium text-neutral-200">
-          {/* How It Works Dropdown */}
-          <div className="relative group" id="labDropdownContainer">
-            <button
-              aria-expanded="false"
-              className="flex items-center gap-1.5 hover:text-white py-2 focus:outline-none transition-colors cursor-pointer"
-              id="labMenuBtn"
-            >
-              <span>{t("nav.howItWorks")}</span>
-              <svg
-                className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white transition-transform group-hover:translate-y-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-              </svg>
-            </button>
-            {/* Dropdown items */}
-            <div className="absolute left-0 top-full pt-2 w-56 hidden group-hover:block transition-all duration-200 z-50">
-              <div className="bg-white text-slate-800 rounded-md shadow-2xl py-2.5 border border-slate-100 flex flex-col font-normal text-[14px]">
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#build-own-lab">{t("nav.overview")}</a>
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#build-own-lab">{t("nav.aiSymptomAssistant")}</a>
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#cloud-lab">{t("nav.hospitalFinder")}</a>
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#cloud-lab">{t("nav.treatmentPlans")}</a>
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#pipette-hero-card">{t("nav.medicalHistory")}</a>
-                <a className="px-5 py-2.5 hover:bg-slate-100 hover:text-black transition-colors cursor-pointer" href="#bottleneck">{t("nav.privacySecurity")}</a>
-              </div>
-            </div>
-          </div>
-
-          {/* For Hospitals Dropdown */}
-          <div className="relative group">
-            <button className="flex items-center gap-1.5 hover:text-white py-2 focus:outline-none transition-colors cursor-pointer">
-              <span>{t("nav.forHospitals")}</span>
-              <svg
-                className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white transition-transform group-hover:translate-y-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-              </svg>
-            </button>
-            <div className="absolute left-0 top-full pt-2 w-48 hidden group-hover:block transition-all duration-200 z-50">
-              <div className="bg-white text-slate-800 rounded-md shadow-2xl py-2 border border-slate-100 flex flex-col font-normal text-[14px]">
-                <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#cloud-lab">{t("nav.hospitalPortal")}</a>
-                <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#cloud-lab">{t("nav.liveCrowdStatus")}</a>
-              </div>
-            </div>
-          </div>
-
-          {/* Resources Dropdown */}
-          <div className="relative group">
-            <button className="flex items-center gap-1.5 hover:text-white py-2 focus:outline-none transition-colors cursor-pointer">
-              <span>{t("nav.resources")}</span>
-              <svg
-                className="w-3.5 h-3.5 text-neutral-400 group-hover:text-white transition-transform group-hover:translate-y-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
-              </svg>
-            </button>
-            <div className="absolute left-0 top-full pt-2 w-48 hidden group-hover:block transition-all duration-200 z-50">
-              <div className="bg-white text-slate-800 rounded-md shadow-2xl py-2 border border-slate-100 flex flex-col font-normal text-[14px]">
-                <a className="px-5 py-2 hover:bg-slate-100 transition-colors cursor-pointer" href="#contact-section">{t("nav.support")}</a>
-              </div>
-            </div>
-          </div>
+          <a
+            className="hover:text-white transition-colors"
+            data-purpose="nav-pharmacies"
+            href="https://pharmacy.endod-health.com"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            {t("nav.pharmacies")}
+          </a>
+          <a
+            className="hover:text-white transition-colors"
+            data-purpose="nav-hospitals"
+            href="https://hospital.endod-health.com"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            {t("nav.hospitals")}
+          </a>
+          <a
+            className="hover:text-white transition-colors"
+            data-purpose="nav-organisations"
+            href="https://organisation.endod-health.com"
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            {t("nav.organisations")}
+          </a>
         </div>
 
         <div className="flex items-center gap-3">

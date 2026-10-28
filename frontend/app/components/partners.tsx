@@ -13,8 +13,13 @@ const PARTNERS = [
 const HALF = [...PARTNERS, ...PARTNERS];
 
 function Logo({ name, src }: { name: string; src: string }) {
+  const isAfilas = name === "Afilas";
   return (
-    <div className="flex-shrink-0 w-24 md:w-80 lg:w-96 flex items-center justify-center drop-shadow-md">
+    <div
+      className={`flex-shrink-0 w-24 md:w-80 lg:w-96 flex items-center justify-center drop-shadow-md ${
+        isAfilas ? "bg-slate-900 rounded-xl p-4" : ""
+      }`}
+    >
       <img
         src={src}
         alt={name}

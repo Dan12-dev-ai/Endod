@@ -86,7 +86,7 @@ export default function Footer() {
         {/* Footer Bottom: Legal & Social Links */}
         <div className="pt-4 border-t border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-400">
           <div className="flex items-center gap-2">
-            <a className="hover:text-white transition-colors" href="#">{t("footer.terms")}</a>
+            <a className="hover:text-white transition-colors" href="/terms">{t("footer.terms")}</a>
             <span>|</span>
             <span>{t("footer.copyright")}</span>
           </div>
