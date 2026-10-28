@@ -108,6 +108,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # The mounted master key must be the one this database's data keys are
+    # wrapped with (recorded on first install): no start with another one.
+    from dedan_platform import crypto
+
+    crypto.verify_master_key()
     settings = get_settings()
     logger.info(f"Starting DEDAN Health Clinical API v{settings.APP_VERSION} in {settings.ENVIRONMENT} mode")
 
@@ -295,6 +300,11 @@ def create_app(settings = None) -> FastAPI:
 
     # Fail closed: refuse to serve a clinical API with no credential configured.
     require_secure_configuration()
+    # Health data is encrypted with keys wrapped by the master key file: no
+    # production start without it (dedan_platform/crypto.py).
+    from dedan_platform import crypto
+
+    crypto.require_master_key("backend")
 
     # Request body cap. `SessionMiddleware` below signs cookies, so a
     # wildcard-with-credentials CORS policy would be the worst possible pairing

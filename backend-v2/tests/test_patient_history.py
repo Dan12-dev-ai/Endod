@@ -306,6 +306,22 @@ def stored_copy(record_id, file_id):
     return record_files.stored_path(record_id, file_id, file_rows()[file_id]["copy"])
 
 
+def plaintext(path):
+    """A stored copy's content: copies are encrypted with the patient's key."""
+    from dedan_platform import file_crypto, record_files
+    from dedan_platform.db import session_scope
+    from dedan_platform.models import RecordFile
+
+    record_id, file_id = path.parent.name, path.name.split(".")[0]
+    with session_scope() as session:
+        user_id = session.scalar(select(RecordFile.user_id).where(
+            RecordFile.record_id == record_id, RecordFile.file_id == file_id))
+    with open(path, "rb") as handle:
+        assert file_crypto.read_header(handle) is not None, "stored in plaintext"
+        return b"".join(file_crypto.decrypt_chunks(handle, key_for_version=record_files.key_lookup(user_id),
+                                                   binding=record_files.binding(record_id, file_id, user_id)))
+
+
 def make_due():
     from dedan_platform.db import session_scope
     from dedan_platform.models import RecordFile
@@ -441,7 +457,7 @@ class TestRecordFiles:
         assert hospital_api.calls == [(f"/platform/records/{record['record_id']}/files/{meta['file_id']}", KEY)]
         stored = stored_copy(record["record_id"], meta["file_id"])
         assert stored.parent == (tmp_path / "records" / record["record_id"]).resolve()
-        assert stored.name.startswith(meta["file_id"] + ".") and stored.read_bytes() == PDF
+        assert stored.name.startswith(meta["file_id"] + ".") and plaintext(stored) == PDF
         assert history(client, patient["auth"])["items"][0]["files"][0]["state"] == "ready"
         assert record_files.download_due() == 0  # nothing more to do
 
@@ -533,7 +549,7 @@ class TestRecordFiles:
         assert [(f["file_id"], f["state"]) for f in item["files"]] == [(kept["file_id"], "arriving")]
         record_files.download_due()
         new_copy = stored_copy(record["record_id"], kept["file_id"])
-        assert new_copy != old_kept and new_copy.read_bytes() == new_png
+        assert new_copy != old_kept and plaintext(new_copy) == new_png
         assert sorted(p.name for p in new_copy.parent.iterdir()) == [new_copy.name]
 
     def test_paths_never_leave_the_records_directory(self, tmp_path, monkeypatch):
@@ -1246,7 +1262,7 @@ class TestCorrectionsKeepTheNewCopy:
         new = stored_copy(record["record_id"], meta["file_id"])
         for action in late:
             action()
-        assert new != old and new.read_bytes() == new_png and not old.exists()
+        assert new != old and plaintext(new) == new_png and not old.exists()
         url = f"/users/me/history/records/{record['record_id']}/files/{meta['file_id']}"
         assert client.get(url, headers=patient["auth"]).content == new_png
 
@@ -1261,7 +1277,7 @@ class TestCorrectionsKeepTheNewCopy:
         record_files.download_due()
         current = stored_copy(record["record_id"], meta["file_id"])
         record_files.forget_copy(record["record_id"], meta["file_id"], file_rows()[meta["file_id"]]["copy"])
-        assert current.read_bytes() == PNG
+        assert plaintext(current) == PNG
 
 
 class TestFollowUpMovedToAnotherPatient:

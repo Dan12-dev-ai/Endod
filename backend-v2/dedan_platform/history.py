@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -82,9 +81,10 @@ def list_history(user_id: str) -> Dict[str, Any]:
         ).order_by(HospitalRecord.occurred_at.desc()).limit(MAX_ITEMS)))
         files: Dict[str, List[RecordFile]] = {}
         if records:
-            for row in session.scalars(select(RecordFile).where(
-                    RecordFile.record_id.in_([r.id for r in records]), RecordFile.user_id == user_id)
-                    .order_by(RecordFile.filename)):
+            # Sorted here: the stored filename is encrypted, so the database cannot order it.
+            for row in sorted(session.scalars(select(RecordFile).where(
+                    RecordFile.record_id.in_([r.id for r in records]), RecordFile.user_id == user_id)),
+                    key=lambda f: (f.filename, f.file_id)):
                 files.setdefault(row.record_id, []).append(row)
         items = [hospital_item(r, files.get(r.id, [])) for r in records]
         # A prescription's QR, code and what pharmacies have given (docs/pharmacy.md section 3).
@@ -112,8 +112,8 @@ def list_history(user_id: str) -> Dict[str, Any]:
     }}
 
 
-def file_for_patient(user_id: str, record_id: str, file_id: str) -> Optional[Tuple[Path, str, str]]:
-    """(path, content type, filename) of the patient's own stored file, or None."""
+def file_for_patient(user_id: str, record_id: str, file_id: str) -> Optional[record_files.StoredFile]:
+    """The patient's own stored file, or None."""
     with session_scope() as session:
         row = session.execute(select(RecordFile, HospitalRecord).join(
             HospitalRecord, HospitalRecord.id == RecordFile.record_id).where(
@@ -124,10 +124,7 @@ def file_for_patient(user_id: str, record_id: str, file_id: str) -> Optional[Tup
         )).first()
         if row is None:
             return None
-        meta = row[0]
-        content_type, filename, copy_id = meta.content_type, meta.filename, meta.copy_id
-    path = record_files.stored_path(record_id, file_id, copy_id)
-    return (path, content_type, filename) if path is not None and path.is_file() else None
+        return record_files.stored_file(row[0])
 
 
 def today() -> str:

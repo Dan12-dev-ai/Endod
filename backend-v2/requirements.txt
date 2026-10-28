@@ -60,6 +60,7 @@ tzdata>=2024.1                  # IANA timezones for zoneinfo; Windows ships non
 
 redis>=5.2,<7                   # events with the hospital service (Redis Streams, Sentinel)
 httpx>=0.27                     # Chapa payments API (and fastapi.testclient's transport)
+cryptography>=42                # AES-256-GCM: health data encrypted per patient (dedan_platform/crypto.py)
 
 # --- Test suite -------------------------------------------------------------
 pytest>=8.0
@@ -71,7 +72,7 @@ fakeredis>=2.26,<3              # Redis Streams in memory for the event tests
 # This file covers the Clinical API only (`main_clinical:app`). The prototype
 # modules additionally import langchain, langchain_core, langchain_openai,
 # crewai, chromadb, sentence-transformers, pandas, scikit-learn, joblib,
-# structlog, aioredis, asyncpg, boto3, cryptography, stripe,
+# structlog, aioredis, asyncpg, boto3, stripe,
 # jinja2, aiofiles, websockets, speech-recognition, and opencv-python.
 #
 # None of those are reachable from `main_clinical`, and none are needed to run

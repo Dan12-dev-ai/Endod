@@ -17,7 +17,6 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import select
@@ -87,8 +86,9 @@ def _resolve(session: Session, user_id: str, record_id: str) -> Tuple[str, Dict[
     record = session.scalar(select(HospitalRecord).where(
         HospitalRecord.id == record_id, HospitalRecord.user_id == user_id, HospitalRecord.retracted_at.is_(None)))
     if record is not None:
-        files = list(session.scalars(select(RecordFile).where(
-            RecordFile.record_id == record.id, RecordFile.user_id == user_id).order_by(RecordFile.filename)))
+        # Sorted here: the stored filename is encrypted, so the database cannot order it.
+        files = sorted(session.scalars(select(RecordFile).where(
+            RecordFile.record_id == record.id, RecordFile.user_id == user_id)), key=lambda f: (f.filename, f.file_id))
         return "hospital", _hospital_entry(record, files)
     event = session.scalar(select(HealthEvent).where(
         HealthEvent.id == record_id, HealthEvent.user_id == user_id,
@@ -167,12 +167,13 @@ def list_for(user_id: str) -> List[Dict[str, Any]]:
             titles: Dict[str, str] = {}
             hospital_ids = [i.record_id for i in items if i.kind == "hospital"]
             self_ids = [i.record_id for i in items if i.kind == "self"]
+            # Whole rows, not columns: titles are stored encrypted and decrypted on load.
             if hospital_ids:
-                titles.update(dict(session.execute(select(HospitalRecord.id, HospitalRecord.title).where(
-                    HospitalRecord.id.in_(hospital_ids), HospitalRecord.user_id == user_id)).all()))
+                titles.update({r.id: r.title for r in session.scalars(select(HospitalRecord).where(
+                    HospitalRecord.id.in_(hospital_ids), HospitalRecord.user_id == user_id))})
             if self_ids:
-                titles.update(dict(session.execute(select(HealthEvent.id, HealthEvent.title).where(
-                    HealthEvent.id.in_(self_ids), HealthEvent.user_id == user_id)).all()))
+                titles.update({e.id: e.title for e in session.scalars(select(HealthEvent).where(
+                    HealthEvent.id.in_(self_ids), HealthEvent.user_id == user_id))})
             out.append(_payload(share, [(i.kind, i.record_id, titles.get(i.record_id, "")) for i in items], now))
         return out
 
@@ -221,8 +222,8 @@ class ShareAccessError(Exception):
         self.status_code = status_code
 
 
-def file_for_hospital(share_id: str, file_id: str) -> Tuple[Path, str, str]:
-    """(path, content type, filename) of a file in a live share, for the hospital service."""
+def file_for_hospital(share_id: str, file_id: str) -> record_files.StoredFile:
+    """A file in a live share, for the hospital service."""
     if not (_ID.match(share_id or "") and _ID.match(file_id or "")):
         raise ShareAccessError(404, "Not found.")
     now = utcnow()
@@ -243,9 +244,8 @@ def file_for_hospital(share_id: str, file_id: str) -> Tuple[Path, str, str]:
             raise ShareAccessError(404, "Not found.")
         if row.status != RecordFileStatus.STORED:
             raise ShareAccessError(503, "The file has not reached Endod yet.")
-        record_id, content_type, filename, copy_id = row.record_id, row.content_type, row.filename, row.copy_id
-    path = record_files.stored_path(record_id, file_id, copy_id)
-    if path is None or not path.is_file():
+        stored = record_files.stored_file(row)
+    if stored is None:
         raise ShareAccessError(503, "The file has not reached Endod yet.")
-    return path, content_type, filename
+    return stored
 

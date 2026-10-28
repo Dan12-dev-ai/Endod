@@ -280,21 +280,12 @@ def _prepared_handoff(user_id: str, handoff_id: str) -> Optional[Dict[str, Any]]
     missed older summaries), and only the prepared event, which carries the
     fingerprint -- not a later "shared" event for the same handoff.
     """
-    from sqlalchemy import select
-
     from dedan_platform.db import session_scope
-    from dedan_platform.models import HealthEvent
-    from dedan_platform.timeline import _to_payload
+    from dedan_platform.timeline import _to_payload, events_with_metadata
 
     with session_scope() as session:
-        rows = session.scalars(
-            select(HealthEvent).where(
-                HealthEvent.user_id == user_id,
-                HealthEvent.event_type == HealthEventType.DOCUMENT,
-                # Narrows the scan; the exact match is checked below.
-                HealthEvent.metadata_json.contains(handoff_id),
-            )
-        ).all()
+        # Matched after decryption: the metadata is stored encrypted.
+        rows = events_with_metadata(session, user_id, HealthEventType.DOCUMENT, "handoff_id", handoff_id)
         events = [_to_payload(row) for row in rows]
     return next(
         (

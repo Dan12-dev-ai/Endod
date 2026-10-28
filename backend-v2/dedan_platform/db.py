@@ -82,15 +82,30 @@ _engine: Optional[Engine] = None
 _SessionFactory: Optional[sessionmaker] = None
 
 
+def application_name() -> str:
+    """The PostgreSQL application_name of this process's connections
+    (DEDAN_DB_APPLICATION_NAME, set per service in deploy/docker-compose.yml)."""
+    return (os.getenv("DEDAN_DB_APPLICATION_NAME") or "endod").strip()[:63] or "endod"
+
+
 def _build_engine() -> Engine:
     url = database_url()
     is_sqlite = url.startswith("sqlite")
 
-    kwargs: dict = {"future": True, "pool_pre_ping": True}
+    from dedan_platform import log_safety
+
+    # Errors and logs never carry statement parameters (patients' data), and
+    # every log record of the process is sanitized (log_safety.py).
+    log_safety.install()
+    kwargs: dict = {"future": True, "pool_pre_ping": True, "hide_parameters": True}
     if is_sqlite:
         # SQLite has no server-side pool and rejects pool_size/max_overflow.
         kwargs["connect_args"] = {"check_same_thread": False}
     else:
+        # Which service a connection belongs to (pg_stat_activity): tools
+        # decrypt-existing refuses while backend, internal-api or events-worker
+        # are connected.
+        kwargs["connect_args"] = {"application_name": application_name()}
         # Sized for a stateless API tier: enough connections to serve a worker
         # without exhausting the database's connection limit at scale.
         kwargs.update(

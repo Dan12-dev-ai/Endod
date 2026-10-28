@@ -20,6 +20,11 @@ file at once. Every claim counts as an attempt, a reclaimed one too. Nothing
 a download does (a refused URL, a full disk, a database error) escapes it;
 it fails that attempt only.
 
+Each copy is encrypted as it is written, with the patient's data key
+(file_crypto.py): the plaintext never touches the disk. ``sha256`` stays the
+hash of the plaintext, checked while downloading and again on every read
+(:func:`open_stored`).
+
 Each stored copy has a path of its own,
 ``RECORD_FILES_DIR/<record_id>/<file_id>.<copy_id>`` (``copy_id``: 16 random
 hex characters, kept on the row). A correction that replaces a file deletes
@@ -37,13 +42,15 @@ import secrets
 import tempfile
 import threading
 import time
+from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import httpx
 from sqlalchemy import or_, select, update
 
+from dedan_platform import crypto, file_crypto
 from dedan_platform import partner_config as config
 from dedan_platform.db import session_scope
 from dedan_platform.models import RecordFile, RecordFileStatus, utcnow
@@ -126,8 +133,8 @@ def _backoff(attempts: int) -> timedelta:
     return timedelta(seconds=min(MAX_BACKOFF_SECONDS, BASE_BACKOFF_SECONDS * 2 ** max(0, attempts - 1)))
 
 
-_JOB_COLUMNS = (RecordFile.id, RecordFile.record_id, RecordFile.file_id, RecordFile.size, RecordFile.sha256,
-                RecordFile.content_type, RecordFile.attempts)
+_JOB_COLUMNS = (RecordFile.id, RecordFile.record_id, RecordFile.file_id, RecordFile.user_id, RecordFile.size,
+                RecordFile.sha256, RecordFile.content_type, RecordFile.attempts)
 
 
 def _claim() -> Optional[dict]:
@@ -154,8 +161,64 @@ def _claim() -> Optional[dict]:
     return None
 
 
-def _fetch(job: dict) -> Path:
-    """Download into a temporary file next to the copies; return it once
+def binding(record_id: str, file_id: str, user_id: str) -> file_crypto.FileBinding:
+    return file_crypto.FileBinding(record_id=record_id, file_id=file_id, user_id=user_id)
+
+
+def _active_key(user_id: str):
+    """(version, data key) for the patient's new copies (its own short transaction)."""
+    with session_scope() as session:
+        return crypto.active_key(session, user_id)
+
+
+def key_lookup(user_id: str, fresh: bool = False):
+    """For file_crypto: the patient's data key of a given version (``fresh``:
+    read from the database, not the cache)."""
+    def key_for_version(version: int) -> bytes:
+        with session_scope() as session:
+            return crypto.data_key(session, user_id, version, fresh=fresh)
+    return key_for_version
+
+
+def _with_fresh_retry(user_id: str, attempt):
+    """Run ``attempt(key_for_version)``; if the copy fails to decrypt, once
+    more with keys read again from the database (a cached key may be stale,
+    as decrypt_field does for values). A refused plaintext is not retried."""
+    try:
+        return attempt(key_lookup(user_id))
+    except file_crypto.PlaintextRefused:
+        raise
+    except (file_crypto.FileCryptoError, crypto.DecryptionError):
+        crypto.evict(user_id)
+        return attempt(key_lookup(user_id, fresh=True))
+
+
+def _encrypt_again(path: Path, *, record_id: str, file_id: str, user_id: str, version: int, data_key: bytes,
+                   sha256: str, size: int) -> None:
+    """Replace the copy at ``path`` by the same file encrypted under ``version``
+    (checked in full first). The plaintext never touches the disk."""
+    where = binding(record_id, file_id, user_id)
+    temp_handle, temp_name = tempfile.mkstemp(prefix=".part-", dir=path.parent)
+    temp = Path(temp_name)
+    try:
+        with open(path, "rb") as handle, os.fdopen(temp_handle, "wb") as out:
+            def rewrite(keys):
+                file_crypto.verify(handle, key_for_version=keys, binding=where, sha256=sha256, size=size)
+                out.seek(0)
+                out.truncate()
+                encryptor = file_crypto.Encryptor(out, key=data_key, version=version, binding=where)
+                for piece in file_crypto.plaintext_chunks(handle, key_for_version=keys, binding=where):
+                    encryptor.write(piece)
+                encryptor.close()
+            _with_fresh_retry(user_id, rewrite)
+        os.replace(temp, path)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def _fetch(job: dict) -> Tuple[Path, int]:
+    """Download into a temporary file next to the copies, encrypting as it
+    arrives; return it, and the key version it is encrypted under, once
     checked. The temporary file is always removed unless returned."""
     deadline = time.monotonic() + DOWNLOAD_DEADLINE_SECONDS
     too_slow = f"took longer than {DOWNLOAD_DEADLINE_SECONDS:.0f}s"
@@ -164,10 +227,13 @@ def _fetch(job: dict) -> Path:
     directory = path_for(job["record_id"], job["file_id"]).parent
     directory.mkdir(parents=True, exist_ok=True)
     digest, received, head = hashlib.sha256(), 0, b""
+    version, data_key = _active_key(job["user_id"])
     handle, temp_name = tempfile.mkstemp(prefix=".part-", dir=directory)
     temp, kept = Path(temp_name), False
     try:
         with os.fdopen(handle, "wb") as out, httpx.Client(transport=_transport, timeout=TIMEOUT) as client:
+            encryptor = file_crypto.Encryptor(out, key=data_key, version=version,
+                                              binding=binding(job["record_id"], job["file_id"], job["user_id"]))
             with client.stream("GET", url, headers={"X-Platform-Key": key}) as response:
                 if response.status_code != 200:
                     raise FileCheckFailed(f"hospital API answered HTTP {response.status_code}")
@@ -180,7 +246,8 @@ def _fetch(job: dict) -> Path:
                     if len(head) < 16:
                         head += chunk[:16 - len(head)]
                     digest.update(chunk)
-                    out.write(chunk)
+                    encryptor.write(chunk)
+            encryptor.close()
         if time.monotonic() > deadline:
             raise FileCheckFailed(too_slow)
         if received != job["size"]:
@@ -190,7 +257,7 @@ def _fetch(job: dict) -> Path:
         if not _SIGNATURES[job["content_type"]](head):
             raise FileCheckFailed(f"content is not {job['content_type']}")
         kept = True
-        return temp
+        return temp, version
     finally:
         if not kept:
             temp.unlink(missing_ok=True)
@@ -243,7 +310,7 @@ def download_one() -> Optional[str]:
         return _failed(job, FileCheckFailed("no attempts left"))
     copy_id = secrets.token_hex(8)
     try:
-        temp = _fetch(job)
+        temp, version = _fetch(job)
         moved = False
         try:
             stored = path_for(job["record_id"], job["file_id"], copy_id)
@@ -257,11 +324,23 @@ def download_one() -> Optional[str]:
         return _failed(job, exc)
     try:
         with session_scope() as session:
-            # Only if the file is still the one fetched and still this claim (a
-            # correction may have replaced or dropped it meanwhile).
+            # Stored under the key that is active now, not the one active when
+            # the download began: the patient's keys are locked (as rotate-key
+            # and purge-old-keys lock them) and, if a rotation came meanwhile,
+            # the copy is encrypted again under the new key before it counts.
+            # So a key's purge never strands a copy written under it.
+            crypto.lock_user_keys(session, job["user_id"])
+            active, active_key = crypto.active_key(session, job["user_id"])
+            if active != version:
+                _encrypt_again(stored, record_id=job["record_id"], file_id=job["file_id"], user_id=job["user_id"],
+                               version=active, data_key=active_key, sha256=job["sha256"], size=job["size"])
+            # Only if the file is still the one fetched, still this claim and
+            # still this patient's (encrypted with their key): a correction may
+            # have replaced, dropped or moved it meanwhile.
             done = session.execute(update(RecordFile).where(
                 RecordFile.id == job["id"], RecordFile.status == RecordFileStatus.DOWNLOADING,
                 RecordFile.sha256 == job["sha256"], RecordFile.attempts == job["attempts"],
+                RecordFile.user_id == job["user_id"],
             ).values(status=RecordFileStatus.STORED, copy_id=copy_id, last_error=None, stored_at=utcnow(),
                      updated_at=utcnow()).execution_options(synchronize_session=False)).rowcount
     except Exception as exc:  # noqa: BLE001
@@ -294,3 +373,116 @@ def run_forever(stop: threading.Event, idle_seconds: float = 5.0) -> None:
             tried = 0
         if not tried:
             stop.wait(idle_seconds)
+
+
+# --- reading, and encrypting copies stored before encryption -----------------------------------
+
+@dataclass(frozen=True)
+class StoredFile:
+    """A stored copy and what is needed to open and check it."""
+
+    path: Path
+    record_id: str
+    file_id: str
+    user_id: str
+    sha256: str
+    size: int
+    content_type: str
+    filename: str
+
+
+def stored_file(row: RecordFile) -> Optional[StoredFile]:
+    """The row's stored copy (None when it has none on disk)."""
+    path = stored_path(row.record_id, row.file_id, row.copy_id)
+    if path is None or not path.is_file():
+        return None
+    return StoredFile(path=path, record_id=row.record_id, file_id=row.file_id, user_id=row.user_id,
+                      sha256=row.sha256, size=row.size, content_type=row.content_type, filename=row.filename)
+
+
+class StoredFileUnavailable(RuntimeError):
+    """The stored copy fails its check (does not decrypt, or is not the announced file)."""
+
+
+def open_stored(stored: StoredFile):
+    """(plaintext stream, size) of a stored copy, verified in full (decryption
+    and SHA-256) before anything is returned. Raises StoredFileUnavailable."""
+    allow_plaintext = not crypto.enforced()
+    try:
+        return _with_fresh_retry(stored.user_id, lambda keys: file_crypto.open_verified(
+            stored.path, key_for_version=keys, binding=binding(stored.record_id, stored.file_id, stored.user_id),
+            sha256=stored.sha256, size=stored.size, allow_plaintext=allow_plaintext))
+    except (file_crypto.FileCryptoError, crypto.CryptoError, OSError) as exc:
+        logger.error("record_file_check_failed record=%s file=%s %s", stored.record_id, stored.file_id,
+                     type(exc).__name__)
+        raise StoredFileUnavailable(f"file {stored.file_id} of record {stored.record_id} failed its check") from None
+
+
+#: rewrite_copy modes.
+TO_ACTIVE_KEY, ONLY_PLAINTEXT, TO_PLAINTEXT = "active", "plaintext", "decrypt"
+
+
+def rewrite_copy(row_id: str, mode: str = TO_ACTIVE_KEY) -> str:
+    """Write a stored copy again as a new copy (new ``copy_id``), then switch
+    the row to it and delete the old one. The old copy is checked in full
+    (decryption and SHA-256) first.
+
+    ``mode``: TO_ACTIVE_KEY (``rotate-key``: re-encrypt under the patient's
+    active key), ONLY_PLAINTEXT (``encrypt-existing``: encrypt copies from
+    before encryption only) or TO_PLAINTEXT (``decrypt-existing``, for a
+    rollback). Returns "done", "unchanged" (nothing to do), "skipped" (not
+    stored, or changed meanwhile) or "failed" (the copy fails its check).
+    """
+    with session_scope() as session:
+        row = session.get(RecordFile, row_id)
+        if row is None or row.status != RecordFileStatus.STORED:
+            return "skipped"
+        record_id, file_id, user_id, old_copy = row.record_id, row.file_id, row.user_id, row.copy_id
+        sha256, size = row.sha256, row.size
+    old_path = stored_path(record_id, file_id, old_copy)
+    if old_path is None or not old_path.is_file():
+        return "skipped"
+    where = binding(record_id, file_id, user_id)
+    with open(old_path, "rb") as handle:
+        stored_version = file_crypto.read_header(handle)
+        if mode == TO_PLAINTEXT:
+            version = data_key = None
+            if stored_version is None:
+                return "unchanged"
+        else:
+            version, data_key = _active_key(user_id)
+            if stored_version == version or (mode == ONLY_PLAINTEXT and stored_version is not None):
+                return "unchanged"
+        try:
+            def check(lookup):
+                file_crypto.verify(handle, key_for_version=lookup, binding=where, sha256=sha256, size=size)
+                return lookup  # the keys that opened it, to read it again below
+            keys = _with_fresh_retry(user_id, check)
+        except (file_crypto.FileCryptoError, crypto.CryptoError):
+            logger.error("record_file_check_failed record=%s file=%s", record_id, file_id)
+            return "failed"
+        new_copy = secrets.token_hex(8)
+        new_path = path_for(record_id, file_id, new_copy)
+        temp_handle, temp_name = tempfile.mkstemp(prefix=".part-", dir=new_path.parent)
+        temp = Path(temp_name)
+        try:
+            with os.fdopen(temp_handle, "wb") as out:
+                writer = out if data_key is None else file_crypto.Encryptor(out, key=data_key, version=version,
+                                                                             binding=where)
+                for piece in file_crypto.plaintext_chunks(handle, key_for_version=keys, binding=where):
+                    writer.write(piece)
+                if data_key is not None:
+                    writer.close()
+            os.replace(temp, new_path)
+        finally:
+            temp.unlink(missing_ok=True)
+    with session_scope() as session:
+        switched = session.execute(update(RecordFile).where(
+            RecordFile.id == row_id, RecordFile.status == RecordFileStatus.STORED, RecordFile.copy_id == old_copy,
+            RecordFile.user_id == user_id, RecordFile.sha256 == sha256,
+        ).values(copy_id=new_copy, updated_at=utcnow()).execution_options(synchronize_session=False)).rowcount
+    if not switched:
+        new_path.unlink(missing_ok=True)
+        return "skipped"
+    old_path.unlink(missing_ok=True)
+    return "done"

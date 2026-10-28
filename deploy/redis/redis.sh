@@ -29,10 +29,21 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 master="${master:-$DEFAULT_MASTER_IP}"
 
+# Event payloads can carry clinical data in plaintext while in flight; the
+# platform deletes each entry once every consumer has acknowledged it
+# (backend-v2/dedan_platform/eventbus.py). On disk: the append-only file only
+# (no RDB snapshots: --save ""), rewritten every hour below so deleted entries
+# do not linger in it. Durability is unchanged: the AOF is the persistence.
 set -- redis-server --requirepass "$REDIS_PASSWORD" --masterauth "$REDIS_PASSWORD" \
-    --appendonly yes --replica-announce-ip "$MY_IP"
+    --appendonly yes --save "" --replica-announce-ip "$MY_IP"
 if [ "$master" != "$MY_IP" ]; then
     set -- "$@" --replicaof "$master" 6379
 fi
+# Hourly AOF rewrite on this server (master or replica: each has its own file).
+(
+    while sleep 3600; do
+        REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli -h 127.0.0.1 -p 6379 bgrewriteaof >/dev/null 2>&1 || true
+    done
+) &
 echo "starting as $([ "$master" = "$MY_IP" ] && echo master || echo "replica of $master")"
 exec "$@"

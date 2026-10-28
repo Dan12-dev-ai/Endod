@@ -72,6 +72,10 @@ jobs:
           echo "AI_PROVIDER_MODE=${AI_PROVIDER_MODE} — running against the offline provider"
 
       - name: Verify the application imports
+        # No master key file here: only an explicit test (or development)
+        # environment may run on the published development key.
+        env:
+          ENVIRONMENT: test
         run: python -c "import main_clinical; print('main_clinical imported OK')"
 
       - name: Run backend tests
@@ -97,10 +101,21 @@ jobs:
       # secrets) and checks it serves the health and auth endpoints.
       - name: Smoke test
         run: |
+          # Without a master key file the API must refuse to start.
+          if docker run --rm -e REALTIME_TOKEN_SECRET=ci-only-secret -e AI_PROVIDER_MODE=offline \
+               -e DEDAN_DATABASE_URL=sqlite:////tmp/dedan.db dedan-api \
+               python -c "import main_clinical" 2>/dev/null; then
+            echo "the API started without a master key"; exit 1
+          fi
+          # A throwaway key, readable by the image's user (uid 10001), mounted read-only.
+          openssl rand -out "$RUNNER_TEMP/master.key" 32
+          chmod 0444 "$RUNNER_TEMP/master.key"
           docker run -d --name api -p 8000:8000 \
             -e REALTIME_TOKEN_SECRET=ci-only-secret \
             -e AI_PROVIDER_MODE=offline \
             -e DEDAN_DATABASE_URL=sqlite:////tmp/dedan.db \
+            -e PLATFORM_MASTER_KEY_FILE=/run/secrets/platform_master_key \
+            -v "$RUNNER_TEMP/master.key:/run/secrets/platform_master_key:ro" \
             dedan-api
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/health && break; sleep 2; done
           curl -fsS http://127.0.0.1:8000/api/health
@@ -108,6 +123,7 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/users/me)
           test "$code" = "401" || { docker logs api; exit 1; }
           test "$(docker inspect -f '{{.Config.User}}' dedan-api)" = "dedan"
+          docker logs api 2>&1 | grep -q "master_key_in_use service=backend id=" || { docker logs api; exit 1; }
 
   frontend:
     name: Frontend (Next.js)
