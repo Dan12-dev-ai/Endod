@@ -526,7 +526,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                 <div className="flex items-center space-x-2">
                   <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
                     <SelectTrigger
-                      aria-label={t("appointments.inPerson")}
+                      aria-label={t("appointments.modal.type")}
                       className="text-xs w-auto"
                       data-purpose="appointment-type-filter"
                     >
@@ -603,7 +603,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-4 text-[11px] text-slate-500">
                   <div className="flex items-center space-x-1.5"><span className="w-2.5 h-2.5 rounded-full bg-black"></span><span>{t("appointments.legendInPerson")}</span></div>
-                  <div className="flex items-center space-x-1.5"><span className="w-2.5 h-2.5 rounded-full bg-black"></span><span>{t("appointments.legendTelehealth")}</span></div>
+                  <div className="flex items-center space-x-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-200 border border-gray-400"></span><span>{t("appointments.legendTelehealth")}</span></div>
                 </div>
               </div>
             </div>
