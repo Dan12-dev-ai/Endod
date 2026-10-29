@@ -59,7 +59,7 @@ export function buildHealthCardHtml(d: HealthCardData): string {
   const qrViewBox = extractViewBox(d.qrSvg);
 
   // HTML version for print/PDF — uses inline styles and Google Fonts
-  return `<div style="width:640px;background:linear-gradient(135deg,#1e3a2e 0%,#1e5852 100%);border-radius:24px;padding:32px;position:relative;font-family:'Plus Jakarta Sans',Arial,sans-serif;color:#fff;box-sizing:border-box;overflow:hidden">
+  return `<div style="width:640px;background:linear-gradient(135deg,#1e3a2e 0%,#000000 100%);border-radius:24px;padding:32px;position:relative;font-family:'Plus Jakarta Sans',Arial,sans-serif;color:#fff;box-sizing:border-box;overflow:hidden">
     <svg style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:3%" viewBox="0 0 400 400" fill="none">
       <circle cx="200" cy="200" r="50" stroke="#ffffff" stroke-width="0.5"/>
       <circle cx="200" cy="200" r="120" stroke="#ffffff" stroke-width="0.3"/>

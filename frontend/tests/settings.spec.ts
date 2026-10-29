@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from './fixtures';
-import { openSection } from './helpers';
+import { chooseOption, openSection } from './helpers';
 
 // Settings against the real backend. These change the shared test patient,
 // so every test puts back what it changed, even when it fails.
@@ -81,7 +81,7 @@ test.describe('Interview — Settings', () => {
     try {
       await openSection(page, 'Setting', 'settings-view');
       await page.locator('#city').fill('Hawassa');
-      await page.locator('#country').selectOption('ET');
+      await chooseOption(page, page.getByRole('combobox', { name: 'Country' }), 'Ethiopia');
       await page.locator('#radius-slider').fill('40');
       await page.getByRole('button', { name: 'Update Location' }).click();
       await expect(page.locator('[data-purpose="toast-notification"]')).toContainText('Location Updated');
@@ -98,10 +98,13 @@ test.describe('Interview — Settings', () => {
   test('password rules follow the backend and mismatches are caught', async ({ page }) => {
     await openSection(page, 'Setting', 'settings-view');
     await page.locator('#new-password').fill('short');
-    await expect(page.locator('[data-purpose="req-length"]')).not.toHaveClass(/emerald/);
+    await expect(page.locator('[data-purpose="req-length"]')).toHaveAttribute('data-met', 'false');
+    await expect(page.locator('[data-purpose="req-length"]')).toContainText('•');
     await page.locator('#new-password').fill('LongEnoughPass');
-    await expect(page.locator('[data-purpose="req-length"]')).toHaveClass(/emerald/);
-    await expect(page.locator('[data-purpose="req-upper"]')).toHaveClass(/emerald/);
+    await expect(page.locator('[data-purpose="req-length"]')).toHaveAttribute('data-met', 'true');
+    await expect(page.locator('[data-purpose="req-length"]')).toContainText('✓');
+    await expect(page.locator('[data-purpose="req-upper"]')).toHaveAttribute('data-met', 'true');
+    await expect(page.locator('[data-purpose="req-upper"]')).toContainText('✓');
     await page.locator('#confirm-password').fill('Different1');
     await expect(page.locator('#match-indicator')).toContainText('do not match');
 
@@ -119,7 +122,7 @@ test.describe('Interview — Settings', () => {
 
       await page.locator('[data-purpose="consent-health"]').check();
       await expect(page.locator('#blood-group')).toBeVisible();
-      await page.locator('#blood-group').selectOption('A-');
+      await chooseOption(page, page.locator('#blood-group'), 'A-');
       await page.locator('#allergies').fill('Latex, Penicillin');
       await page.getByRole('button', { name: 'Save Card Details' }).click();
       await expect(page.locator('[data-purpose="toast-notification"]')).toContainText('Card Updated');

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
-import { expect, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Locator, type Page } from './fixtures';
 
 /** The test partner hospital listed by tests/seed.py. */
 export const PARTNER_ID = 'e2e0'.repeat(8);
@@ -69,4 +69,21 @@ export async function payBooking(request: APIRequestContext, payment: { checkout
   const back = await request.get(`/api/backend/users/me/booking-payments/${payment.tx_ref}`);
   expect(back.status(), await back.text()).toBe(200);
   expect((await back.json()).status).toBe('paid');
+}
+
+/**
+ * Pick an option in a Radix select (components/ui/select.tsx): open the
+ * combobox trigger, choose the option by its visible name, and check the
+ * trigger now shows it. `trigger` is a data-purpose value or a locator.
+ */
+export async function chooseOption(page: Page, trigger: string | Locator, label: string) {
+  const box = typeof trigger === 'string' ? page.locator(`[data-purpose="${trigger}"]`) : trigger;
+  await expect(box).toHaveAttribute('role', 'combobox');
+  await box.click();
+  // While open, Radix hides the rest of the page (the trigger too) from the
+  // accessibility tree, so wait for the listbox rather than the trigger.
+  await expect(page.getByRole('listbox')).toBeVisible();
+  await page.getByRole('option', { name: label, exact: true }).click();
+  await expect(box).toHaveAttribute('aria-expanded', 'false');
+  await expect(box).toHaveText(label);
 }

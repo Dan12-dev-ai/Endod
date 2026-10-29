@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { createAppointment, futureSlot, openSection } from './helpers';
+import { chooseOption, createAppointment, futureSlot, openSection } from './helpers';
 
 // Appointments against the real backend. Each test creates its own
 // appointments with a unique doctor name, since the test patient is shared.
@@ -72,7 +72,9 @@ test.describe('Interview — Appointment page', () => {
     });
     await openSection(page, 'Appointment', 'appointment-view');
     await page.locator(`[data-purpose="appointment-card-${appointment.appointment_id}"]`).getByRole('button', { name: 'Reschedule' }).click();
-    await expect(page.locator('#appointment-window')).toHaveValue('morning');
+    const arrivalWindow = page.getByRole('combobox', { name: 'Arrival Window' });
+    await expect(arrivalWindow).toHaveAttribute('id', 'appointment-window');
+    await expect(arrivalWindow).toHaveText('Morning (08:00 - 12:00)');
 
     const slot = futureSlot(12, 15, 0);
     await page.locator('#appointment-date').fill(slot.date);
@@ -80,7 +82,7 @@ test.describe('Interview — Appointment page', () => {
     await page.getByRole('button', { name: 'Confirm Reschedule' }).click();
     await expect(page.locator('[data-purpose="appointment-error"]')).toContainText('morning appointment must start between');
 
-    await page.locator('#appointment-window').selectOption('afternoon');
+    await chooseOption(page, arrivalWindow, 'Afternoon (12:00 - 17:00)');
     await page.getByRole('button', { name: 'Confirm Reschedule' }).click();
     await expect(page.locator('[data-purpose="appointment-modal-success"]')).toBeVisible();
   });
@@ -106,7 +108,7 @@ test.describe('Interview — Appointment page', () => {
     await createAppointment(page.request, { scheduled_at: futureSlot(8).iso, provider_name: doctor, visit_mode: 'in_person' });
     await openSection(page, 'Appointment', 'appointment-view');
     await expect(page.locator('[data-purpose^="appointment-card-"]', { hasText: doctor })).toBeVisible();
-    await page.locator('[data-purpose="appointment-type-filter"]').selectOption('telehealth');
+    await chooseOption(page, 'appointment-type-filter', 'Video Telehealth');
     await expect(page.locator('[data-purpose^="appointment-card-"]', { hasText: doctor })).toHaveCount(0);
   });
 });

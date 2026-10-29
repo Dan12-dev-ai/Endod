@@ -44,7 +44,6 @@ export default function Footer() {
               {t("footer.platform")}
             </p>
             <ul className="space-y-3 text-sm text-neutral-300">
-              <li><a className="hover:text-white transition-colors" href="#build-own-lab">{t("footer.aiSymptomAssistant")}</a></li>
               <li><a className="hover:text-white transition-colors" href="#cloud-lab">{t("footer.hospitalDirectoryBooking")}</a></li>
               <li><a className="hover:text-white transition-colors" href="#pipette-hero-card">{t("footer.treatmentPlans")}</a></li>
               <li><a className="hover:text-white transition-colors" href="#pipette-hero-card">{t("footer.medicalHistory")}</a></li>
@@ -86,7 +85,7 @@ export default function Footer() {
         {/* Footer Bottom: Legal & Social Links */}
         <div className="pt-4 border-t border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-400">
           <div className="flex items-center gap-2">
-            <a className="hover:text-white transition-colors" href="#">{t("footer.terms")}</a>
+            <a className="hover:text-white transition-colors" href="/terms">{t("footer.terms")}</a>
             <span>|</span>
             <span>{t("footer.copyright")}</span>
           </div>

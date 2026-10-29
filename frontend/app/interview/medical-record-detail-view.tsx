@@ -107,7 +107,7 @@ export function MedicalRecordDetailView({ recordId: recordIdProp, onBack }: Prop
   const content = (
     <div className={embedded ? "w-full space-y-5 pb-6" : "max-w-3xl mx-auto space-y-5"} data-purpose="medical-record-detail">
         <button
-          className="text-sm font-semibold text-emerald-700 hover:underline"
+          className="text-sm font-semibold text-black hover:underline"
           data-purpose="back-link"
           onClick={handleBack}
           type="button"
@@ -148,7 +148,7 @@ export function MedicalRecordDetailView({ recordId: recordIdProp, onBack }: Prop
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                   {t(CATEGORY_LABEL[item.category])}
                 </span>
-                <span className={"text-[10px] font-semibold rounded px-1.5 py-0.5 border " + (item.verified ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-slate-500 bg-slate-50 border-slate-200")} data-purpose="record-source">
+                <span className={"text-[10px] font-semibold rounded px-1.5 py-0.5 border " + (item.verified ? "text-black bg-gray-50 border-gray-200" : "text-slate-500 bg-slate-50 border-slate-200")} data-purpose="record-source">
                   {item.verified ? t("records.verified") : t("records.selfReported")}
                 </span>
               </div>

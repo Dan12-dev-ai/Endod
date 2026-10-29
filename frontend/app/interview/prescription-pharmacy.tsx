@@ -64,14 +64,14 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
   };
 
   const STATUS_STYLE: Record<Dispensing["status"], string> = {
-    open: "text-emerald-800 bg-emerald-50 border-emerald-200",
+    open: "text-black bg-gray-50 border-gray-200",
     completed: "text-slate-700 bg-slate-100 border-slate-200",
     expired: "text-amber-800 bg-amber-50 border-amber-200",
     retracted: "text-red-800 bg-red-50 border-red-200",
   };
 
   return (
-    <section aria-label={t("rx.title")} className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-3 sm:p-4 space-y-3" data-purpose="rx-pharmacy" data-status={rx.status}>
+    <section aria-label={t("rx.title")} className="rounded-2xl border border-gray-200 bg-gray-50/40 p-3 sm:p-4 space-y-3" data-purpose="rx-pharmacy" data-status={rx.status}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-bold text-slate-900">{t("rx.title")}</h3>
         <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 border ${STATUS_STYLE[rx.status]}`} data-purpose="rx-status">
@@ -117,7 +117,7 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
                   {[text(medicine.drug), text(medicine.dose)].filter(Boolean).join(" ") || t("rx.item.unnamed", { n: item.item_index + 1 })}
                   {item.quantity_text && <span className="block text-[11px] font-normal text-slate-500">{t("history.rx.quantity", { quantity: item.quantity_text })}</span>}
                 </span>
-                <span className={`text-xs font-semibold ${item.status === "given" ? "text-emerald-700" : item.status === "partly_given" ? "text-amber-700" : "text-slate-500"}`} data-purpose="rx-item-status">
+                <span className={`text-xs font-semibold ${item.status === "given" ? "text-black" : item.status === "partly_given" ? "text-amber-700" : "text-slate-500"}`} data-purpose="rx-item-status">
                   {itemStatus(item)}
                 </span>
               </li>

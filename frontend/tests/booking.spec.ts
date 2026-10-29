@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { futureSlot, openSection } from './helpers';
+import { chooseOption, futureSlot, openSection } from './helpers';
 
 // The hospital directory and booking, against the real backend directory.
 
@@ -22,7 +22,7 @@ test.describe('Interview — Booking page', () => {
 
     // Department filter.
     await page.locator('[data-purpose="hospital-search"]').fill('');
-    await page.locator('[data-purpose="department-filter"]').selectOption('maternal_health');
+    await chooseOption(page, 'department-filter', 'Maternal Health');
     await expect(page.locator('.hospital-card').first()).toBeVisible();
     expect(await page.locator('.hospital-card').count()).toBeLessThanOrEqual(all);
   });
@@ -39,7 +39,7 @@ test.describe('Interview — Booking page', () => {
     const slot = futureSlot(9, 9, 15);
     await page.locator('#booking-date').fill(slot.date);
     await page.locator('#booking-time').fill(slot.time);
-    await page.locator('[data-purpose="time-window"]').selectOption('morning');
+    await chooseOption(page, 'time-window', 'Morning (08:00 - 12:00)');
     await page.locator('#booking-note').fill('Booking flow test');
     await page.getByRole('button', { name: 'Submit Booking' }).click();
 
@@ -61,7 +61,7 @@ test.describe('Interview — Booking page', () => {
     const slot = futureSlot(10, 15, 0);
     await page.locator('#booking-date').fill(slot.date);
     await page.locator('#booking-time').fill(slot.time);
-    await page.locator('[data-purpose="time-window"]').selectOption('morning');
+    await chooseOption(page, 'time-window', 'Morning (08:00 - 12:00)');
     await page.getByRole('button', { name: 'Submit Booking' }).click();
     await expect(page.locator('[data-purpose="booking-error"]')).toContainText('morning appointment must start between');
     await expect(page.locator('[data-purpose="success-modal"]')).toHaveCount(0);
@@ -82,5 +82,30 @@ test.describe('Interview — Booking page', () => {
     await expect(page.locator('[data-purpose="booking-view"]')).toBeVisible();
     await expect(modal).toHaveCount(0);
     await expect(page.locator('[data-purpose="hospital-search"]')).toHaveValue('');
+  });
+
+  test('the directory filters work from the keyboard', async ({ page }) => {
+    await openSection(page, 'Booking', 'booking-view');
+    const filter = page.getByRole('combobox', { name: 'Department' });
+    await expect(filter).toHaveAttribute('data-purpose', 'department-filter');
+    await expect(filter).toHaveText('All Specialties');
+    await filter.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('option', { name: 'All Specialties', exact: true })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    const next = page.getByRole('option').nth(1);
+    await expect(next).toBeFocused();
+    const label = (await next.textContent())!.trim();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('listbox')).toHaveCount(0);
+    await expect(filter).toHaveText(label);
+    await expect(filter).toBeFocused();
+
+    // Escape closes without changing the choice.
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('listbox')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('listbox')).toHaveCount(0);
+    await expect(filter).toHaveText(label);
   });
 });

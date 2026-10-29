@@ -22,7 +22,7 @@ export default function HealthCardView({ card }: { card: HealthCardInfo }) {
 
   return (
     <div
-      className="relative w-full rounded-2xl overflow-hidden bg-gradient-to-br from-[#1e3a2e] via-[#1e4d43] to-[#1e5852] text-white shadow-lg"
+      className="relative w-full rounded-2xl overflow-hidden bg-gradient-to-br from-[#1e3a2e] via-[#1e4d43] to-[#000000] text-white shadow-lg"
       data-purpose="health-card-preview"
       style={{ aspectRatio: "1.586 / 1", containerType: "inline-size" }}
     >

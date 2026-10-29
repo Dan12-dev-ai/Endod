@@ -193,8 +193,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
                 {t("notifications.unreadCount", { count: unread.total })}
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">{t("notifications.subtitle")}</p>
-          </div>
+            </div>
           <button type="button" onClick={markAllRead} disabled={unread.total === 0} className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg transition-colors shadow-xs disabled:opacity-50 self-start sm:self-auto">
             <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <span>{t("notifications.markAllRead")}</span>

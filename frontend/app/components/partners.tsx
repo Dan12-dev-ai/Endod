@@ -3,24 +3,25 @@
 import { useI18n } from "../lib/i18n";
 
 const PARTNERS = [
-  { name: "St. Paul's Hospital", domain: "stpaulsmm.edu.et" },
-  { name: "Tikur Anbessa", domain: "aau.edu.et" },
-  { name: "Alert Hospital", domain: "alert.gov.et" },
-  { name: "Kadisco Hospital", domain: "kadisco.com" },
-  { name: "Hallelujah Hospital", domain: "hallelujahhospital.com" },
-  { name: "Myungsung Hospital", domain: "mcmhospital.com" },
-  { name: "Yekatit 12 Hospital", domain: "yekatit12hospital.gov.et" },
-  { name: "Zewditu Hospital", domain: "zewdituhospital.gov.et" },
+  { name: "Adinas", src: "/adinas_logo.jpeg" },
+  { name: "Afilas", src: "/afilas_logo.png" },
+  { name: "Felege Hiwot", src: "/felegehiwot_logo.jpeg" },
+  { name: "Tibebegion", src: "/tibebegion_logo.jpeg" },
 ];
 
 // Double the set so one "half" is wide enough to fill large screens.
 const HALF = [...PARTNERS, ...PARTNERS];
 
-function Logo({ name }: { name: string }) {
+function Logo({ name, src }: { name: string; src: string }) {
+  const isAfilas = name === "Afilas";
   return (
-    <div className="flex-shrink-0 w-24 md:w-80 lg:w-96 flex items-center justify-center drop-shadow-md">
+    <div
+      className={`flex-shrink-0 w-24 md:w-80 lg:w-96 flex items-center justify-center drop-shadow-md ${
+        isAfilas ? "bg-slate-900 rounded-xl p-4" : ""
+      }`}
+    >
       <img
-        src="/logo.jpeg"
+        src={src}
         alt={name}
         width={320}
         height={320}
@@ -61,7 +62,7 @@ export default function Partners() {
         <div className="marquee-track flex flex-shrink-0 w-max whitespace-nowrap hover:[animation-play-state:paused]">
           <div className="flex flex-shrink-0 items-center gap-8 md:gap-16 lg:gap-16 pr-8 md:pr-16 lg:pr-16">
             {HALF.map((p, i) => (
-              <Logo key={`a-${i}`} name={p.name} />
+              <Logo key={`a-${i}`} name={p.name} src={p.src} />
             ))}
           </div>
           <div
@@ -69,7 +70,7 @@ export default function Partners() {
             aria-hidden="true"
           >
             {HALF.map((p, i) => (
-              <Logo key={`b-${i}`} name={p.name} />
+              <Logo key={`b-${i}`} name={p.name} src={p.src} />
             ))}
           </div>
         </div>

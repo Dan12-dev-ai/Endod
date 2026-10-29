@@ -161,7 +161,7 @@ export default function HealthCardPage() {
       // Gradient card background with rounded corners
       const grad = ctx.createLinearGradient(40, 40, 680, 440);
       grad.addColorStop(0, "#1e3a2e");
-      grad.addColorStop(1, "#1e5852");
+      grad.addColorStop(1, "#000000");
       ctx.fillStyle = grad;
       ctx.beginPath();
       const radius = 24;

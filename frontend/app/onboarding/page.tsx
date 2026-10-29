@@ -276,7 +276,7 @@ export default function OnboardingPage() {
             </div>
             <div className="h-1.5 w-full bg-[#F2F5F5] rounded-full overflow-hidden">
               <div
-                className="h-full bg-[#1E5852] rounded-full transition-all duration-500 ease-out accent-[#1E5852] cursor-pointer"
+                className="h-full bg-[#000000] rounded-full transition-all duration-500 ease-out accent-[#000000] cursor-pointer"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -346,7 +346,7 @@ export default function OnboardingPage() {
               </div>
               {/* Slide 2: Looking for (multi-select options) */}
               <div className="w-full flex-shrink-0" data-purpose="step-looking-for">
-                <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-[#1E5852] tracking-tight mb-1">
+                <h2 className="font-serif text-3xl sm:text-[36px] font-medium text-[#000000] tracking-tight mb-1">
                   {t(STEP_TITLE_KEYS[1])}
                 </h2>
                 <p className="text-xs text-brand-muted mb-5">{t("onboarding.selectAll")}</p>
@@ -367,7 +367,7 @@ export default function OnboardingPage() {
                         <span
                           className={`shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                             selected
-                              ? "border-[#1E5852] bg-[#1E5852]"
+                              ? "border-[#000000] bg-[#000000]"
                               : "border-[#B6C4C3] bg-white"
                           }`}
                         >
@@ -411,8 +411,8 @@ export default function OnboardingPage() {
                         aria-pressed={selected}
                         className={`px-4 py-3.5 rounded-xl border text-sm font-medium transition-all cursor-pointer ${
                           selected
-                            ? "border-[#1E5852] bg-[#F2F8F7] text-brand-heading font-semibold"
-                            : "border-[#E2E8F0] bg-[#F8FAFB] text-brand-muted hover:border-[#1E5852]/40 hover:text-brand-heading"
+                            ? "border-[#000000] bg-[#F2F8F7] text-brand-heading font-semibold"
+                            : "border-[#E2E8F0] bg-[#F8FAFB] text-brand-muted hover:border-[#000000]/40 hover:text-brand-heading"
                         }`}
                         key={option.id}
                         onClick={() => {
@@ -442,8 +442,8 @@ export default function OnboardingPage() {
                         key={range.value}
                         className={`flex items-center justify-center py-3 px-4 rounded-lg text-sm font-medium cursor-pointer transition-all border ${
                           selected
-                            ? "border-[#1E5852] bg-[#F2F8F7] text-brand-heading font-semibold"
-                            : "border-[#E2E8F0] bg-[#F8FAFB] text-brand-muted hover:border-[#1E5852]/40 hover:text-brand-heading"
+                            ? "border-[#000000] bg-[#F2F8F7] text-brand-heading font-semibold"
+                            : "border-[#E2E8F0] bg-[#F8FAFB] text-brand-muted hover:border-[#000000]/40 hover:text-brand-heading"
                         }`}
                         data-purpose={`age-range-${range.value}`}
                       >
@@ -478,7 +478,7 @@ export default function OnboardingPage() {
                 <label className="flex items-start gap-2.5 text-xs text-brand-muted leading-relaxed cursor-pointer" data-purpose="health-consent">
                   <input
                     checked={healthConsent}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-[#1E5852]"
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-[#000000]"
                     onChange={(e) => {
                       setHealthConsent(e.target.checked);
                       setFormError("");
@@ -588,7 +588,7 @@ export default function OnboardingPage() {
             </button>
             {step === STEP_TITLE_KEYS.length - 1 && (
               <button
-                className="px-6 py-3 rounded-full text-sm font-semibold bg-[#1E5852] text-white hover:bg-[#174640] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-3 rounded-full text-sm font-semibold bg-[#000000] text-white hover:bg-[#174640] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-purpose="finish-onboarding"
                 disabled={!ageRange || isSaving}
                 onClick={() => void handleFinish()}
