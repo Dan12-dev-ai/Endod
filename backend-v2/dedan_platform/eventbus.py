@@ -97,6 +97,10 @@ DEAD_LETTER_PAYLOAD_KEYS = frozenset({
 KEEP_RECORDS_FOR = timedelta(days=30)
 #: What a sent row's payload becomes (the column is NOT NULL).
 PURGED = ""
+#: The events worker's last round (ISO time, UTC), for the admin's health
+#: page (api_admin.py). Expires on its own if the worker stops.
+HEARTBEAT_KEY = "endod:events-worker:heartbeat"
+HEARTBEAT_TTL_SECONDS = 600
 #: Postgres advisory lock id: one publisher at a time keeps events in order.
 _PUBLISH_LOCK = 0x45_4E_44_4F_44  # "ENDOD"
 
@@ -260,6 +264,11 @@ def housekeeping(client: redis.Redis) -> None:
         session.execute(delete(OutboxEvent).where(OutboxEvent.published_at.is_not(None),
                                                   OutboxEvent.published_at < cutoff))
         session.execute(delete(ProcessedEvent).where(ProcessedEvent.processed_at < cutoff))
+
+
+def heartbeat(client: redis.Redis) -> None:
+    """Note that the worker just finished a round (no data, only the time)."""
+    client.set(HEARTBEAT_KEY, utcnow().isoformat(), ex=HEARTBEAT_TTL_SECONDS)
 
 
 # --- consuming ---------------------------------------------------------------------------

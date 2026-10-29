@@ -3,7 +3,9 @@
 Runs as its own service (``internal-api`` in deploy/docker-compose.yml), the
 only part of the platform on the private ``endod-bus`` network (alias
 ``endod-platform-api``). It serves nothing but ``/internal/...`` (each route
-requires ``X-Platform-Key``), ``/pharmacy/...`` (each route requires
+requires ``X-Platform-Key``, except ``/internal/admin/...``, for the Endod
+super admin's API, which requires ``X-Superadmin-Key``; dedan_platform/api_admin.py),
+``/pharmacy/...`` (each route requires
 ``X-Pharmacy-Key``; docs/pharmacy.md) and ``/health``: the patient API is not
 reachable from that network at all, and the patient app (main_clinical)
 serves neither ``/internal`` nor ``/pharmacy``.
@@ -40,6 +42,7 @@ def create_app() -> FastAPI:
     # No middleware here reads a client's address (no proxy headers); the
     # pharmacy routes key their limits on X-Client-IP, behind their key.
     from dedan_platform import crypto
+    from dedan_platform.api_admin import router as admin_router
     from dedan_platform.api_history import internal_router
     from dedan_platform.api_pharmacy import router as pharmacy_router
 
@@ -53,6 +56,7 @@ def create_app() -> FastAPI:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts())
     app.include_router(internal_router)
     app.include_router(pharmacy_router)
+    app.include_router(admin_router)
 
     @app.get("/health")
     def health() -> Dict[str, str]:
