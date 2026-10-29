@@ -319,6 +319,9 @@ def complete(
     user = identity.find_user_by_phone(phone)
     if user is not None and not user.is_active:
         raise AccountDeactivated("This account has been deactivated. Please contact support.")
+    if user is not None and user.suspended_at is not None:
+        # A password reset by phone is a sign-in too: refused while suspended.
+        raise AccountDeactivated(credentials.SUSPENDED_MESSAGE)
     _claim(verification_id)
 
     created = user is None

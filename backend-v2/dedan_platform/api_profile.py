@@ -76,6 +76,11 @@ def current_user_id(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Account is deactivated."
         )
+    if user.suspended_at is not None:
+        # Suspended by an Endod admin (api_admin.py): every session ends.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail=credentials.SUSPENDED_MESSAGE
+        )
     # A password change signs out every session issued before it.
     valid_from = credentials.tokens_valid_from(user.id)
     if valid_from is not None and payload["iat"] < valid_from:

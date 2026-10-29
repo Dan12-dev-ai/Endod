@@ -62,6 +62,13 @@ class TestTokens:
     def test_no_secret_refuses_to_mint(self, monkeypatch):
         monkeypatch.delenv("REALTIME_TOKEN_SECRET", raising=False)
         monkeypatch.delenv("ADMIN_API_KEY", raising=False)
+        # signing_secret() also reads the cached settings (and a local .env):
+        # blank both there too, whatever ran before this test.
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        monkeypatch.setattr(settings, "REALTIME_TOKEN_SECRET", None, raising=False)
+        monkeypatch.setattr(settings, "ADMIN_API_KEY", None, raising=False)
         with pytest.raises(auth.AuthError):
             auth.issue_token("DE123456")
 

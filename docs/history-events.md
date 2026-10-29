@@ -34,7 +34,15 @@ platform -> hospital `patient.linked`
 
 platform -> hospital `patient.link_refused`
 `{"request_id", "hospital_id", "patient_id", "dedan_id", "reason": "not_found"|"not_verified"}`
-(no data on refusal).
+(no data on refusal). An unknown, closed or **suspended** account is
+`not_found`, by card or by phone, so the hospital learns nothing more.
+
+**Suspended accounts** (suspended by an Endod admin, through internal-api's
+`/internal/admin`): the patient is signed out and cannot sign in, and no
+new hospital link is made. For continuity of care, links made before the
+suspension keep working: those hospitals still send records, follow-ups and
+queue places, and they are kept. Prescriptions keep working at pharmacies
+(docs/pharmacy.md).
 
 The hospital stores `dedan_id` on its patient only on `patient.linked`; the
 patient gets an inbox item "<Hospital> linked your records to Endod". A

@@ -39,8 +39,10 @@ HOUSEKEEPING_EVERY = 3600
 HOLDS_EVERY = 60
 PAYMENTS_EVERY = 120
 REFUNDS_EVERY = 30
+#: The heartbeat the admin's health page reads (eventbus.HEARTBEAT_KEY).
+HEARTBEAT_EVERY = 15
 _last = {"trim_out": 0.0, "deposits": 0.0, "stale": 0.0, "shares": 0.0, "housekeeping": 0.0, "holds": 0.0, "payments": 0.0,
-         "refunds": 0.0}
+         "refunds": 0.0, "heartbeat": 0.0}
 
 #: Every event this worker handles: bookings and listings, patient history,
 #: and texts to facilities signing up.
@@ -119,6 +121,9 @@ def run_once(client: redis.Redis, now: float | None = None) -> int:
     if now - _last["housekeeping"] >= HOUSEKEEPING_EVERY:
         eventbus.housekeeping(client)
         _last["housekeeping"] = now
+    if now - _last["heartbeat"] >= HEARTBEAT_EVERY:
+        _last["heartbeat"] = now
+        eventbus.heartbeat(client)
     return work
 
 

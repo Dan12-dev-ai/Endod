@@ -115,6 +115,14 @@ class DuplicateAccountError(CredentialError):
     """A credential already exists for that account."""
 
 
+class AccountSuspendedError(CredentialError):
+    """An Endod admin suspended the account: no sign-in until it is reactivated."""
+
+
+#: What a suspended patient is told (only after the correct password).
+SUSPENDED_MESSAGE = "This account is suspended. Please contact Endod support."
+
+
 # --- hashing -----------------------------------------------------------------
 
 
@@ -214,6 +222,10 @@ def tokens_valid_from(internal_user_id: str) -> Optional[int]:
     whole-second precision because ``iat`` is whole seconds: a token minted in
     the same second as the change (e.g. the one returned by the change itself)
     stays valid.
+
+    Tokens issued before an admin signed the account out
+    (``User.sessions_revoked_at``) are rejected too, including those minted
+    in that same second: nothing is handed out with a revocation.
     """
     with session_scope() as session:
         changed_at = session.scalar(
@@ -221,12 +233,20 @@ def tokens_valid_from(internal_user_id: str) -> Optional[int]:
                 Credential.user_id == internal_user_id
             )
         )
-    if changed_at is None:
-        return None
-    if changed_at.tzinfo is None:
-        # SQLite returns naive datetimes; they were stored as UTC.
-        changed_at = changed_at.replace(tzinfo=timezone.utc)
-    return int(changed_at.timestamp())
+        revoked_at = session.scalar(
+            select(User.sessions_revoked_at).where(User.id == internal_user_id)
+        )
+    cutoffs = []
+    if changed_at is not None:
+        cutoffs.append(int(_aware(changed_at).timestamp()))
+    if revoked_at is not None:
+        cutoffs.append(int(_aware(revoked_at).timestamp()) + 1)
+    return max(cutoffs) if cutoffs else None
+
+
+def _aware(value: datetime) -> datetime:
+    # SQLite returns naive datetimes; they were stored as UTC.
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
 def has_credential(identifier: str) -> bool:
@@ -413,6 +433,10 @@ def authenticate(identifier: str, password: str, client: str = "unknown") -> Dic
         # Only after the correct password: said earlier, this message revealed
         # that the account exists to anyone who typed its id.
         raise CredentialError("This account has been deactivated.")
+    if user.suspended_at is not None:
+        # Likewise only after the correct password.
+        logger.info("credential_login_refused_suspended user_id=%s", internal_user_id)
+        raise AccountSuspendedError(SUSPENDED_MESSAGE)
 
     token = issue_token(subject, expires_in=SESSION_TTL_SECONDS, scope="portal")
     logger.info("credential_login user_id=%s", internal_user_id)
