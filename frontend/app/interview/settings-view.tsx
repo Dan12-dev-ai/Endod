@@ -569,12 +569,12 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                 </Select>
               </div>
             </div>
-            <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
+            <div className="bg-slate-50/80 dark:bg-gray-800/80 p-4 rounded-xl border border-slate-200 dark:border-gray-600">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700" htmlFor="radius-slider">{t("settings.location.radius")}</label>
-                <span className="text-xs font-semibold text-gray-900 bg-gray-100/70 px-2.5 py-0.5 rounded-full">{t("settings.location.within", { km: radius })}</span>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-gray-200" htmlFor="radius-slider">{t("settings.location.radius")}</label>
+                <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 bg-gray-100/70 dark:bg-gray-700/70 px-2.5 py-0.5 rounded-full">{t("settings.location.within", { km: radius })}</span>
               </div>
-              <input id="radius-slider" max={RADIUS_MAX_KM} min={RADIUS_MIN_KM} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-black h-2 bg-slate-200 rounded-lg cursor-pointer" />
+              <input id="radius-slider" max={RADIUS_MAX_KM} min={RADIUS_MIN_KM} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-black h-2 bg-slate-200 dark:bg-gray-600 rounded-lg cursor-pointer" />
               <div className="flex justify-between text-[11px] text-slate-400 mt-1">
                 <span>{t("settings.location.within", { km: RADIUS_MIN_KM })}</span>
                 <span>{t("settings.location.within", { km: 100 })}</span>
