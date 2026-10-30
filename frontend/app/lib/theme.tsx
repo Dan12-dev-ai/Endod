@@ -15,18 +15,15 @@ const ThemeContext = createContext<ThemeContextValue>({
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("system");
-
-  useEffect(() => {
+  const [theme, setThemeState] = useState<Theme>(() => {
     try {
       const stored = localStorage.getItem("theme");
-      if (stored === "system" || stored === "light" || stored === "dark") {
-        setThemeState(stored);
-      }
+      if (stored === "system" || stored === "light" || stored === "dark") return stored;
     } catch {
       // ignore
     }
-  }, []);
+    return "system";
+  });
 
   useEffect(() => {
     const root = document.documentElement;
@@ -52,6 +49,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // ignore
     }
+    // Apply immediately for instant feedback.
+    const root = document.documentElement;
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const dark = next === "dark" || (next === "system" && prefersDark);
+    root.classList.toggle("dark", dark);
   };
 
   return <ThemeContext.Provider value={{ theme, setTheme }}>{children}</ThemeContext.Provider>;
