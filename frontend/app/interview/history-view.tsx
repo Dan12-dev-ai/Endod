@@ -216,7 +216,7 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
                   data-record={item.id}
                   key={item.id}
                 >
-                  <div className="w-full text-left p-4 flex items-start gap-3 hover:bg-slate-50/60" role="button" tabIndex={0} onClick={() => onSelectRecord?.(item.id)}>
+                  <div className="w-full text-left p-4 flex items-start gap-3 hover:bg-slate-50/60 dark:hover:bg-gray-700/60" role="button" tabIndex={0} onClick={() => onSelectRecord?.(item.id)}>
                     <span className={`mt-0.5 flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-bold ${item.kind === "hospital" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-slate-100 text-slate-500 border border-slate-200"}`} aria-hidden>
                       {t(CATEGORY_LABEL[item.category]).slice(0, 2)}
                     </span>
@@ -235,7 +235,7 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
                         <span className="block text-[11px] text-emerald-700 mt-1">{t(item.files.length === 1 ? "history.filesOne" : "history.filesOther", { count: item.files.length })}</span>
                       )}
                     </span>
-                    <button aria-expanded={false} className="mt-1 flex-shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50" data-purpose="record-open" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSelectRecord?.(item.id); }} type="button">
+                    <button aria-expanded={false} className="mt-1 flex-shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-700" data-purpose="record-open" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSelectRecord?.(item.id); }} type="button">
                       Open
                     </button>
                   </div>
