@@ -247,7 +247,7 @@ export default function Interview() {
             <DrawerTitle>{t("interview.nav.setting")}</DrawerTitle>
           </DrawerHeader>
           <div className="drawer-settings p-4">
-            <SettingsView onToast={showToast} onProfileChange={(profile) => setHealthCard(healthCardFromProfile(profile))} />
+            <SettingsView compact onToast={showToast} onProfileChange={(profile) => setHealthCard(healthCardFromProfile(profile))} />
           </div>
         </DrawerContent>
       </Drawer>

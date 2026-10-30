@@ -47,6 +47,8 @@ type Props = {
   onToast: (title: string, message: string) => void;
   /** The profile changed (names, phone): refresh the header and card. */
   onProfileChange: (profile: ProfileForCard) => void;
+  /** Hide section subtitles (for compact drawer usage). */
+  compact?: boolean;
 };
 
 const COUNTRIES: { value: string; labelKey: TranslationKey }[] = [
@@ -94,7 +96,7 @@ const STRENGTH_COLORS = ["text-slate-400", "text-rose-500", "text-amber-500", "t
 const STRENGTH_BARS = ["bg-slate-200", "bg-rose-500", "bg-amber-500", "bg-black", "bg-gray-500"];
 
 /** Account settings (GET/PATCH /users/me, preferences, consent, health profile; password change). */
-export default function SettingsView({ onToast, onProfileChange }: Props) {
+export default function SettingsView({ onToast, onProfileChange, compact = false }: Props) {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -455,7 +457,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
           <summary className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 cursor-pointer list-none">
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.personal.title")}</h2>
-              <p className="text-xs sm:text-sm text-slate-500">{t("settings.personal.subtitle")}</p>
+              <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.personal.subtitle")}</p>
             </div>
             <span className="self-start sm:self-auto px-3 py-1 bg-gray-50 text-gray-900 text-xs font-semibold rounded-full border border-gray-200">
               {profile.dedan_user_id}
@@ -530,7 +532,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         <details data-purpose="location-settings-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
           <summary className="border-b border-slate-100 pb-4 cursor-pointer list-none">
             <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.location.title")}</h2>
-            <p className="text-xs sm:text-sm text-slate-500">{t("settings.location.subtitle")}</p>
+            <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.location.subtitle")}</p>
           </summary>
           <form onSubmit={saveLocation} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -591,7 +593,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         <details data-purpose="appearance-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
           <summary className="border-b border-slate-100 pb-4 mb-2 cursor-pointer list-none">
             <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.appearance.title")}</h2>
-            <p className="text-xs sm:text-sm text-slate-500">{t("settings.appearance.subtitle")}</p>
+            <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.appearance.subtitle")}</p>
           </summary>
           <div className="flex items-center gap-3">
             {(["system", "light", "dark"] as const).map((value) => (
@@ -619,7 +621,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         <details data-purpose="privacy-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
           <summary className="border-b border-slate-100 pb-4 mb-2 cursor-pointer list-none">
             <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.privacy.title")}</h2>
-            <p className="text-xs sm:text-sm text-slate-500">{t("settings.privacy.subtitle")}</p>
+            <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.privacy.subtitle")}</p>
           </summary>
           {toggle("consent-health", profile.consent.treatment_processing, (v) => void setConsent("treatment_processing", v),
             t("settings.privacy.consentHealth.label"), t("settings.privacy.consentHealth.hint"))}
@@ -633,7 +635,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         <details data-purpose="security-settings-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
           <summary className="border-b border-slate-100 pb-4 cursor-pointer list-none">
             <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.password.title")}</h2>
-            <p className="text-xs sm:text-sm text-slate-500">{t("settings.password.subtitle")}</p>
+            <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.password.subtitle")}</p>
           </summary>
           <form onSubmit={changePassword} className="space-y-5">
             <div>
@@ -686,7 +688,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
           <summary className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 cursor-pointer list-none">
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.card.title")}</h2>
-              <p className="text-xs sm:text-sm text-slate-500">{t("settings.card.subtitle")}</p>
+              <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.card.subtitle")}</p>
             </div>
             <div className="flex gap-2 self-start sm:self-auto">
               <button type="button" onClick={() => setCardVisible(!cardVisible)} className="px-3.5 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-900 text-xs font-semibold border border-gray-200">
