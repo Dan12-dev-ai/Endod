@@ -120,7 +120,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
                   {t("home.showQr")}
                 </button>
                 <Link
-                  className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition"
+                  className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 text-sm font-semibold transition"
                   data-purpose="home-open-card"
                   href="/health-card"
                 >
