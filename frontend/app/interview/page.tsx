@@ -374,7 +374,7 @@ export default function Interview() {
       </div>
 
       {/* ===== Mobile bottom bar: the same sections as the sidebar ===== */}
-      <nav aria-label={t("interview.mobileNav")} className="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-black backdrop-blur-md border-t border-slate-200 dark:border-gray-900 lg:hidden shadow-lg">
+      <nav aria-label={t("interview.mobileNav")} className="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-gray-800 backdrop-blur-md border-t border-slate-200 dark:border-gray-700 lg:hidden shadow-lg">
         <div className="flex items-stretch px-1 py-1.5" data-purpose="mobile-nav">
           {navItems.map((item) => {
             const isActive = activeNav === item.id;
@@ -382,7 +382,7 @@ export default function Interview() {
               <button
                 aria-current={isActive ? "page" : undefined}
                 className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-lg transition-colors ${
-                  isActive ? "text-black dark:text-white bg-gray-100 dark:bg-gray-800" : "text-slate-500 dark:text-gray-300 hover:text-black dark:hover:text-white"
+                  isActive ? "text-black dark:text-white bg-gray-100 dark:bg-gray-700" : "text-slate-500 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-slate-50 dark:hover:bg-gray-700"
                 }`}
                 data-purpose={`mobile-nav-${item.id}`}
                 key={item.id}
