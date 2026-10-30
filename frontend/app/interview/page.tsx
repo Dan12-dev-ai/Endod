@@ -374,7 +374,7 @@ export default function Interview() {
       </div>
 
       {/* ===== Mobile bottom bar: the same sections as the sidebar ===== */}
-      <nav aria-label={t("interview.mobileNav")} className="fixed bottom-0 inset-x-0 z-30 bg-black backdrop-blur-md border-t border-gray-800 lg:hidden shadow-lg">
+      <nav aria-label={t("interview.mobileNav")} className="fixed bottom-0 inset-x-0 z-30 bg-black backdrop-blur-md border-t border-gray-900 lg:hidden shadow-lg">
         <div className="flex items-stretch px-1 py-1.5" data-purpose="mobile-nav">
           {navItems.map((item) => {
             const isActive = activeNav === item.id;
