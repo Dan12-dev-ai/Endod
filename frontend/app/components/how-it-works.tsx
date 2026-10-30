@@ -24,7 +24,7 @@ const STEPS = [
 export default function HowItWorks() {
   const { t } = useI18n();
   return (
-    <section className="py-10 sm:py-12 bg-white dark:bg-gray-900" data-purpose="how-it-works">
+    <section className="pt-12 sm:pt-16 pb-10 sm:pb-12 bg-white dark:bg-gray-900" data-purpose="how-it-works">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-6 sm:mb-8">
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-gray-100">
