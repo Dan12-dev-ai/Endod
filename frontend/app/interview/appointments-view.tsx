@@ -485,7 +485,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
               <div>
                 <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("appointments.nextAppointment")}</p>
                 <h4 className="text-base font-bold text-slate-900 dark:text-gray-100 mt-0.5">{nextVisit ? formatWhen(nextVisit.scheduled_at, locale) : t("appointments.noneScheduled")}</h4>
-                {nextVisit && <span className="text-[11px] text-black font-medium">{appointmentTitle(nextVisit, t)}</span>}
+                {nextVisit && <span className="text-[11px] text-black dark:text-gray-200 font-medium">{appointmentTitle(nextVisit, t)}</span>}
               </div>
             </div>
             <div data-purpose="next-video-visit" className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-slate-200/90 card-shadow flex items-center space-x-3.5">
@@ -497,7 +497,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
               <div>
                 <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("appointments.nextVideoVisit")}</p>
                 <h4 className="text-base font-bold text-slate-900 dark:text-gray-100 mt-0.5">{nextVideo ? formatWhen(nextVideo.scheduled_at, locale) : t("appointments.noneScheduled")}</h4>
-                {nextVideo && <span className="text-[11px] text-black font-medium">{appointmentTitle(nextVideo, t)}</span>}
+                {nextVideo && <span className="text-[11px] text-black dark:text-gray-200 font-medium">{appointmentTitle(nextVideo, t)}</span>}
               </div>
             </div>
           </div>
