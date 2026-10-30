@@ -208,7 +208,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
               type="button"
               data-purpose={`notif-filter-${pill.id}`}
               onClick={() => setFilter(pill.id)}
-              className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition flex items-center gap-1.5 ${filter === pill.id ? "font-semibold bg-black text-white shadow-xs" : "font-medium bg-white dark:bg-gray-800 text-slate-600 hover:bg-slate-50 border border-slate-200"}`}
+              className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition flex items-center gap-1.5 ${filter === pill.id ? "font-semibold bg-black text-white shadow-xs dark:bg-gray-700" : "font-medium bg-white dark:bg-gray-800 text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-700 border border-slate-200 dark:border-gray-600"}`}
             >
               <span>{pill.label}{pill.count ? ` (${pill.count})` : ""}</span>
             </button>
