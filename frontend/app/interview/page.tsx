@@ -246,8 +246,47 @@ export default function Interview() {
           <DrawerHeader>
             <DrawerTitle>{t("interview.nav.setting")}</DrawerTitle>
           </DrawerHeader>
-          <div className="drawer-settings p-4">
-            <SettingsView onToast={showToast} onProfileChange={(profile) => setHealthCard(healthCardFromProfile(profile))} />
+          <div className="p-4 space-y-2">
+            <details className="group border border-slate-200 dark:border-gray-700 rounded-lg">
+              <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-slate-800 dark:text-gray-100 flex items-center justify-between">
+                {t("settings.appearance.title")}
+                <span className="text-slate-400 group-open:rotate-180 transition">▾</span>
+              </summary>
+              <div className="px-3 pb-3 flex items-center gap-2 flex-wrap">
+                {(["system", "light", "dark"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTheme(value)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${theme === value ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white" : "bg-white dark:bg-gray-800 text-slate-700 dark:text-gray-200 border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700"}`}
+                  >
+                    {value === "system" ? t("settings.appearance.system") : value === "light" ? t("settings.appearance.light") : t("settings.appearance.dark")}
+                  </button>
+                ))}
+              </div>
+            </details>
+
+            <details className="group border border-slate-200 dark:border-gray-700 rounded-lg">
+              <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-slate-800 dark:text-gray-100 flex items-center justify-between">
+                {t("nav.selectLanguage")}
+                <span className="text-slate-400 group-open:rotate-180 transition">▾</span>
+              </summary>
+              <div className="px-3 pb-3 flex items-center gap-2 flex-wrap">
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => {
+                      setLanguage(lang.code);
+                      void rememberLanguageChoice(lang.code);
+                    }}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium border transition ${language === lang.code ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white" : "bg-white dark:bg-gray-800 text-slate-700 dark:text-gray-200 border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700"}`}
+                  >
+                    {lang.label}
+                  </button>
+                ))}
+              </div>
+            </details>
           </div>
         </DrawerContent>
       </Drawer>
