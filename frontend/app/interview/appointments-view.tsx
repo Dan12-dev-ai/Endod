@@ -517,7 +517,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                       type="button"
                       data-purpose={`appointment-tab-${t2.id}`}
                       onClick={() => setTab(t2.id)}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs whitespace-nowrap transition ${tab === t2.id ? "font-semibold bg-white dark:bg-gray-500 text-slate-800 dark:text-white shadow-xs" : "font-medium text-slate-600 dark:text-gray-300 bg-white/60 dark:bg-gray-700 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-gray-600/60"}`}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs whitespace-nowrap transition ${tab === t2.id ? "font-semibold bg-white dark:bg-white text-slate-800 dark:text-black shadow-xs" : "font-medium text-slate-600 dark:text-gray-300 bg-white/60 dark:bg-gray-700 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-gray-600/60"}`}
                     >
                       {t2.label}
                     </button>
