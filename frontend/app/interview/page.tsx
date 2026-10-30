@@ -12,10 +12,14 @@ import type { BookingPreset } from "./history-data";
 import SettingsView from "./settings-view";
 import EmergencyPanel from "./emergency-panel";
 import { api, logout } from "../lib/api";
-import { isLanguage, useI18n, type TranslationKey } from "../lib/i18n";
+import { Home, CalendarPlus, Calendar, FileText, Bell, Settings } from "lucide-react";
+import { isLanguage, useI18n, type TranslationKey, LANGUAGES } from "../lib/i18n";
+import { useTheme } from "../lib/theme";
+import { rememberLanguageChoice } from "../components/language-switcher";
 
 export default function Interview() {
   const { t, language, setLanguage } = useI18n();
+  const { theme, setTheme } = useTheme();
   const setAccountLanguage = (saved: Parameters<typeof setLanguage>[0]) => {
     if (saved !== language) setLanguage(saved);
   };
@@ -75,12 +79,12 @@ export default function Interview() {
   };
 
   const navItems: { id: string; labelKey: TranslationKey; icon: React.ReactNode }[] = [
-    { id: "home", labelKey: "interview.nav.home", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
-    { id: "booking", labelKey: "interview.nav.booking", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
-    { id: "appointment", labelKey: "interview.nav.appointment", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
-    { id: "followup", labelKey: "interview.nav.medicalRecord", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
-    { id: "message", labelKey: "interview.nav.notification", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
-    { id: "setting", labelKey: "interview.nav.setting", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeLinecap="round" strokeLinejoin="round" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
+    { id: "home", labelKey: "interview.nav.home", icon: <Home className="w-5 h-5" /> },
+    { id: "booking", labelKey: "interview.nav.booking", icon: <CalendarPlus className="w-5 h-5" /> },
+    { id: "appointment", labelKey: "interview.nav.appointment", icon: <Calendar className="w-5 h-5" /> },
+    { id: "followup", labelKey: "interview.nav.medicalRecord", icon: <FileText className="w-5 h-5" /> },
+    { id: "message", labelKey: "interview.nav.notification", icon: <Bell className="w-5 h-5" /> },
+    { id: "setting", labelKey: "interview.nav.setting", icon: <Settings className="w-5 h-5" /> },
   ];
 
   // ===== Toast (any screen) =====
@@ -162,7 +166,7 @@ export default function Interview() {
   return (
     <div className="h-screen bg-[#F6F9FA] text-slate-800 font-sans antialiased flex flex-col overflow-hidden pb-16 lg:pb-0">
       {/* ===== Main Header ===== */}
-      <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
+      <header className="bg-white dark:bg-gray-800 border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center space-x-3 sm:space-x-6">
           <button
             type="button"
@@ -204,18 +208,18 @@ export default function Interview() {
             <div className="text-left text-xs leading-tight hidden lg:block">
               <div className="font-bold text-slate-800 flex items-center">
                 {healthCard?.fullName ?? ""}
-                <svg className="w-3.5 h-3.5 text-slate-500 ml-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <svg className="w-3.5 h-3.5 text-slate-500 dark:text-gray-400 ml-0.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path d="M19 9l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <div className="text-slate-400 text-[11px]">{t("interview.patient")}</div>
+              <div className="text-slate-500 dark:text-gray-400 text-[11px]">{t("interview.patient")}</div>
             </div>
           </div>
           <button
             type="button"
             data-purpose="sign-out"
             onClick={() => void logout()}
-            className="whitespace-nowrap px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50 rounded-lg transition"
+            className="whitespace-nowrap px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-gray-100 border border-slate-200 hover:bg-slate-50 dark:hover:bg-gray-700 dark:hover:text-white rounded-lg transition"
           >
             {t("interview.signOut")}
           </button>
@@ -235,7 +239,7 @@ export default function Interview() {
       {/* ===== Body Content ===== */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* ===== Sidebar ===== */}
-<aside className={`hidden fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out flex-col justify-between p-4 flex-shrink-0 shadow-2xl ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"} ${desktopSidebarOpen ? "lg:static lg:w-64 lg:translate-x-0 lg:flex lg:shadow-none" : "lg:hidden"}`}>
+<aside className={`hidden fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-800 border-r border-slate-200 transform transition-transform duration-300 ease-in-out flex-col justify-between p-4 flex-shrink-0 shadow-2xl ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"} ${desktopSidebarOpen ? "lg:static lg:w-64 lg:translate-x-0 lg:flex lg:shadow-none" : "lg:hidden"}`}>
           <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100 lg:hidden">
             <div className="flex items-center space-x-2.5">
               <div className="w-8 h-8 rounded-full bg-teal-500 flex items-center justify-center text-white shadow-sm">
@@ -245,19 +249,19 @@ export default function Interview() {
               </div>
               <div>
                 <div className="flex items-baseline space-x-1 leading-none">
-                  <span className="text-base font-black tracking-tight text-slate-900">ENDOD</span>
+                  <span className="text-base font-black tracking-tight text-slate-900 dark:text-gray-100">ENDOD</span>
                   <span className="text-base font-bold text-teal-600">Health</span>
                 </div>
                 <span className="text-[10px] font-medium text-teal-700 block tracking-tight">{t("interview.yourAiDoctor")}</span>
               </div>
             </div>
-<button aria-label={t("interview.closeMenu")} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition" onClick={() => setMobileSidebarOpen(false)} type="button">
+<button aria-label={t("interview.closeMenu")} className="p-1.5 text-slate-500 dark:text-gray-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition" onClick={() => setMobileSidebarOpen(false)} type="button">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
           </div>
-          <nav className="space-y-1 overflow-y-auto flex-1 min-h-0">
+          <nav className="space-y-1 overflow-hidden flex-1 min-h-0">
             {navItems.map((item) => {
               const isActive = activeNav === item.id;
               return (
@@ -270,10 +274,10 @@ export default function Interview() {
                     setHighlightTarget(null);
                     navigateTo(item.id);
                   }}
-                  className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors text-sm font-medium cursor-pointer"
+                  className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-700 dark:text-gray-200 hover:text-black dark:hover:text-white hover:bg-slate-50 dark:hover:bg-gray-700 transition-colors text-sm font-medium cursor-pointer"
                 >
                   {item.icon}
-                  <span className={isActive ? "text-slate-900 font-semibold" : undefined}>{t(item.labelKey)}</span>
+                  <span className={isActive ? "text-slate-900 dark:text-gray-100 font-semibold" : undefined}>{t(item.labelKey)}</span>
                 </a>
               );
             })}
@@ -285,8 +289,8 @@ export default function Interview() {
                   <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <h4 className="text-xs font-bold text-slate-900 leading-snug">{t("interview.betterHealth")}</h4>
-              <p className="text-[11px] text-slate-500 mt-1 leading-normal">{t("interview.betterHealthBody")}</p>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-gray-100 leading-snug">{t("interview.betterHealth")}</h4>
+              <p className="text-[11px] text-slate-500 dark:text-gray-400 mt-1 leading-normal">{t("interview.betterHealthBody")}</p>
             </div>
           </div>
         </aside>
@@ -318,7 +322,7 @@ export default function Interview() {
                 <h5 className="text-xs font-semibold text-white tracking-wide uppercase">{toast.title}</h5>
                 <p className="text-xs text-slate-300">{toast.message}</p>
               </div>
-              <button type="button" aria-label={t("common.close")} onClick={dismissToast} className="ml-3 text-slate-400 hover:text-white text-sm focus:outline-none">×</button>
+              <button type="button" aria-label={t("common.close")} onClick={dismissToast} className="ml-3 text-slate-500 dark:text-gray-400 hover:text-white text-sm focus:outline-none">×</button>
             </div>
           )}
 
@@ -359,7 +363,7 @@ export default function Interview() {
       </div>
 
       {/* ===== Mobile bottom bar: the same sections as the sidebar ===== */}
-      <nav aria-label={t("interview.mobileNav")} className="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 lg:hidden shadow-lg">
+      <nav aria-label={t("interview.mobileNav")} className="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-gray-800 backdrop-blur-md border-t border-slate-200 dark:border-gray-700 lg:hidden shadow-lg">
         <div className="flex items-stretch px-1 py-1.5" data-purpose="mobile-nav">
           {navItems.map((item) => {
             const isActive = activeNav === item.id;
@@ -367,7 +371,7 @@ export default function Interview() {
               <button
                 aria-current={isActive ? "page" : undefined}
                 className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-lg transition-colors ${
-                  isActive ? "text-black bg-gray-100" : "text-slate-500 hover:text-black"
+                  isActive ? "text-black dark:text-white bg-gray-100 dark:bg-gray-700" : "text-slate-500 dark:text-gray-300 hover:text-black dark:hover:text-white hover:bg-slate-50 dark:hover:bg-gray-700"
                 }`}
                 data-purpose={`mobile-nav-${item.id}`}
                 key={item.id}

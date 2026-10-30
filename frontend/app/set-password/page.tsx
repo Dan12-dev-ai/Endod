@@ -90,7 +90,7 @@ function SetPassword() {
       data-purpose="page-wrapper"
     >
       <div className="w-full max-w-[560px]">
-        <div className="bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10">
+        <div className="bg-white dark:bg-gray-800 rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10">
           {/* Brand */}
           <div className="mb-6" data-purpose="brand-logo">
             <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">{t("common.endod")}</h1>

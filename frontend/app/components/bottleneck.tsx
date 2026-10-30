@@ -5,7 +5,7 @@ import { useI18n } from "../lib/i18n";
 export default function Bottleneck() {
   const { t } = useI18n();
   return (
-    <section className="bg-[#f5f3ef] py-20 lg:py-28 text-slate-900 border-b border-stone-200" data-purpose="narrative-split-section" id="bottleneck">
+    <section className="bg-[#f5f3ef] py-20 lg:py-28 text-slate-900 dark:text-gray-100 border-b border-stone-200" data-purpose="narrative-split-section" id="bottleneck">
       <div className="max-w-7xl mx-auto px-6 sm:px-12">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-center">
           {/* Left: Circular Masked Machinery Image */}
@@ -33,9 +33,9 @@ export default function Bottleneck() {
               <p>{t("bottleneck.p2")}</p>
             </div>
             <div>
-              <a className="inline-flex items-center gap-3.5 px-6 py-2.5 rounded-full border border-slate-900 bg-transparent hover:bg-slate-900 hover:text-white text-slate-900 transition-all duration-200 text-[15px] font-medium group" href="#build-own-lab">
+              <a className="inline-flex items-center gap-3.5 px-6 py-2.5 rounded-full border border-slate-900 bg-transparent hover:bg-slate-900 hover:text-white text-slate-900 dark:text-gray-100 transition-all duration-200 text-[15px] font-medium group" href="#build-own-lab">
                 <span>{t("bottleneck.cta")}</span>
-                <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center group-hover:bg-white group-hover:text-black transition-colors">
+                <span className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center group-hover:bg-white dark:bg-gray-800 group-hover:text-black transition-colors">
                   <svg className="w-3.5 h-3.5 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" />
                   </svg>

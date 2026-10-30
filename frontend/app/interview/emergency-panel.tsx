@@ -123,7 +123,7 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
       role="dialog"
     >
       <div
-        className="bg-white w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-5"
+        className="bg-white dark:bg-gray-800 w-full sm:max-w-lg max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 space-y-5"
         onClick={(event) => event.stopPropagation()}
         ref={dialogRef}
       >
@@ -172,7 +172,7 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
 
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-bold text-slate-900">{t("emergency.nearby")}</h3>
+            <h3 className="text-sm font-bold text-slate-900 dark:text-gray-100">{t("emergency.nearby")}</h3>
             <button
               className="text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-60"
               data-purpose="emergency-locate"
@@ -198,7 +198,7 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
             <div className="rounded-2xl border border-slate-200 p-3.5" data-purpose={`emergency-hospital-${h.hospital_id}`} key={h.hospital_id}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-900">{language === "am" && h.name_am ? h.name_am : h.name}</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-gray-100">{language === "am" && h.name_am ? h.name_am : h.name}</p>
                   <p className="text-xs text-slate-500">
                     {[h.address, h.city].filter(Boolean).join(", ")}
                     {h.distance_km !== null ? ` · ${h.distance_km} km` : ""}

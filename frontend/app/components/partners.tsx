@@ -17,7 +17,7 @@ function Logo({ name, src }: { name: string; src: string }) {
   return (
     <div
       className={`flex-shrink-0 w-24 md:w-80 lg:w-96 flex items-center justify-center drop-shadow-md ${
-        isAfilas ? "bg-slate-900 rounded-xl p-4" : ""
+        isAfilas ? "bg-slate-900 rounded-xl p-4 h-14 md:h-54 lg:h-58" : ""
       }`}
     >
       <img
@@ -37,12 +37,12 @@ export default function Partners() {
 
   return (
     <section
-      className="py-16 sm:py-20 bg-white overflow-hidden"
+      className="py-16 sm:py-20 bg-white dark:bg-gray-800 overflow-hidden"
       data-purpose="partners-section"
       id="partners"
     >
       <div className="max-w-7xl mx-auto px-6 sm:px-12 mb-10 text-center">
-        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+        <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-gray-100 tracking-tight">
           {t("partners.title")}
         </h2>
         <p className="mt-2 text-sm sm:text-base text-slate-500">

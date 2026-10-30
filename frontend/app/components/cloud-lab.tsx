@@ -36,7 +36,7 @@ export default function CloudLab() {
           </p>
           {/* Two CTA Buttons */}
           <div className="flex flex-wrap items-center gap-3">
-            <a className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-slate-900 bg-white/80 hover:bg-white text-slate-900 text-sm font-medium transition shadow-sm group" href="/interview">
+            <a className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full border border-slate-900 bg-white/80 hover:bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 text-sm font-medium transition shadow-sm group" href="/interview">
               <span>{t("cloudLab.findHospital")}</span>
               <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center">
                 <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -46,7 +46,7 @@ export default function CloudLab() {
             </a>
             <a className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-[#0d2130] hover:bg-[#16364e] text-white text-sm font-medium transition shadow-md group" href="#contact-section">
               <span>{t("cloudLab.hospitalPortal")}</span>
-              <span className="w-5 h-5 rounded-full bg-white text-slate-900 flex items-center justify-center">
+              <span className="w-5 h-5 rounded-full bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 flex items-center justify-center">
                 <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" />
                 </svg>

@@ -335,14 +335,14 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
       <div
         key={a.appointment_id}
         data-purpose={id}
-        className={`bg-white rounded-2xl border p-4 card-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${cancelled ? "opacity-60" : ""} ${highlighted ? "border-black ring-2 ring-gray-300" : "border-slate-200"}`}
+        className={`bg-white dark:bg-gray-800 rounded-2xl border p-4 card-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${cancelled ? "opacity-60" : ""} ${highlighted ? "border-black ring-2 ring-gray-300" : "border-slate-200"}`}
       >
         <div className="flex items-center space-x-4 min-w-0">
           <div className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold text-sm flex-shrink-0 ${telehealth ? "bg-gray-50 border-gray-200 text-black" : "bg-gray-50 border-gray-200 text-black"}`}>
             {initials(appointmentTitle(a, t))}
           </div>
           <div className="min-w-0">
-            <h4 className="text-sm font-bold text-slate-900">{appointmentTitle(a, t)}</h4>
+            <h4 className="text-sm font-bold text-slate-900 dark:text-gray-100">{appointmentTitle(a, t)}</h4>
             <p className="text-xs text-slate-500 mt-0.5">{appointmentPlace(a, t)}</p>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-xs text-slate-500">
               <span>{formatWhen(a.scheduled_at, locale)}</span>
@@ -417,7 +417,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
               <button type="button" disabled={busyId === a.appointment_id} onClick={() => cancelAppointment(a)} className="px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition">
                 {t("appointments.yesCancel")}
               </button>
-              <button type="button" onClick={() => setConfirmCancelId(null)} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition">
+              <button type="button" onClick={() => setConfirmCancelId(null)} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white dark:bg-gray-800 border border-slate-300 hover:bg-slate-50 rounded-lg transition">
                 {t("appointments.keep")}
               </button>
             </div>
@@ -425,18 +425,18 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
             <div className="flex items-center gap-2 flex-shrink-0">
               {/* A paid hospital visit is changed by cancelling (refunded) and booking again. */}
               {!hb && (
-                <button type="button" onClick={() => openReschedule(a)} className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition">
+                <button type="button" onClick={() => openReschedule(a)} className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white dark:bg-gray-800 border border-slate-300 hover:bg-slate-50 rounded-lg transition">
                   {t("appointments.reschedule")}
                 </button>
               )}
-              <button type="button" onClick={() => setConfirmCancelId(a.appointment_id)} className="px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-white border border-rose-200 hover:bg-rose-50 rounded-lg transition">
+              <button type="button" onClick={() => setConfirmCancelId(a.appointment_id)} className="px-3.5 py-1.5 text-xs font-semibold text-rose-400 dark:text-rose-300 bg-white dark:bg-gray-800 border border-rose-200 dark:border-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition">
                 {t("appointments.cancel")}
               </button>
             </div>
           )
         ) : (
           <span className={`px-3 py-1 text-xs font-semibold rounded-lg flex-shrink-0 border ${
-            cancelled ? "text-rose-700 bg-rose-50 border-rose-200"
+            cancelled ? "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-700"
               : a.status === "COMPLETED" ? "text-gray-900 bg-gray-50 border-gray-200"
               : "text-slate-600 bg-slate-50 border-slate-200"
           }`}>
@@ -458,13 +458,13 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200">
             <div>
               <div className="flex items-center space-x-3">
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{t("appointments.title")}</h1>
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-gray-100 tracking-tight">{t("appointments.title")}</h1>
                 <span data-purpose="upcoming-count" className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-black border border-gray-200">
                   {t("appointments.scheduledCount", { count: counts.upcoming })}
                 </span>
               </div>
             </div>
-            <button type="button" onClick={openBook} className="hidden lg:inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-black hover:bg-gray-800 text-white text-xs font-semibold shadow-sm transition self-start md:self-auto">
+            <button type="button" onClick={openBook} className="hidden lg:inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black text-xs font-semibold shadow-sm transition self-start md:self-auto">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
                 <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -476,7 +476,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
 
           {/* Stat cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div data-purpose="next-appointment" className="bg-white p-4 rounded-2xl border border-slate-200/90 card-shadow flex items-center space-x-3.5">
+            <div data-purpose="next-appointment" className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-slate-200/90 card-shadow flex items-center space-x-3.5">
               <div className="w-12 h-12 rounded-xl bg-gray-50 text-black flex items-center justify-center flex-shrink-0">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
@@ -484,11 +484,11 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
               </div>
               <div>
                 <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("appointments.nextAppointment")}</p>
-                <h4 className="text-base font-bold text-slate-900 mt-0.5">{nextVisit ? formatWhen(nextVisit.scheduled_at, locale) : t("appointments.noneScheduled")}</h4>
-                {nextVisit && <span className="text-[11px] text-black font-medium">{appointmentTitle(nextVisit, t)}</span>}
+                <h4 className="text-base font-bold text-slate-900 dark:text-gray-100 mt-0.5">{nextVisit ? formatWhen(nextVisit.scheduled_at, locale) : t("appointments.noneScheduled")}</h4>
+                {nextVisit && <span className="text-[11px] text-black dark:text-gray-200 font-medium">{appointmentTitle(nextVisit, t)}</span>}
               </div>
             </div>
-            <div data-purpose="next-video-visit" className="bg-white p-4 rounded-2xl border border-slate-200/90 card-shadow flex items-center space-x-3.5">
+            <div data-purpose="next-video-visit" className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-slate-200/90 card-shadow flex items-center space-x-3.5">
               <div className="w-12 h-12 rounded-xl bg-gray-50 text-black flex items-center justify-center flex-shrink-0">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
@@ -496,8 +496,8 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
               </div>
               <div>
                 <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("appointments.nextVideoVisit")}</p>
-                <h4 className="text-base font-bold text-slate-900 mt-0.5">{nextVideo ? formatWhen(nextVideo.scheduled_at, locale) : t("appointments.noneScheduled")}</h4>
-                {nextVideo && <span className="text-[11px] text-black font-medium">{appointmentTitle(nextVideo, t)}</span>}
+                <h4 className="text-base font-bold text-slate-900 dark:text-gray-100 mt-0.5">{nextVideo ? formatWhen(nextVideo.scheduled_at, locale) : t("appointments.noneScheduled")}</h4>
+                {nextVideo && <span className="text-[11px] text-black dark:text-gray-200 font-medium">{appointmentTitle(nextVideo, t)}</span>}
               </div>
             </div>
           </div>
@@ -505,8 +505,8 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <div className="xl:col-span-2 space-y-5">
               {/* Tabs & Filters */}
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 card-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center space-x-1 p-1 bg-slate-100 rounded-xl overflow-x-auto">
+              <div className="bg-white dark:bg-gray-800 p-3.5 rounded-2xl border border-slate-200/90 card-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center space-x-1 p-1 bg-slate-100 dark:bg-gray-900 rounded-xl overflow-x-auto">
                   {([
                     { id: "upcoming" as const, label: t("appointments.tabUpcoming", { count: counts.upcoming }) },
                     { id: "past" as const, label: t("appointments.tabPast", { count: counts.past }) },
@@ -517,7 +517,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                       type="button"
                       data-purpose={`appointment-tab-${t2.id}`}
                       onClick={() => setTab(t2.id)}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs whitespace-nowrap transition ${tab === t2.id ? "font-semibold bg-white text-slate-800 shadow-xs" : "font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"}`}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs whitespace-nowrap transition ${tab === t2.id ? "font-semibold bg-white dark:bg-white text-slate-800 dark:text-black shadow-xs" : "font-medium text-slate-600 dark:text-gray-300 bg-white/60 dark:bg-gray-700 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-gray-600/60"}`}
                     >
                       {t2.label}
                     </button>
@@ -563,7 +563,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                   </Skeleton>
                 )}
                 {appointments && visible.length === 0 && (
-                  <p data-purpose="appointment-empty" className="text-xs text-slate-500 bg-white border border-slate-200 rounded-2xl p-4">
+                  <p data-purpose="appointment-empty" className="text-xs text-slate-500 bg-white dark:bg-gray-800 border border-slate-200 rounded-2xl p-4">
                     {tab === "upcoming" ? t("appointments.emptyUpcoming")
                       : tab === "past" ? t("appointments.emptyPast") : t("appointments.emptyCancelled")}
                   </p>
@@ -574,9 +574,9 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
 
             {/* Calendar */}
             <div className="space-y-5">
-              <div data-purpose="appointment-calendar" className="bg-white rounded-2xl border border-slate-200/90 p-5 card-shadow">
+              <div data-purpose="appointment-calendar" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200/90 p-5 card-shadow">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-slate-900">{monthLabel}</h3>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-gray-100">{monthLabel}</h3>
                   <div className="flex items-center space-x-1">
                     <button type="button" aria-label={t("appointments.previousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -595,7 +595,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                     const key = dateKey(new Date(month.getFullYear(), month.getMonth(), day));
                     const mode = busyDays.get(key);
                     let cls = "p-2 text-slate-700 rounded-lg";
-                    if (key === todayKey) cls = "p-2 rounded-lg ring-2 ring-gray-400 font-bold text-slate-900";
+                    if (key === todayKey) cls = "p-2 rounded-lg ring-2 ring-gray-400 font-bold text-slate-900 dark:text-gray-100";
                     if (mode === "in_person") cls = "p-2 rounded-lg bg-black text-white font-bold";
                     if (mode === "telehealth") cls = "p-2 rounded-lg bg-gray-200 text-black font-bold";
                     return <span key={key} data-purpose={mode ? "calendar-busy-day" : undefined} className={cls}>{day}</span>;
@@ -614,10 +614,10 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
       {/* ===== Book / Reschedule Modal ===== */}
       {modal && (
         <div data-purpose="appointment-modal" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 className="text-base font-bold text-slate-900 dark:text-gray-100">
                   {modal.mode === "reschedule" ? t("appointments.modal.rescheduleTitle", { name: appointmentTitle(modal.appointment, t) }) : t("appointments.modal.scheduleTitle")}
                 </h3>
                 <p className="text-xs text-slate-500">
@@ -645,7 +645,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                   <>
                     <div>
                       <label htmlFor="appointment-provider" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.doctor")}</label>
-                      <input id="appointment-provider" maxLength={120} value={formProvider} onChange={(e) => setFormProvider(e.target.value)} placeholder={t("appointments.modal.doctorPlaceholder")} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:bg-white focus:ring-2 focus:ring-black font-medium" />
+                      <input id="appointment-provider" maxLength={120} value={formProvider} onChange={(e) => setFormProvider(e.target.value)} placeholder={t("appointments.modal.doctorPlaceholder")} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:bg-white dark:bg-gray-800 focus:ring-2 focus:ring-black font-medium" />
                     </div>
                     <div>
                       <span className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.type")}</span>
@@ -745,7 +745,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
           aria-label={t("appointments.scheduleVisit")}
           data-purpose="appointment-fab"
           onClick={openBook}
-          className="fixed bottom-20 right-4 z-50 lg:hidden flex items-center justify-center w-12 h-12 rounded-full bg-black hover:bg-gray-800 text-white shadow-lg transition"
+          className="fixed bottom-20 right-4 z-50 lg:hidden flex items-center justify-center w-12 h-12 rounded-full bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black shadow-lg transition"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
             <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />

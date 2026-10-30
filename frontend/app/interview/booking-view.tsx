@@ -269,7 +269,9 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
     return list;
   }, [allFacilities, ownershipFilter]);
   const mapPoints: MapPoint[] = useMemo(
-    () => facilities.map((f) => ({ id: f.id, latitude: f.latitude, longitude: f.longitude, label: f.name })),
+    () => facilities
+      .filter((f) => Number.isFinite(Number(f.latitude)) && Number.isFinite(Number(f.longitude)))
+      .map((f) => ({ id: f.id, latitude: f.latitude, longitude: f.longitude, label: f.name })),
     [facilities],
   );
   const here = useMemo(() => coords, [coords]);
@@ -280,13 +282,13 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
         {/* Breadcrumbs & Welcome Hero */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
-            <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">{t("booking.title")}</h1>
+            <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-gray-100 tracking-tight">{t("booking.title")}</h1>
           </div>
         </div>
 
         <section data-purpose="manual-booking-section" className="space-y-4 pb-6">
           {/* Search and Filters Bar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 card-shadow flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl border border-slate-200 card-shadow flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div className="flex-1 relative">
               <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -360,7 +362,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
 
           {/* Directory Subhead */}
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-gray-100 flex items-center space-x-2">
               <span>{t("booking.hospitalsCenters")}</span>
               {directory && <span className="text-xs font-normal text-slate-400">({t("booking.shown", { count: facilities.length })})</span>}
             </h3>
@@ -401,14 +403,14 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
               <div
                 key={facility.id}
                 data-purpose={`hospital-${facility.id}`}
-                className="hospital-card bg-white rounded-2xl p-4 border border-slate-200 card-shadow hover:border-gray-400 transition-all flex items-center justify-between gap-3"
+                className="hospital-card bg-white dark:bg-gray-800 rounded-2xl p-4 border border-slate-200 card-shadow hover:border-gray-400 transition-all flex items-center justify-between gap-3"
               >
                 <div className="flex items-center space-x-4 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 text-red-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
                     {initials(facility.name)}
                   </div>
                   <div className="min-w-0">
-                    <h4 className="text-sm font-bold text-slate-900">{facility.name}</h4>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-gray-100">{facility.name}</h4>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-0.5 text-xs text-slate-500">
                       <span>{facility.city}</span>
                       {facility.distance_km !== null && <span>{facility.distance_km} km</span>}
@@ -455,11 +457,11 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
       {/* ===== Booking Time & Submit Modal ===== */}
       {selected && !booked && (
         <div id="booking-modal" data-purpose="booking-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
             <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div>
                 <span className="text-[11px] font-semibold text-black uppercase tracking-wider">{t("booking.modalBadge")}</span>
-                <h3 className="text-lg font-bold text-slate-900 mt-0.5">{selected.name}</h3>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-gray-100 mt-0.5">{selected.name}</h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {[selected.address, selected.city].filter(Boolean).join(", ")}
                   {selected.phone ? ` • ${selected.phone}` : ""}
@@ -619,13 +621,13 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
       {/* ===== Success Confirmation Modal ===== */}
       {selected && booked && (
         <div id="success-modal" data-purpose="success-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-center">
             <div className="w-14 h-14 rounded-full bg-gray-100 text-black flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-lg font-bold text-slate-900">{t("booking.visitBooked")}</h3>
+            <h3 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("booking.visitBooked")}</h3>
             <p className="text-xs text-slate-500 mt-1">
               {t("booking.savedPrefix", { facility: selected.name })}
               {selected.phone

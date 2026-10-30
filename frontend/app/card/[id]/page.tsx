@@ -38,7 +38,7 @@ export default function CardCheckPage() {
 
   return (
     <main className="w-full min-h-screen flex items-center justify-center py-8 px-4 bg-[#DDE9E6] text-brand-primary font-sans antialiased">
-      <div className="w-full max-w-[440px] bg-white rounded-[28px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8">
+      <div className="w-full max-w-[440px] bg-white dark:bg-gray-800 rounded-[28px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8">
         <p className="text-2xl font-extrabold tracking-tight text-brand-heading mb-1">{t("common.endod")}</p>
         <h1 className="text-sm font-medium text-brand-muted mb-6">{t("cardVerify.title")}</h1>
 

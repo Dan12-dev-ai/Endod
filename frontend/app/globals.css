@@ -1,15 +1,22 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
 
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-plus-jakarta-sans);
-  --font-serif: var(--font-newsreader);
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
 
   --color-ginkgo-dark: #0b1319;
   --color-ginkgo-navy: #0e1c27;
@@ -27,20 +34,41 @@
   --color-brand-accent: #000000;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* Dark mode disabled: DEDAN is a light-only application. */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* ===== Booking page: custom scrollbars ===== */
+/* Smooth theme transitions to avoid flicker/vibration */
+html, body {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.dark body {
+  background-color: #0a0a0a;
+  color: #e5e7eb;
+}
+.dark .bg-white { background-color: #1f2937; }
+.dark .bg-slate-50 { background-color: #111827; }
+.dark .bg-slate-100 { background-color: #1f2937; }
+.dark .bg-slate-200 { background-color: #374151; }
+.dark .bg-slate-900 { background-color: #000000; }
+.dark .text-slate-900,
+.dark .text-slate-800 { color: #f9fafb; }
+.dark .text-slate-700,
+.dark .text-slate-600 { color: #d1d5db; }
+.dark .text-slate-500,
+.dark .text-slate-400 { color: #9ca3af; }
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 { border-color: #374151; }
+.dark .bg-\[\#F6F9FA\] { background-color: #0a0a0a; }
+.dark .bg-\[\#DDE9E6\] { background-color: #111827; }
+.dark .bg-\[\#E6F8F3\] { background-color: #1f2937; }
+.dark .bg-\[\#000000\] { background-color: #000000; }
+.dark .shadow-xs,
+.dark .card-shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4); }
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -114,4 +142,25 @@ body {
 }
 .marquee-track:hover {
   animation-play-state: paused;
+}
+
+/* Drawer settings: avoid nested scroll containers */
+.drawer-settings > div {
+  flex: none !important;
+  min-height: auto !important;
+  overflow: visible !important;
+  max-width: none !important;
+}
+
+/* Simplify settings inside drawer */
+.drawer-settings section,
+.drawer-settings details {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0.5rem 0 !important;
+}
+.drawer-settings .border-b {
+  border-color: rgba(148, 163, 184, 0.2) !important;
 }

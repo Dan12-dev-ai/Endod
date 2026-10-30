@@ -7,6 +7,7 @@ import {
   BLOOD_TYPES, formatPhoneDisplay, invalidateHealthCard, splitAllergies, type ProfileForCard,
 } from "../health-card/health-card-data";
 import { useI18n, type TranslationKey } from "../lib/i18n";
+import { useTheme } from "../lib/theme";
 import { Bone, FieldBones, Skeleton } from "../components/skeleton";
 import {
   Select,
@@ -46,6 +47,8 @@ type Props = {
   onToast: (title: string, message: string) => void;
   /** The profile changed (names, phone): refresh the header and card. */
   onProfileChange: (profile: ProfileForCard) => void;
+  /** Hide section subtitles (for compact drawer usage). */
+  compact?: boolean;
 };
 
 const COUNTRIES: { value: string; labelKey: TranslationKey }[] = [
@@ -64,7 +67,7 @@ const DEFAULT_RADIUS_KM = 15;
 const RADIUS_MIN_KM = 5;
 const RADIUS_MAX_KM = 200;
 
-const inputClass = "w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-black py-2.5 px-3.5 shadow-xs text-slate-900 border";
+const inputClass = "w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-black py-2.5 px-3.5 shadow-xs text-slate-900 dark:text-gray-100 border";
 const labelClass = "block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5";
 const saveClass = "px-5 py-2.5 bg-black hover:bg-gray-800 disabled:opacity-60 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all";
 
@@ -93,14 +96,16 @@ const STRENGTH_COLORS = ["text-slate-400", "text-rose-500", "text-amber-500", "t
 const STRENGTH_BARS = ["bg-slate-200", "bg-rose-500", "bg-amber-500", "bg-black", "bg-gray-500"];
 
 /** Account settings (GET/PATCH /users/me, preferences, consent, health profile; password change). */
-export default function SettingsView({ onToast, onProfileChange }: Props) {
+export default function SettingsView({ onToast, onProfileChange, compact = false }: Props) {
   const { t } = useI18n();
+  const { theme, setTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
   // Personal information
   const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   // Phone: changed only by confirming the new number with an SMS code.
@@ -133,6 +138,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
   // section never discards unsaved edits in another.
   const applyPersonal = useCallback((p: Profile) => {
     setFirstName(p.first_name ?? "");
+    setMiddleName(p.middle_name ?? "");
     setLastName(p.last_name ?? "");
     setEmail(p.email ?? "");
   }, []);
@@ -193,7 +199,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     try {
       const updated = await api<Profile>("users/me", {
         method: "PATCH",
-        body: { first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim() || null },
+        body: { first_name: firstName.trim(), middle_name: middleName.trim() || null, last_name: lastName.trim(), email: email.trim() || null },
       });
       setProfile(updated);
       applyPersonal(updated);
@@ -363,6 +369,10 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     }
   };
 
+  const setAppearance = (value: "system" | "light" | "dark") => {
+    setTheme(value);
+  };
+
   const saveCard = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy("card");
@@ -388,12 +398,12 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
 
   if (!profile) {
     return (
-      <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto">
+      <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         <div className="max-w-5xl mx-auto py-6">
           {loadError ? <p className="text-sm text-red-600" role="alert">{loadError}</p> : (
             <Skeleton className="space-y-6" label={t("settings.loading")}>
               {[3, 2, 2].map((fields, section) => (
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-7 space-y-5" key={section}>
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 p-5 sm:p-7 space-y-5" key={section}>
                   <Bone className="h-4 w-40 rounded" />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {Array.from({ length: fields }, (_, i) => <FieldBones key={i} />)}
@@ -434,20 +444,20 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
   );
 
   return (
-    <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto">
+    <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
       <div className="max-w-5xl mx-auto space-y-6 py-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{t("settings.title")}</h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-gray-100 tracking-tight">{t("settings.title")}</h1>
             </div>
         </div>
 
         {/* Personal information */}
-        <section data-purpose="user-profile-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+        <section data-purpose="user-profile-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 cursor-pointer list-none">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{t("settings.personal.title")}</h2>
-              <p className="text-xs sm:text-sm text-slate-500">{t("settings.personal.subtitle")}</p>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.personal.title")}</h2>
+              <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.personal.subtitle")}</p>
             </div>
             <span className="self-start sm:self-auto px-3 py-1 bg-gray-50 text-gray-900 text-xs font-semibold rounded-full border border-gray-200">
               {profile.dedan_user_id}
@@ -458,6 +468,10 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
               <div>
                 <label className={labelClass} htmlFor="first-name">{t("settings.personal.firstName")}</label>
                 <input id="first-name" required maxLength={60} type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="middle-name">{t("settings.personal.middleName")}</label>
+                <input id="middle-name" maxLength={60} type="text" value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} />
               </div>
               <div>
                 <label className={labelClass} htmlFor="last-name">{t("settings.personal.lastName")}</label>
@@ -515,10 +529,10 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         </section>
 
         {/* Location */}
-        <section data-purpose="location-settings-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-900">{t("settings.location.title")}</h2>
-            <p className="text-xs sm:text-sm text-slate-500">{t("settings.location.subtitle")}</p>
+        <section data-purpose="location-settings-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="border-b border-slate-100 pb-4 cursor-pointer list-none">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.location.title")}</h2>
+            <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.location.subtitle")}</p>
           </div>
           <form onSubmit={saveLocation} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -557,12 +571,12 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                 </Select>
               </div>
             </div>
-            <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
+            <div className="bg-slate-50/80 dark:bg-gray-800/80 p-4 rounded-xl border border-slate-200 dark:border-gray-600">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700" htmlFor="radius-slider">{t("settings.location.radius")}</label>
-                <span className="text-xs font-semibold text-gray-900 bg-gray-100/70 px-2.5 py-0.5 rounded-full">{t("settings.location.within", { km: radius })}</span>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-gray-200" htmlFor="radius-slider">{t("settings.location.radius")}</label>
+                <span className="text-xs font-semibold text-gray-900 dark:text-gray-100 bg-gray-100/70 dark:bg-gray-700/70 px-2.5 py-0.5 rounded-full">{t("settings.location.within", { km: radius })}</span>
               </div>
-              <input id="radius-slider" max={RADIUS_MAX_KM} min={RADIUS_MIN_KM} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-black h-2 bg-slate-200 rounded-lg cursor-pointer" />
+              <input id="radius-slider" max={RADIUS_MAX_KM} min={RADIUS_MIN_KM} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-black h-2 bg-slate-200 dark:bg-gray-600 rounded-lg cursor-pointer" />
               <div className="flex justify-between text-[11px] text-slate-400 mt-1">
                 <span>{t("settings.location.within", { km: RADIUS_MIN_KM })}</span>
                 <span>{t("settings.location.within", { km: 100 })}</span>
@@ -575,11 +589,39 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
           </form>
         </section>
 
+        {/* Appearance */}
+        <section data-purpose="appearance-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
+          <div className="border-b border-slate-100 pb-4 mb-2 cursor-pointer list-none">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.appearance.title")}</h2>
+            <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.appearance.subtitle")}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {(["system", "light", "dark"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                data-purpose={`theme-${value}`}
+                onClick={() => {
+                  setTheme(value);
+                  void setAppearance(value);
+                }}
+                className={`px-4 py-2 rounded-xl border text-sm font-semibold transition ${
+                  theme === value
+                    ? "bg-black text-white border-black"
+                    : "bg-white dark:bg-gray-800 text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {value === "system" ? t("settings.appearance.system") : value === "light" ? t("settings.appearance.light") : t("settings.appearance.dark")}
+              </button>
+            ))}
+          </div>
+        </section>
+
         {/* Privacy & notifications */}
-        <section data-purpose="privacy-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
-          <div className="border-b border-slate-100 pb-4 mb-2">
-            <h2 className="text-lg font-bold text-slate-900">{t("settings.privacy.title")}</h2>
-            <p className="text-xs sm:text-sm text-slate-500">{t("settings.privacy.subtitle")}</p>
+        <section data-purpose="privacy-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
+          <div className="border-b border-slate-100 pb-4 mb-2 cursor-pointer list-none">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.privacy.title")}</h2>
+            <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.privacy.subtitle")}</p>
           </div>
           {toggle("consent-health", profile.consent.treatment_processing, (v) => void setConsent("treatment_processing", v),
             t("settings.privacy.consentHealth.label"), t("settings.privacy.consentHealth.hint"))}
@@ -590,10 +632,10 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         </section>
 
         {/* Password */}
-        <section data-purpose="security-settings-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-900">{t("settings.password.title")}</h2>
-            <p className="text-xs sm:text-sm text-slate-500">{t("settings.password.subtitle")}</p>
+        <section data-purpose="security-settings-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="border-b border-slate-100 pb-4 cursor-pointer list-none">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.password.title")}</h2>
+            <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.password.subtitle")}</p>
           </div>
           <form onSubmit={changePassword} className="space-y-5">
             <div>
@@ -642,11 +684,11 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         </section>
 
         {/* Digital health card */}
-        <section data-purpose="digital-card-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+        <section data-purpose="digital-card-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 cursor-pointer list-none">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{t("settings.card.title")}</h2>
-              <p className="text-xs sm:text-sm text-slate-500">{t("settings.card.subtitle")}</p>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.card.title")}</h2>
+              <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.card.subtitle")}</p>
             </div>
             <div className="flex gap-2 self-start sm:self-auto">
               <button type="button" onClick={() => setCardVisible(!cardVisible)} className="px-3.5 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-900 text-xs font-semibold border border-gray-200">

@@ -2,6 +2,7 @@ import Header from './components/header';
 import Hero from './components/hero';
 import Bottleneck from './components/bottleneck';
 import BuildLab from './components/build-lab';
+import HowItWorks from './components/how-it-works';
 import Partners from './components/partners';
 import CloudLab from './components/cloud-lab';
 import SocialProof from './components/social-proof';
@@ -16,7 +17,8 @@ export default function Home() {
       <Hero />
       <Bottleneck />
       <BuildLab />
-      <div className="h-16 bg-white" aria-hidden="true" />
+      <HowItWorks />
+      <div className="h-16 bg-white dark:bg-gray-800" aria-hidden="true" />
       <CloudLab />
       <SocialProof />
       <Pipette />

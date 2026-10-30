@@ -46,9 +46,9 @@ function MedicalRecordDetailContent() {
   const formatDate = (iso: string) => new Date(iso).toLocaleDateString(locale, { dateStyle: "medium" });
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900 px-4 py-6 sm:px-10" data-purpose="medical-record-detail">
+    <main className="min-h-screen bg-slate-50 text-slate-900 dark:text-gray-100 px-4 py-6 sm:px-10" data-purpose="medical-record-detail">
       <div className="max-w-3xl mx-auto space-y-5">
-        <Link className="text-sm font-semibold text-black hover:underline" data-purpose="back-link" href="/interview?section=followup">
+        <Link className="text-sm font-semibold text-black dark:text-white hover:underline" data-purpose="back-link" href="/interview?section=followup">
           {"← " + t("print.back")}
         </Link>
 
@@ -56,7 +56,7 @@ function MedicalRecordDetailContent() {
           <div data-purpose="record-loading">
             <Skeleton className="space-y-3" label={t("common.loading")}>
             {[0, 1, 2].map((i) => (
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2.5" key={i}>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 p-4 space-y-2.5" key={i}>
                 <Bone className="h-3 w-24 rounded" />
                 <Bone className="h-4 w-2/3 rounded" />
                 <Bone className="h-3 w-1/2 rounded" />
@@ -73,13 +73,13 @@ function MedicalRecordDetailContent() {
         )}
 
         {!loading && !error && !item && (
-          <div className="bg-white rounded-2xl border border-dashed border-slate-300 px-5 py-8 text-center" data-purpose="record-not-found">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-slate-300 px-5 py-8 text-center" data-purpose="record-not-found">
             <p className="text-sm text-slate-500">{t("history.empty")}</p>
           </div>
         )}
 
         {!loading && !error && item && (
-          <article className="bg-white rounded-2xl border border-slate-200 card-shadow overflow-hidden" data-purpose="record-card">
+          <article className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 card-shadow overflow-hidden" data-purpose="record-card">
             <header className="p-4 sm:p-5 border-b border-slate-100 space-y-2" data-purpose="record-header">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
@@ -89,7 +89,7 @@ function MedicalRecordDetailContent() {
                   {item.verified ? t("records.verified") : t("records.selfReported")}
                 </span>
               </div>
-              <h1 className="text-lg sm:text-xl font-bold text-slate-900 break-words" data-purpose="record-title">
+              <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-gray-100 break-words" data-purpose="record-title">
                 {item.title}
               </h1>
               <p className="text-xs text-slate-500">

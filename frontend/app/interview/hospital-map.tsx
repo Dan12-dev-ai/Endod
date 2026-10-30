@@ -93,7 +93,10 @@ export default function HospitalMap({
     layer.current.clearLayers();
     const bounds = L.latLngBounds([]);
     for (const point of points) {
-      const position: [number, number] = [point.latitude, point.longitude];
+      const lat = Number(point.latitude);
+      const lng = Number(point.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const position: [number, number] = [lat, lng];
       L.marker(position, {
         icon: L.divIcon({ className: "", html: HOSPITAL_PIN, iconSize: [22, 22], iconAnchor: [11, 22] }),
         title: point.label,
@@ -126,7 +129,7 @@ export default function HospitalMap({
   return (
     <div
       aria-label={t("map.label")}
-      className={`relative z-0 w-full ${fill ? "h-[60dvh] min-h-64 lg:h-[calc(100dvh-16rem)] lg:min-h-[24rem]" : "h-64 sm:h-80"} rounded-2xl overflow-hidden border border-slate-200 bg-slate-100`}
+      className={`relative z-0 w-full ${fill ? "h-[50dvh] min-h-60 lg:h-[calc(100dvh-18rem-22px)] lg:min-h-[22rem]" : "h-64 sm:h-80"} rounded-2xl overflow-hidden border border-slate-200 bg-slate-100`}
       data-purpose="hospital-map"
       ref={box}
       role="region"

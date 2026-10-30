@@ -161,7 +161,7 @@ export default function LoginPage() {
               <div className="flex items-center space-x-2.5 pt-1" data-purpose="carousel-controls">
                 <button
                   aria-label={t("login.prevQuote")}
-                  className="w-8 h-8 rounded-full bg-white/70 hover:bg-white text-brand-heading transition-colors flex items-center justify-center shadow-xs focus:outline-hidden"
+                  className="w-8 h-8 rounded-full bg-white/70 hover:bg-white dark:bg-gray-800 text-brand-heading transition-colors flex items-center justify-center shadow-xs focus:outline-hidden"
                   onClick={() => move(-1)}
                   type="button"
                 >
@@ -171,7 +171,7 @@ export default function LoginPage() {
                 </button>
                 <button
                   aria-label={t("login.nextQuote")}
-                  className="w-8 h-8 rounded-full bg-white/70 hover:bg-white text-brand-heading transition-colors flex items-center justify-center shadow-xs focus:outline-hidden"
+                  className="w-8 h-8 rounded-full bg-white/70 hover:bg-white dark:bg-gray-800 text-brand-heading transition-colors flex items-center justify-center shadow-xs focus:outline-hidden"
                   onClick={() => move(1)}
                   type="button"
                 >
@@ -224,7 +224,7 @@ export default function LoginPage() {
         {/* END: LeftColumn */}
         {/* BEGIN: RightColumn (Sign-In Card) */}
         <section className="order-1 lg:order-2 lg:col-span-6 xl:col-span-6 flex justify-end mt-6 lg:mt-0" data-purpose="login-form-card">
-          <div className="w-full max-w-[540px] bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10 lg:p-11">
+          <div className="w-full max-w-[540px] bg-white dark:bg-gray-800 rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10 lg:p-11">
             {/* Card Heading */}
             <h2 className="font-serif text-4xl sm:text-[42px] font-medium text-brand-heading tracking-tight mb-2">
               {t("login.title")}

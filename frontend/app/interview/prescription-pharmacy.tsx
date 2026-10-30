@@ -73,7 +73,7 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
   return (
     <section aria-label={t("rx.title")} className="rounded-2xl border border-gray-200 bg-gray-50/40 p-3 sm:p-4 space-y-3" data-purpose="rx-pharmacy" data-status={rx.status}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-bold text-slate-900">{t("rx.title")}</h3>
+        <h3 className="text-sm font-bold text-slate-900 dark:text-gray-100">{t("rx.title")}</h3>
         <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 border ${STATUS_STYLE[rx.status]}`} data-purpose="rx-status">
           {t(`rx.status.${rx.status}` as TranslationKey)}
         </span>
@@ -82,7 +82,7 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
       {usable && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           {rx.qr_url && (
-            <div className="mx-auto sm:mx-0 w-full max-w-[280px] aspect-square rounded-xl bg-white border border-slate-200 p-2 flex items-center justify-center">
+            <div className="mx-auto sm:mx-0 w-full max-w-[280px] aspect-square rounded-xl bg-white dark:bg-gray-800 border border-slate-200 p-2 flex items-center justify-center">
               {qr ? (
                 // eslint-disable-next-line @next/next/no-img-element -- a data URL drawn in the browser
                 <img alt={t("rx.qrAlt")} className="w-full h-full [image-rendering:pixelated]" data-purpose="rx-qr" src={qr} />
@@ -94,7 +94,7 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
           <div className="space-y-2 min-w-0">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t("rx.code")}</p>
-              <p className="text-3xl font-bold tracking-[0.2em] tabular-nums text-slate-900" data-purpose="rx-code">{rx.code}</p>
+              <p className="text-3xl font-bold tracking-[0.2em] tabular-nums text-slate-900 dark:text-gray-100" data-purpose="rx-code">{rx.code}</p>
             </div>
             <p className="text-xs text-slate-600">{t("rx.howTo")}</p>
             <p className="text-xs font-semibold text-slate-700" data-purpose="rx-expiry">{t("rx.validUntil", { date: day })}</p>
@@ -112,7 +112,7 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
           {rx.items.map((item) => {
             const medicine = medicines.get(item.item_index) ?? {};
             return (
-              <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-xl bg-white border border-slate-200 px-3 py-2" data-purpose="rx-item" data-status={item.status} key={item.item_index}>
+              <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-xl bg-white dark:bg-gray-800 border border-slate-200 px-3 py-2" data-purpose="rx-item" data-status={item.status} key={item.item_index}>
                 <span className="min-w-0 text-sm font-medium text-slate-800 break-words">
                   {[text(medicine.drug), text(medicine.dose)].filter(Boolean).join(" ") || t("rx.item.unnamed", { n: item.item_index + 1 })}
                   {item.quantity_text && <span className="block text-[11px] font-normal text-slate-500">{t("history.rx.quantity", { quantity: item.quantity_text })}</span>}

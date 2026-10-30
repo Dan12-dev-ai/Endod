@@ -127,16 +127,16 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
       <div className="w-full space-y-5 pb-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t("history.title")}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-gray-100">{t("history.title")}</h1>
             </div>
           <div className="flex flex-nowrap gap-2 overflow-x-auto sm:flex-wrap sm:items-center self-start pb-1 -mb-1">
-            <button type="button" data-purpose="add-record" onClick={() => setAdding(true)} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-black hover:bg-gray-800 text-white shadow-sm">
+            <button type="button" data-purpose="add-record" onClick={() => setAdding(true)} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black shadow-sm">
               {t("records.addVisit")}
             </button>
-            <button type="button" data-purpose="share-records" onClick={() => setSharing(true)} disabled={!items.length} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-black text-black bg-white hover:bg-gray-50 disabled:opacity-50">
+            <button type="button" data-purpose="share-records" onClick={() => setSharing(true)} disabled={!items.length} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-black dark:border-gray-400 text-black dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
               {t("history.share")}
             </button>
-            <Link data-purpose="download-records" href="/history/print" target="_blank" rel="noopener" className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-slate-200 text-slate-700 bg-white hover:bg-slate-50">
+            <Link data-purpose="download-records" href="/history/print" target="_blank" rel="noopener" className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-slate-200 text-slate-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-slate-50 dark:hover:bg-gray-700">
               {t("history.download")}
             </Link>
           </div>
@@ -153,10 +153,10 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
             { id: "stat-hospitals", label: t("history.stat.hospitals"), value: summary?.hospitals },
             { id: "stat-self", label: t("history.stat.selfReported"), value: summary?.self_reported },
           ].map((stat) => (
-            <div key={stat.id} data-purpose={stat.id} className="bg-white rounded-2xl border border-slate-200 card-shadow p-3.5">
+            <div key={stat.id} data-purpose={stat.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 card-shadow p-3.5">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{stat.label}</p>
               {data ? (
-                <p className="text-xl font-bold text-slate-900 leading-tight tabular-nums">{stat.value ?? 0}</p>
+                <p className="text-xl font-bold text-slate-900 dark:text-gray-100 leading-tight tabular-nums">{stat.value ?? 0}</p>
               ) : loadError ? (
                 <p className="text-xl font-bold text-slate-300 leading-tight">—</p>
               ) : (
@@ -167,12 +167,12 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-2xl border border-slate-200 card-shadow p-3 sm:p-4 mt-2">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 card-shadow p-3 sm:p-4 mt-2">
           <div role="tablist" aria-label={t("history.categories")} className="flex gap-2.5 overflow-x-auto -mx-1 px-1 pb-1">
             {TABS.map((item) => (
               <button
                 aria-selected={tab === item.id}
-                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-semibold border transition ${tab === item.id ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-semibold border transition ${tab === item.id ? "bg-slate-900 text-white border-slate-900" : "bg-white dark:bg-gray-800 text-slate-600 border-slate-200 hover:bg-slate-50"}`}
                 data-purpose={`history-tab-${item.id}`}
                 key={item.id}
                 onClick={() => setTab(item.id)}
@@ -193,7 +193,7 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
         {!data && !loadError ? (
           <Skeleton className="space-y-3" label={t("common.loading")}>
             {[0, 1, 2].map((i) => (
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2.5" key={i}>
+              <div className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 p-4 space-y-2.5" key={i}>
                 <Bone className="h-3 w-24 rounded" />
                 <Bone className="h-4 w-2/3 rounded" />
                 <Bone className="h-3 w-1/2 rounded" />
@@ -201,22 +201,22 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
             ))}
           </Skeleton>
         ) : data && !items.length ? (
-          <p data-purpose="history-empty" className="bg-white rounded-2xl border border-dashed border-slate-300 px-5 py-8 text-sm text-slate-500 text-center">{t("history.empty")}</p>
+          <p data-purpose="history-empty" className="bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-slate-300 px-5 py-8 text-sm text-slate-500 text-center">{t("history.empty")}</p>
         ) : data && !shown.length ? (
-          <p data-purpose="history-no-match" className="bg-white rounded-2xl border border-dashed border-slate-300 px-5 py-8 text-sm text-slate-500 text-center">{t("history.noMatch")}</p>
+          <p data-purpose="history-no-match" className="bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-slate-300 px-5 py-8 text-sm text-slate-500 text-center">{t("history.noMatch")}</p>
         ) : (
           <ul className="space-y-3" data-purpose="history-list">
             {shown.map((item) => {
               const target = `record-${item.id}`;
               return (
                 <li
-                  className={`bg-white rounded-2xl border card-shadow overflow-hidden ${highlightTarget === target ? "border-emerald-400 ring-2 ring-emerald-200" : "border-slate-200"}`}
+                  className={`bg-white dark:bg-gray-800 rounded-2xl border card-shadow overflow-hidden ${highlightTarget === target ? "border-emerald-400 ring-2 ring-emerald-200" : "border-slate-200"}`}
                   data-category={item.category}
                   data-purpose="history-item"
                   data-record={item.id}
                   key={item.id}
                 >
-                  <div className="w-full text-left p-4 flex items-start gap-3 hover:bg-slate-50/60" role="button" tabIndex={0} onClick={() => onSelectRecord?.(item.id)}>
+                  <div className="w-full text-left p-4 flex items-start gap-3 hover:bg-slate-50/60 dark:hover:bg-gray-700/60" role="button" tabIndex={0} onClick={() => onSelectRecord?.(item.id)}>
                     <span className={`mt-0.5 flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-bold ${item.kind === "hospital" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-slate-100 text-slate-500 border border-slate-200"}`} aria-hidden>
                       {t(CATEGORY_LABEL[item.category]).slice(0, 2)}
                     </span>
@@ -227,7 +227,7 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
                           {item.verified ? t("records.verified") : t("records.selfReported")}
                         </span>
                       </span>
-                      <span className="block text-sm sm:text-base font-semibold text-slate-900 mt-0.5 break-words">{item.title}</span>
+                      <span className="block text-sm sm:text-base font-semibold text-slate-900 dark:text-gray-100 mt-0.5 break-words">{item.title}</span>
                       <span className="block text-xs text-slate-500 mt-0.5">
                         {[formatDate(item.occurred_at), item.hospital_name, item.recorded_by].filter(Boolean).join(" · ")}
                       </span>
@@ -235,7 +235,7 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
                         <span className="block text-[11px] text-emerald-700 mt-1">{t(item.files.length === 1 ? "history.filesOne" : "history.filesOther", { count: item.files.length })}</span>
                       )}
                     </span>
-                    <button aria-expanded={false} className="mt-1 flex-shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50" data-purpose="record-open" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSelectRecord?.(item.id); }} type="button">
+                    <button aria-expanded={false} className="mt-1 flex-shrink-0 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:text-gray-300 hover:bg-slate-50 dark:hover:bg-gray-700" data-purpose="record-open" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSelectRecord?.(item.id); }} type="button">
                       Open
                     </button>
                   </div>

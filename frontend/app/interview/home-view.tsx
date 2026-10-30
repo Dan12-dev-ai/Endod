@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { useI18n, type TranslationKey } from "../lib/i18n";
+import { QrCode } from "lucide-react";
 import { type Appointment, appointmentTitle, formatWhen } from "./data";
 import { Bone, HealthCardBones, InlineSkeleton, Skeleton } from "../components/skeleton";
 import HealthCardView from "../health-card/card-view";
@@ -64,11 +65,22 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
   return (
     <div data-purpose="home-view" className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-5xl mx-auto space-y-6 py-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-gray-100 tracking-tight">
             {firstName ? t("home.welcomeNamed", { name: firstName }) : t("home.welcome")}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">{t("home.subtitle")}</p>
+          <button
+            type="button"
+            data-purpose="open-settings"
+            onClick={() => onNavigate("setting")}
+            className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-gray-700 hover:text-slate-900 dark:hover:text-white transition"
+            aria-label={t("interview.nav.setting")}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
 
         {/* Live: a place in today's queue, and follow-ups to book. */}
@@ -76,7 +88,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
         <FollowUpCards onBook={onBook} />
 
         {/* The card comes first: open the app, show the phone, get scanned. */}
-        <section aria-labelledby="home-card-title" className="bg-white rounded-2xl border border-slate-200 card-shadow p-4 sm:p-6" data-purpose="home-card">
+        <section aria-labelledby="home-card-title" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 card-shadow p-4 sm:p-6" data-purpose="home-card">
           <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-5 md:gap-8 items-center">
             <div className="w-full max-w-[520px] mx-auto md:mx-0">
               {card === undefined ? (
@@ -104,24 +116,22 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
             </div>
             <div className="space-y-4">
               <div>
-                <h2 id="home-card-title" className="text-lg font-bold text-slate-900">{t("home.yourCard")}</h2>
+                <h2 id="home-card-title" className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("home.yourCard")}</h2>
                 <p className="text-sm text-slate-500 mt-1">{t("home.cardHint")}</p>
               </div>
               <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row gap-2.5">
                 <button
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#000000] hover:bg-[#174640] text-white text-sm font-semibold transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black text-sm font-semibold transition disabled:opacity-50"
                   data-purpose="home-show-qr"
                   disabled={!card?.qrSvg}
                   onClick={() => setQrOpen(true)}
                   type="button"
                 >
-                  <svg aria-hidden className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2v2h-2zM18 14h2v2h-2z" strokeLinejoin="round" />
-                  </svg>
+                  <QrCode className="w-4 h-4" aria-hidden />
                   {t("home.showQr")}
                 </button>
                 <Link
-                  className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition"
+                  className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700 text-slate-700 dark:text-gray-200 text-sm font-semibold transition"
                   data-purpose="home-open-card"
                   href="/health-card"
                 >
@@ -133,23 +143,13 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
                   {t("home.healthDetailsUnavailable")}
                 </p>
               )}
-              {card && !card.medicalUnavailable && !hasMedical(card) && (
-                <button
-                  className="w-full text-left text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 hover:bg-emerald-100 transition"
-                  data-purpose="home-add-health-details"
-                  onClick={() => onNavigate("setting")}
-                  type="button"
-                >
-                  {t("home.addHealthDetails")} →
-                </button>
-              )}
             </div>
           </div>
         </section>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.nextAppointment")}</p>
+<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white dark:bg-gray-800 p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white dark:hover:!bg-gray-700 dark:hover:!border-gray-700 transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300 dark:group-hover:!text-gray-300">{t("home.nextAppointment")}</p>
             {next === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
                 <Bone className="h-5 w-2/3 rounded mt-1.5" />
@@ -157,29 +157,29 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
               </InlineSkeleton>
             ) : (
               <>
-                <h2 className="text-lg font-bold text-slate-900 mt-1 group-hover:text-white">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100 mt-1 group-hover:text-white dark:group-hover:!text-white">
                   {next ? formatWhen(next.scheduled_at, locale) : t("home.noneScheduled")}
                 </h2>
-                {next && <p className="text-sm text-emerald-600 font-medium mt-0.5 group-hover:text-emerald-300">{appointmentTitle(next, t)}</p>}
+                {next && <p className="text-sm text-emerald-600 font-medium mt-0.5 group-hover:text-emerald-300 dark:group-hover:!text-emerald-300">{appointmentTitle(next, t)}</p>}
               </>
             )}
           </button>
-<button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.notifications")}</p>
+<button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white dark:bg-gray-800 p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white dark:hover:!bg-gray-700 dark:hover:!border-gray-700 transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300 dark:group-hover:!text-gray-300">{t("home.notifications")}</p>
             {unread === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
                 <Bone className="h-5 w-1/2 rounded mt-1.5" />
               </InlineSkeleton>
             ) : (
-              <h2 className="text-lg font-bold text-slate-900 mt-1 group-hover:text-white">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100 mt-1 group-hover:text-white dark:group-hover:!text-white">
                 {unread === null ? "—" : unread === 0 ? t("home.upToDate") : t("home.unread", { count: unread })}
               </h2>
             )}
           </button>
           {SHORTCUTS.map((s) => (
-<button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
-              <h3 className="text-base font-bold text-slate-900 group-hover:text-white">{t(s.titleKey)}</h3>
-              <p className="text-sm text-slate-500 mt-1 group-hover:text-slate-300">{t(s.hintKey)}</p>
+<button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white dark:bg-gray-800 p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white dark:hover:!bg-gray-700 dark:hover:!border-gray-700 transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+              <h3 className="text-base font-bold text-slate-900 dark:text-gray-100 group-hover:text-white dark:group-hover:!text-white">{t(s.titleKey)}</h3>
+              <p className="text-sm text-slate-500 mt-1 group-hover:text-slate-300 dark:group-hover:!text-gray-300">{t(s.hintKey)}</p>
             </button>
           ))}
         </div>
@@ -231,7 +231,7 @@ function QrScreen({ card, onClose }: { card: HealthCardInfo; onClose: () => void
     <div
       aria-labelledby="qr-screen-title"
       aria-modal="true"
-      className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6"
+      className="fixed inset-0 z-[100] bg-white dark:bg-gray-800 flex flex-col items-center justify-center p-6"
       data-purpose="qr-screen"
       onClick={onClose}
       role="dialog"
@@ -244,7 +244,7 @@ function QrScreen({ card, onClose }: { card: HealthCardInfo; onClose: () => void
           role="img"
           dangerouslySetInnerHTML={{ __html: card.qrSvg }}
         />
-        <p className="text-2xl font-bold font-serif text-slate-900">{card.fullName}</p>
+        <p className="text-2xl font-bold font-serif text-slate-900 dark:text-gray-100">{card.fullName}</p>
         <p className="text-base font-semibold text-emerald-700 mt-1">{card.userId}</p>
         <button
           className="mt-8 px-8 py-3 rounded-full border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50"

@@ -99,7 +99,7 @@ test.describe('Onboarding', () => {
     const home = page.locator('[data-purpose="home-card"]');
     // Not recorded reads "—", never "none".
     await expect(home.locator('[data-purpose="allergies-value"]')).toHaveText('—');
-    await expect(home.locator('[data-purpose="home-add-health-details"]')).toBeVisible();
+    await expect(home.locator('[data-purpose="home-add-health-details"]')).toHaveCount(0);
   });
 });
 

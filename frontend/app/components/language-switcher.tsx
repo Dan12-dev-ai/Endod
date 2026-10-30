@@ -16,11 +16,11 @@ const menuId = "language-menu";
 
 const TONES = {
   dark: {
-    button: "border-neutral-400 text-white hover:bg-white hover:text-black",
+    button: "border-neutral-400 text-white hover:bg-white dark:bg-gray-800 hover:text-black",
     chevron: "text-neutral-400",
   },
   light: {
-    button: "border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900",
+    button: "border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:text-gray-100 dark:hover:bg-gray-700 dark:hover:text-white",
     chevron: "text-slate-400",
   },
 } as const;
@@ -116,7 +116,7 @@ export default function LanguageSwitcher({ tone = "dark" }: { tone?: keyof typeo
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-2 w-40 bg-white text-slate-800 rounded-md shadow-2xl py-1.5 border border-slate-100 flex flex-col text-[14px] z-50"
+          className="absolute right-0 top-full mt-2 w-40 bg-white dark:bg-gray-800 text-slate-800 rounded-md shadow-2xl py-1.5 border border-slate-100 flex flex-col text-[14px] z-50"
           aria-label={t("nav.selectLanguage")}
           data-purpose="language-menu"
           id={menuId}
@@ -126,7 +126,7 @@ export default function LanguageSwitcher({ tone = "dark" }: { tone?: keyof typeo
           {LANGUAGES.map((lang, index) => (
             <button
               aria-selected={language === lang.code}
-              className={`text-left px-4 py-2 transition-colors cursor-pointer ${language === lang.code ? "bg-slate-100 text-black font-semibold" : "hover:bg-slate-100 hover:text-black"}`}
+              className={`text-left px-4 py-2 transition-colors cursor-pointer ${language === lang.code ? "bg-slate-100 dark:bg-gray-700 text-black dark:text-white font-semibold" : "hover:bg-slate-100 dark:hover:bg-gray-700 hover:text-black dark:hover:text-white"}`}
               data-purpose={`language-option-${lang.code}`}
               key={lang.code}
               lang={lang.code}

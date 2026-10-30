@@ -32,7 +32,7 @@ export default function Footer() {
                   type="email"
                 />
               </div>
-              <button className="w-full py-2.5 px-6 border border-neutral-400 text-white hover:bg-white hover:text-black transition-all text-sm font-medium tracking-wide" type="submit">
+              <button className="w-full py-2.5 px-6 border border-neutral-400 text-white hover:bg-white dark:bg-gray-800 hover:text-black transition-all text-sm font-medium tracking-wide" type="submit">
                 {t("footer.subscribe")}
               </button>
             </form>
