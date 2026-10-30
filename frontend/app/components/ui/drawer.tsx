@@ -26,7 +26,7 @@ const DrawerContent = React.forwardRef<
 >(({ className, children, direction = "bottom", ...props }, ref) => {
   const classes =
     direction === "right"
-      ? "fixed inset-y-0 right-0 z-50 h-full w-3/4 max-w-sm flex flex-col overflow-y-auto border-l bg-white dark:bg-gray-800 " + (className || "")
+      ? "fixed inset-y-0 right-0 z-50 h-full w-[85vw] max-w-md flex flex-col overflow-y-auto border-l bg-white dark:bg-gray-800 " + (className || "")
       : "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto max-h-[85vh] flex-col overflow-y-auto rounded-t-[10px] border bg-white dark:bg-gray-800 " + (className || "");
   return (
     <DrawerPortal>
