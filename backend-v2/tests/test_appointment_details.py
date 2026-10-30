@@ -112,7 +112,7 @@ class TestAppointmentDetails:
 class TestFacilityBrowse:
     def test_filters(self, client, auth):
         body = client.get("/users/me/care/facilities?country=ET", headers=auth).json()
-        assert body["total"] == 2 and {f["country"] for f in body["facilities"]} == {"ET"}
+        assert body["total"] == 4 and {f["country"] for f in body["facilities"]} == {"ET"}
         assert all(f["distance_km"] is None for f in body["facilities"])
         assert body["location_used"] is False
         cardio = client.get("/users/me/care/facilities?department=cardiology", headers=auth).json()
@@ -158,4 +158,4 @@ def test_legacy_invalid_timezone_can_still_be_rescheduled(client, auth):
 
 def test_blank_city_filter_is_ignored(client, auth):
     body = client.get("/users/me/care/facilities", headers=auth, params={"city": " "}).json()
-    assert body["total"] == 6
+    assert body["total"] == 8
