@@ -126,7 +126,7 @@ export default function HospitalMap({
   return (
     <div
       aria-label={t("map.label")}
-      className={`relative z-0 w-full ${fill ? "h-[50dvh] min-h-60 lg:h-[calc(100dvh-18rem+8px)] lg:min-h-[22rem]" : "h-64 sm:h-80"} rounded-2xl overflow-hidden border border-slate-200 bg-slate-100`}
+      className={`relative z-0 w-full ${fill ? "h-[50dvh] min-h-60 lg:h-[calc(100dvh-18rem+4px)] lg:min-h-[22rem]" : "h-64 sm:h-80"} rounded-2xl overflow-hidden border border-slate-200 bg-slate-100`}
       data-purpose="hospital-map"
       ref={box}
       role="region"
