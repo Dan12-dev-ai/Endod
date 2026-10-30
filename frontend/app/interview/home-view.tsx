@@ -194,8 +194,15 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
       {qrOpen && card?.qrSvg && <QrScreen card={card} onClose={closeQr} />}
       <Drawer direction="right" open={settingsDrawerOpen} onOpenChange={setSettingsDrawerOpen}>
         <DrawerContent direction="right">
-          <DrawerHeader>
-            <DrawerTitle>{t("interview.nav.setting")}</DrawerTitle>
+<DrawerHeader>
+            <div className="flex items-center justify-between">
+              <DrawerTitle>{t("interview.nav.setting")}</DrawerTitle>
+              <button type="button" onClick={() => setSettingsDrawerOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-700 transition" aria-label="Close">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
           </DrawerHeader>
           <div className="drawer-settings p-4">
             <SettingsView compact onToast={() => {}} onProfileChange={() => {}} />
