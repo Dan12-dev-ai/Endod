@@ -5,13 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { useI18n, type TranslationKey } from "../lib/i18n";
-import { useTheme } from "../lib/theme";
-import { rememberLanguageChoice } from "../components/language-switcher";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "../components/ui/drawer";
 import { type Appointment, appointmentTitle, formatWhen } from "./data";
 import { Bone, HealthCardBones, InlineSkeleton, Skeleton } from "../components/skeleton";
 import HealthCardView from "../health-card/card-view";
-import SettingsView from "./settings-view";
 import { FollowUpCards, QueueCard } from "./care-cards";
 import type { BookingPreset } from "./history-data";
 import { invalidateHealthCard, loadHealthCard, type HealthCardInfo } from "../health-card/health-card-data";
@@ -32,13 +28,11 @@ const SHORTCUTS: { nav: string; titleKey: TranslationKey; hintKey: TranslationKe
 
 /** The landing screen: what is next, and where to go. */
 export default function HomeView({ firstName, onNavigate, onBook }: Props) {
-  const { t, locale, setLanguage } = useI18n();
-  const { theme, setTheme } = useTheme();
+  const { t, locale } = useI18n();
   const [next, setNext] = useState<Appointment | null | undefined>(undefined);
   // undefined while loading; null if it could not be loaded.
   const [unread, setUnread] = useState<number | null | undefined>(undefined);
   const [card, setCard] = useState<HealthCardInfo | null | undefined>(undefined);
-  const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const closeQr = useCallback(() => setQrOpen(false), []);
   const [cardAttempt, setCardAttempt] = useState(0);
@@ -77,7 +71,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
           <button
             type="button"
             data-purpose="open-settings"
-            onClick={() => setSettingsDrawerOpen(true)}
+            onClick={() => onNavigate("setting")}
             className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-gray-700 hover:text-slate-900 dark:hover:text-white transition"
             aria-label={t("interview.nav.setting")}
           >
@@ -192,23 +186,6 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
         </div>
       </div>
       {qrOpen && card?.qrSvg && <QrScreen card={card} onClose={closeQr} />}
-      <Drawer direction="right" open={settingsDrawerOpen} onOpenChange={setSettingsDrawerOpen}>
-        <DrawerContent direction="right">
-<DrawerHeader>
-            <div className="flex items-center justify-between">
-              <DrawerTitle>{t("interview.nav.setting")}</DrawerTitle>
-              <button type="button" onClick={() => setSettingsDrawerOpen(false)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-gray-200 hover:bg-slate-100 dark:hover:bg-gray-700 transition" aria-label="Close">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            </div>
-          </DrawerHeader>
-          <div className="drawer-settings p-4">
-            <SettingsView compact onToast={() => {}} onProfileChange={() => {}} />
-          </div>
-        </DrawerContent>
-      </Drawer>
     </div>
   );
 }
