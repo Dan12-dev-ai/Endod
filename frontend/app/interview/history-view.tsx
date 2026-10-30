@@ -130,10 +130,10 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-gray-100">{t("history.title")}</h1>
             </div>
           <div className="flex flex-nowrap gap-2 overflow-x-auto sm:flex-wrap sm:items-center self-start pb-1 -mb-1">
-            <button type="button" data-purpose="add-record" onClick={() => setAdding(true)} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-black hover:bg-gray-800 text-white shadow-sm">
+            <button type="button" data-purpose="add-record" onClick={() => setAdding(true)} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-black hover:bg-gray-800 dark:bg-white dark:hover:bg-gray-200 text-white dark:text-black shadow-sm">
               {t("records.addVisit")}
             </button>
-            <button type="button" data-purpose="share-records" onClick={() => setSharing(true)} disabled={!items.length} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-black text-black bg-white dark:bg-gray-800 hover:bg-gray-50 disabled:opacity-50">
+            <button type="button" data-purpose="share-records" onClick={() => setSharing(true)} disabled={!items.length} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-black dark:border-gray-400 text-black dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50">
               {t("history.share")}
             </button>
             <Link data-purpose="download-records" href="/history/print" target="_blank" rel="noopener" className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-slate-200 text-slate-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-slate-50 dark:hover:bg-gray-700">
