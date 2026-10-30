@@ -72,9 +72,9 @@ export const en = {
   "nav.accountMenu": "Account menu",
 
   // ===== Landing page =====
-  "hero.title": "Your Health, Empowered at Your Fingertips",
+  "hero.title": "Book care, carry your card, keep your records",
   "hero.body":
-    "Endod Health OS connects patients and hospitals through one trusted system. Talk to Endod AI about how you feel, discover nearby hospitals with live crowd levels, book in seconds, and arrive with a clear, consent-based record of your health.",
+    "Find verified hospitals, book visits, and arrive with a scannable health card. Your records, appointments and notifications stay with you — and you stay in control of your data.",
   "hero.cta": "Get Started",
   "hero.ctaSignedIn": "Go to your dashboard",
   "hero.facilityPrompt": "Run a clinic or hospital? Register your facility on Endod.",
@@ -92,29 +92,29 @@ export const en = {
   "bottleneck.cta": "See how it works",
   "bottleneck.imageAlt": "Patients and hospitals connected in one trusted system",
 
-  "buildLab.badge": "ENDOD AI",
-  "buildLab.title": "Understand your symptoms in minutes",
+  "buildLab.badge": "HOSPITAL BOOKING",
+  "buildLab.title": "Book the right hospital, faster",
   "buildLab.subtitle":
-    "Talk or type in Amharic or English — Endod AI listens and asks the right follow-up questions",
+    "Search by specialty and location, compare verified facilities, and book in a few taps",
   "buildLab.body":
-    "Endod AI guides a calm conversation, asks clarifying questions, and turns what you share into a clear, structured summary your doctor can read before you even arrive.",
-  "buildLab.cta": "Start a check-up",
+    "Browse partner and listed hospitals, see distance and availability, and book in-person or video visits. Cancel or reschedule anytime, with clear status and reminders.",
+  "buildLab.cta": "Find a hospital",
   "buildLab.findHospital": "Find a hospital",
-  "buildLab.imageAlt": "Endod AI symptom conversation",
+  "buildLab.imageAlt": "Hospital directory and booking",
 
-  "partners.title": "Trusted by healthcare partners",
-  "partners.subtitle": "Hospitals, clinics and health organizations we work with",
+  "partners.title": "Hospitals on Endod",
+  "partners.subtitle": "Partner and listed facilities you can book today",
 
-  "cloudLab.badge": "FOR HOSPITALS",
+  "cloudLab.badge": "HOSPITALS",
   "cloudLab.title": "Reach the right hospital, faster",
-  "cloudLab.subtitle": "An interactive map of nearby hospitals paired with live crowd levels",
+  "cloudLab.subtitle": "An interactive map of nearby hospitals",
   "cloudLab.body":
-    "Each facility reports its crowd status in real time, so you can compare wait times and book the right appointment online. Reschedule or cancel anytime, with SMS and in-app reminders to keep you on track.",
+    "See hospitals on a map, compare by specialty and distance, and book online. Get SMS and in-app reminders so you never miss a visit.",
   "cloudLab.findHospital": "Find a hospital",
   "cloudLab.hospitalPortal": "Hospital Portal",
-  "cloudLab.imageAlt": "Hospital directory and live crowd levels",
+  "cloudLab.imageAlt": "Hospital directory and map",
 
-  "socialProof.title": "ONE SYSTEM FOR PATIENTS, DOCTORS, NURSES & HOSPITAL ADMINS",
+  "socialProof.title": "ONE PLACE FOR PATIENTS, HOSPITALS AND CARE TEAMS",
   "socialProof.patients": "Patients",
   "socialProof.doctors": "Doctors",
   "socialProof.nurses": "Nurses",
@@ -122,12 +122,12 @@ export const en = {
   "socialProof.admins": "Admins",
   "socialProof.hospitals": "Hospitals",
 
-  "pipette.badge": "TREATMENT PLANS",
-  "pipette.title": "Your plan, and your history, in one place",
+  "pipette.badge": "MEDICAL RECORDS",
+  "pipette.title": "Your records, always on your phone",
   "pipette.body":
-    "Follow-up care with clear timelines, remaining drug and injection counts, and overdue alerts for you and your hospital. A single lifetime medical history travels with you across every facility — shared only with your consent.",
-  "pipette.cta": "Talk to Endod AI",
-  "pipette.imageAlt": "Patient following a treatment plan",
+    "Labs, prescriptions and files in one place. Share with a hospital for a set time, then revoke. Your digital health card travels with you.",
+  "pipette.cta": "View your records",
+  "pipette.imageAlt": "Patient viewing medical records",
 
   "socialLinks.followUs": "FOLLOW US",
 
@@ -139,10 +139,10 @@ export const en = {
   "footer.subscribed": "Subscribed successfully!",
   "footer.platform": "Platform",
   "footer.company": "Company",
-  "footer.aiSymptomAssistant": "AI Symptom Assistant",
+  "footer.aiSymptomAssistant": "Digital Health Card",
   "footer.hospitalDirectoryBooking": "Hospital Directory & Booking",
-  "footer.treatmentPlans": "Treatment Plans",
-  "footer.medicalHistory": "Medical History",
+  "footer.treatmentPlans": "Medical Records",
+  "footer.medicalHistory": "Appointments",
   "footer.consentPrivacy": "Consent & Privacy",
   "footer.forHospitals": "For Hospitals",
   "footer.about": "About",
