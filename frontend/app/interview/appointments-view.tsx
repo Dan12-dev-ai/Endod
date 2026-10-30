@@ -506,7 +506,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
             <div className="xl:col-span-2 space-y-5">
               {/* Tabs & Filters */}
               <div className="bg-white dark:bg-gray-800 p-3.5 rounded-2xl border border-slate-200/90 card-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center space-x-1 p-1 bg-slate-100 dark:bg-gray-800 rounded-xl overflow-x-auto">
+                <div className="flex items-center space-x-1 p-1 bg-slate-100 dark:bg-gray-900 rounded-xl overflow-x-auto">
                   {([
                     { id: "upcoming" as const, label: t("appointments.tabUpcoming", { count: counts.upcoming }) },
                     { id: "past" as const, label: t("appointments.tabPast", { count: counts.past }) },
@@ -517,7 +517,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                       type="button"
                       data-purpose={`appointment-tab-${t2.id}`}
                       onClick={() => setTab(t2.id)}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs whitespace-nowrap transition ${tab === t2.id ? "font-semibold bg-white dark:bg-gray-600 text-slate-800 dark:text-white shadow-xs" : "font-medium text-slate-600 dark:text-gray-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-gray-700/60"}`}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs whitespace-nowrap transition ${tab === t2.id ? "font-semibold bg-white dark:bg-gray-500 text-slate-800 dark:text-white shadow-xs" : "font-medium text-slate-600 dark:text-gray-300 bg-white/60 dark:bg-gray-700 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-gray-600/60"}`}
                     >
                       {t2.label}
                     </button>
