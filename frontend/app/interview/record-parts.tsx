@@ -56,7 +56,7 @@ export function RecordDetails({ item }: { item: HistoryItem }) {
             <ul className="space-y-2" data-purpose="medicine-list">
               {medicines.map((m, i) => (
                 <li className="rounded-xl border border-slate-200 px-3 py-2" key={i}>
-                  <p className="text-sm font-semibold text-slate-900">{[text(m.drug), text(m.dose)].filter(Boolean).join(" ")}</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-gray-100">{[text(m.drug), text(m.dose)].filter(Boolean).join(" ")}</p>
                   <p className="text-xs text-slate-600">
                     {[text(m.route), text(m.frequency), text(m.duration) ? t("history.rx.for", { duration: text(m.duration) ?? "" }) : null,
                       text(m.quantity) ? t("history.rx.quantity", { quantity: text(m.quantity) ?? "" }) : null].filter(Boolean).join(" · ")}
@@ -92,7 +92,7 @@ export function RecordDetails({ item }: { item: HistoryItem }) {
                     return (
                       <tr key={i} data-flag={flag ?? ""}>
                         <td className="py-1.5 px-1 font-medium text-slate-800">{text(r.test)}</td>
-                        <td className={`py-1.5 px-1 tabular-nums ${flag && flag !== "normal" ? "font-bold text-slate-900" : "text-slate-700"}`}>
+                        <td className={`py-1.5 px-1 tabular-nums ${flag && flag !== "normal" ? "font-bold text-slate-900 dark:text-gray-100" : "text-slate-700"}`}>
                           {[text(r.value), text(r.unit)].filter(Boolean).join(" ")}
                         </td>
                         <td className="py-1.5 px-1 text-slate-500">{text(r.reference_range)}</td>
@@ -197,9 +197,9 @@ export function FilePreview({ recordId, file, onClose }: { recordId: string; fil
   return (
     <div aria-label={t("history.file.previewTitle")} aria-modal="true" className="fixed inset-0 z-50 bg-slate-900/80 flex flex-col items-center justify-center p-4" data-purpose="file-preview" onClick={onClose} role="dialog">
       {/* eslint-disable-next-line @next/next/no-img-element -- a private file from the app's own route, not an optimisable asset */}
-      <img alt={file.filename} className="max-w-full max-h-[80vh] rounded-lg bg-white" onClick={(e) => e.stopPropagation()} src={fileUrl(recordId, file.file_id)} />
+      <img alt={file.filename} className="max-w-full max-h-[80vh] rounded-lg bg-white dark:bg-gray-800" onClick={(e) => e.stopPropagation()} src={fileUrl(recordId, file.file_id)} />
       <div className="mt-3 flex gap-2">
-        <a className="px-4 py-2 rounded-xl bg-white text-slate-900 text-sm font-semibold" download={file.filename} href={fileUrl(recordId, file.file_id, true)} onClick={(e) => e.stopPropagation()}>
+        <a className="px-4 py-2 rounded-xl bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 text-sm font-semibold" download={file.filename} href={fileUrl(recordId, file.file_id, true)} onClick={(e) => e.stopPropagation()}>
           {t("history.file.download")}
         </a>
         <button className="px-4 py-2 rounded-xl border border-white/60 text-white text-sm font-semibold" onClick={onClose} type="button">

@@ -66,7 +66,7 @@ const DEFAULT_RADIUS_KM = 15;
 const RADIUS_MIN_KM = 5;
 const RADIUS_MAX_KM = 200;
 
-const inputClass = "w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-black py-2.5 px-3.5 shadow-xs text-slate-900 border";
+const inputClass = "w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-black py-2.5 px-3.5 shadow-xs text-slate-900 dark:text-gray-100 border";
 const labelClass = "block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5";
 const saveClass = "px-5 py-2.5 bg-black hover:bg-gray-800 disabled:opacity-60 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all";
 
@@ -415,7 +415,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
           {loadError ? <p className="text-sm text-red-600" role="alert">{loadError}</p> : (
             <Skeleton className="space-y-6" label={t("settings.loading")}>
               {[3, 2, 2].map((fields, section) => (
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-7 space-y-5" key={section}>
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 p-5 sm:p-7 space-y-5" key={section}>
                   <Bone className="h-4 w-40 rounded" />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {Array.from({ length: fields }, (_, i) => <FieldBones key={i} />)}
@@ -460,15 +460,15 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       <div className="max-w-5xl mx-auto space-y-6 py-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{t("settings.title")}</h1>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-gray-100 tracking-tight">{t("settings.title")}</h1>
             </div>
         </div>
 
         {/* Personal information */}
-        <section data-purpose="user-profile-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+        <section data-purpose="user-profile-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{t("settings.personal.title")}</h2>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.personal.title")}</h2>
               <p className="text-xs sm:text-sm text-slate-500">{t("settings.personal.subtitle")}</p>
             </div>
             <span className="self-start sm:self-auto px-3 py-1 bg-gray-50 text-gray-900 text-xs font-semibold rounded-full border border-gray-200">
@@ -541,9 +541,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         </section>
 
         {/* Location */}
-        <section data-purpose="location-settings-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+        <section data-purpose="location-settings-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-900">{t("settings.location.title")}</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.location.title")}</h2>
             <p className="text-xs sm:text-sm text-slate-500">{t("settings.location.subtitle")}</p>
           </div>
           <form onSubmit={saveLocation} className="space-y-5">
@@ -602,9 +602,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         </section>
 
         {/* Appearance */}
-        <section data-purpose="appearance-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
+        <section data-purpose="appearance-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
           <div className="border-b border-slate-100 pb-4 mb-2">
-            <h2 className="text-lg font-bold text-slate-900">{t("settings.appearance.title")}</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.appearance.title")}</h2>
             <p className="text-xs sm:text-sm text-slate-500">{t("settings.appearance.subtitle")}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -620,7 +620,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                 className={`px-4 py-2 rounded-xl border text-sm font-semibold transition ${
                   profile.preferences.theme === value
                     ? "bg-black text-white border-black"
-                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                    : "bg-white dark:bg-gray-800 text-slate-700 border-slate-200 hover:bg-slate-50"
                 }`}
               >
                 {value === "system" ? t("settings.appearance.system") : value === "light" ? t("settings.appearance.light") : t("settings.appearance.dark")}
@@ -630,9 +630,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         </section>
 
         {/* Privacy & notifications */}
-        <section data-purpose="privacy-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
+        <section data-purpose="privacy-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
           <div className="border-b border-slate-100 pb-4 mb-2">
-            <h2 className="text-lg font-bold text-slate-900">{t("settings.privacy.title")}</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.privacy.title")}</h2>
             <p className="text-xs sm:text-sm text-slate-500">{t("settings.privacy.subtitle")}</p>
           </div>
           {toggle("consent-health", profile.consent.treatment_processing, (v) => void setConsent("treatment_processing", v),
@@ -644,9 +644,9 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         </section>
 
         {/* Password */}
-        <section data-purpose="security-settings-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+        <section data-purpose="security-settings-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
           <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-900">{t("settings.password.title")}</h2>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.password.title")}</h2>
             <p className="text-xs sm:text-sm text-slate-500">{t("settings.password.subtitle")}</p>
           </div>
           <form onSubmit={changePassword} className="space-y-5">
@@ -696,10 +696,10 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
         </section>
 
         {/* Digital health card */}
-        <section data-purpose="digital-card-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+        <section data-purpose="digital-card-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{t("settings.card.title")}</h2>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.card.title")}</h2>
               <p className="text-xs sm:text-sm text-slate-500">{t("settings.card.subtitle")}</p>
             </div>
             <div className="flex gap-2 self-start sm:self-auto">

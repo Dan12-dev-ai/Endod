@@ -65,7 +65,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
     <div data-purpose="home-view" className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-5xl mx-auto space-y-6 py-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-gray-100 tracking-tight">
             {firstName ? t("home.welcomeNamed", { name: firstName }) : t("home.welcome")}
           </h1>
         </div>
@@ -75,7 +75,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
         <FollowUpCards onBook={onBook} />
 
         {/* The card comes first: open the app, show the phone, get scanned. */}
-        <section aria-labelledby="home-card-title" className="bg-white rounded-2xl border border-slate-200 card-shadow p-4 sm:p-6" data-purpose="home-card">
+        <section aria-labelledby="home-card-title" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 card-shadow p-4 sm:p-6" data-purpose="home-card">
           <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-5 md:gap-8 items-center">
             <div className="w-full max-w-[520px] mx-auto md:mx-0">
               {card === undefined ? (
@@ -103,7 +103,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
             </div>
             <div className="space-y-4">
               <div>
-                <h2 id="home-card-title" className="text-lg font-bold text-slate-900">{t("home.yourCard")}</h2>
+                <h2 id="home-card-title" className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("home.yourCard")}</h2>
                 <p className="text-sm text-slate-500 mt-1">{t("home.cardHint")}</p>
               </div>
               <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row gap-2.5">
@@ -137,7 +137,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
         </section>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white dark:bg-gray-800 p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.nextAppointment")}</p>
             {next === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
@@ -146,28 +146,28 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
               </InlineSkeleton>
             ) : (
               <>
-                <h2 className="text-lg font-bold text-slate-900 mt-1 group-hover:text-white">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100 mt-1 group-hover:text-white">
                   {next ? formatWhen(next.scheduled_at, locale) : t("home.noneScheduled")}
                 </h2>
                 {next && <p className="text-sm text-emerald-600 font-medium mt-0.5 group-hover:text-emerald-300">{appointmentTitle(next, t)}</p>}
               </>
             )}
           </button>
-<button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+<button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white dark:bg-gray-800 p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.notifications")}</p>
             {unread === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
                 <Bone className="h-5 w-1/2 rounded mt-1.5" />
               </InlineSkeleton>
             ) : (
-              <h2 className="text-lg font-bold text-slate-900 mt-1 group-hover:text-white">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100 mt-1 group-hover:text-white">
                 {unread === null ? "—" : unread === 0 ? t("home.upToDate") : t("home.unread", { count: unread })}
               </h2>
             )}
           </button>
           {SHORTCUTS.map((s) => (
-<button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
-              <h3 className="text-base font-bold text-slate-900 group-hover:text-white">{t(s.titleKey)}</h3>
+<button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white dark:bg-gray-800 p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+              <h3 className="text-base font-bold text-slate-900 dark:text-gray-100 group-hover:text-white">{t(s.titleKey)}</h3>
               <p className="text-sm text-slate-500 mt-1 group-hover:text-slate-300">{t(s.hintKey)}</p>
             </button>
           ))}
@@ -220,7 +220,7 @@ function QrScreen({ card, onClose }: { card: HealthCardInfo; onClose: () => void
     <div
       aria-labelledby="qr-screen-title"
       aria-modal="true"
-      className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6"
+      className="fixed inset-0 z-[100] bg-white dark:bg-gray-800 flex flex-col items-center justify-center p-6"
       data-purpose="qr-screen"
       onClick={onClose}
       role="dialog"
@@ -233,7 +233,7 @@ function QrScreen({ card, onClose }: { card: HealthCardInfo; onClose: () => void
           role="img"
           dangerouslySetInnerHTML={{ __html: card.qrSvg }}
         />
-        <p className="text-2xl font-bold font-serif text-slate-900">{card.fullName}</p>
+        <p className="text-2xl font-bold font-serif text-slate-900 dark:text-gray-100">{card.fullName}</p>
         <p className="text-base font-semibold text-emerald-700 mt-1">{card.userId}</p>
         <button
           className="mt-8 px-8 py-3 rounded-full border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50"

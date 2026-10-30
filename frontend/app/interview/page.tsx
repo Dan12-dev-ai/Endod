@@ -162,7 +162,7 @@ export default function Interview() {
   return (
     <div className="h-screen bg-[#F6F9FA] text-slate-800 font-sans antialiased flex flex-col overflow-hidden pb-16 lg:pb-0">
       {/* ===== Main Header ===== */}
-      <header className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
+      <header className="bg-white dark:bg-gray-800 border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center space-x-3 sm:space-x-6">
           <button
             type="button"
@@ -215,7 +215,7 @@ export default function Interview() {
             type="button"
             data-purpose="sign-out"
             onClick={() => void logout()}
-            className="whitespace-nowrap px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-50 rounded-lg transition"
+            className="whitespace-nowrap px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-gray-100 border border-slate-200 hover:bg-slate-50 rounded-lg transition"
           >
             {t("interview.signOut")}
           </button>
@@ -235,7 +235,7 @@ export default function Interview() {
       {/* ===== Body Content ===== */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* ===== Sidebar ===== */}
-<aside className={`hidden fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out flex-col justify-between p-4 flex-shrink-0 shadow-2xl ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"} ${desktopSidebarOpen ? "lg:static lg:w-64 lg:translate-x-0 lg:flex lg:shadow-none" : "lg:hidden"}`}>
+<aside className={`hidden fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-gray-800 border-r border-slate-200 transform transition-transform duration-300 ease-in-out flex-col justify-between p-4 flex-shrink-0 shadow-2xl ${mobileSidebarOpen ? "translate-x-0" : "-translate-x-full"} ${desktopSidebarOpen ? "lg:static lg:w-64 lg:translate-x-0 lg:flex lg:shadow-none" : "lg:hidden"}`}>
           <div className="flex items-center justify-between pb-3 mb-2 border-b border-slate-100 lg:hidden">
             <div className="flex items-center space-x-2.5">
               <div className="w-8 h-8 rounded-full bg-teal-500 flex items-center justify-center text-white shadow-sm">
@@ -245,7 +245,7 @@ export default function Interview() {
               </div>
               <div>
                 <div className="flex items-baseline space-x-1 leading-none">
-                  <span className="text-base font-black tracking-tight text-slate-900">ENDOD</span>
+                  <span className="text-base font-black tracking-tight text-slate-900 dark:text-gray-100">ENDOD</span>
                   <span className="text-base font-bold text-teal-600">Health</span>
                 </div>
                 <span className="text-[10px] font-medium text-teal-700 block tracking-tight">{t("interview.yourAiDoctor")}</span>
@@ -273,7 +273,7 @@ export default function Interview() {
                   className="flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-slate-700 hover:text-black hover:bg-slate-50 transition-colors text-sm font-medium cursor-pointer"
                 >
                   {item.icon}
-                  <span className={isActive ? "text-slate-900 font-semibold" : undefined}>{t(item.labelKey)}</span>
+                  <span className={isActive ? "text-slate-900 dark:text-gray-100 font-semibold" : undefined}>{t(item.labelKey)}</span>
                 </a>
               );
             })}
@@ -285,7 +285,7 @@ export default function Interview() {
                   <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
-              <h4 className="text-xs font-bold text-slate-900 leading-snug">{t("interview.betterHealth")}</h4>
+              <h4 className="text-xs font-bold text-slate-900 dark:text-gray-100 leading-snug">{t("interview.betterHealth")}</h4>
               <p className="text-[11px] text-slate-500 mt-1 leading-normal">{t("interview.betterHealthBody")}</p>
             </div>
           </div>

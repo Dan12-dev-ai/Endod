@@ -16,7 +16,7 @@ export default function Home() {
       <Hero />
       <Bottleneck />
       <BuildLab />
-      <div className="h-16 bg-white" aria-hidden="true" />
+      <div className="h-16 bg-white dark:bg-gray-800" aria-hidden="true" />
       <CloudLab />
       <SocialProof />
       <Pipette />

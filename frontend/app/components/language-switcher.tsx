@@ -16,11 +16,11 @@ const menuId = "language-menu";
 
 const TONES = {
   dark: {
-    button: "border-neutral-400 text-white hover:bg-white hover:text-black",
+    button: "border-neutral-400 text-white hover:bg-white dark:bg-gray-800 hover:text-black",
     chevron: "text-neutral-400",
   },
   light: {
-    button: "border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900",
+    button: "border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 dark:text-gray-100",
     chevron: "text-slate-400",
   },
 } as const;
@@ -116,7 +116,7 @@ export default function LanguageSwitcher({ tone = "dark" }: { tone?: keyof typeo
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-2 w-40 bg-white text-slate-800 rounded-md shadow-2xl py-1.5 border border-slate-100 flex flex-col text-[14px] z-50"
+          className="absolute right-0 top-full mt-2 w-40 bg-white dark:bg-gray-800 text-slate-800 rounded-md shadow-2xl py-1.5 border border-slate-100 flex flex-col text-[14px] z-50"
           aria-label={t("nav.selectLanguage")}
           data-purpose="language-menu"
           id={menuId}

@@ -67,11 +67,11 @@ export function AddVisitModal({ onClose, onSaved, onOpenSettings }: {
   const input = "w-full text-sm rounded-xl border border-slate-200 px-3 py-2";
   return (
     <div data-purpose="record-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div aria-labelledby="record-modal-title" aria-modal="true" role="dialog" className="relative bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
+      <div aria-labelledby="record-modal-title" aria-modal="true" role="dialog" className="relative bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
         <button type="button" onClick={onClose} aria-label="Close" className="absolute top-3 right-3 p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
-        <h3 id="record-modal-title" className="text-lg font-bold text-slate-900 pr-8">{t("records.modal.title")}</h3>
+        <h3 id="record-modal-title" className="text-lg font-bold text-slate-900 dark:text-gray-100 pr-8">{t("records.modal.title")}</h3>
         <p className="text-xs text-slate-500 mt-0.5">{t("records.modal.subtitle")}</p>
         <form onSubmit={submit} className="space-y-3 mt-4">
           <div className="grid grid-cols-2 gap-3">
@@ -190,8 +190,8 @@ export function ShareModal({ items, onClose, onShared }: {
 
   return (
     <div data-purpose="share-modal" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div aria-labelledby="share-modal-title" aria-modal="true" role="dialog" className="bg-white rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
-        <h3 id="share-modal-title" className="text-lg font-bold text-slate-900">{t("share.title")}</h3>
+      <div aria-labelledby="share-modal-title" aria-modal="true" role="dialog" className="bg-white dark:bg-gray-800 rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
+        <h3 id="share-modal-title" className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("share.title")}</h3>
         <p className="text-xs text-slate-500 mt-0.5">{t("share.subtitle")}</p>
         <form onSubmit={submit} className="space-y-4 mt-4">
           <fieldset>
@@ -224,7 +224,7 @@ export function ShareModal({ items, onClose, onShared }: {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label htmlFor="share-hospital" className="block text-xs font-semibold text-slate-700 mb-1">{t("share.hospital")}</label>
-              <select id="share-hospital" value={hospitalId} onChange={(e) => setHospitalId(e.target.value)} disabled={!hospitals} className="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 bg-white">
+              <select id="share-hospital" value={hospitalId} onChange={(e) => setHospitalId(e.target.value)} disabled={!hospitals} className="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 bg-white dark:bg-gray-800">
                 <option value="">{t("share.chooseHospital")}</option>
                 {(hospitals ?? []).map((h) => (
                   <option key={h.hospital_id} value={h.hospital_id}>
@@ -275,8 +275,8 @@ export function SharesList({ shares, onChanged, onToast }: {
   };
 
   return (
-    <section aria-labelledby="shares-title" className="bg-white rounded-2xl border border-slate-200 card-shadow p-4 sm:p-5" data-purpose="shares">
-      <h2 id="shares-title" className="text-sm font-bold text-slate-900">{t("share.listTitle")}</h2>
+    <section aria-labelledby="shares-title" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 card-shadow p-4 sm:p-5" data-purpose="shares">
+      <h2 id="shares-title" className="text-sm font-bold text-slate-900 dark:text-gray-100">{t("share.listTitle")}</h2>
       {shares === null ? (
         <Skeleton className="mt-3" label={t("common.loading")}>
           <RowBones />
@@ -288,7 +288,7 @@ export function SharesList({ shares, onChanged, onToast }: {
           {shares.map((share) => (
             <li className="py-3 flex flex-col sm:flex-row sm:items-center gap-2 justify-between" data-purpose="share" data-status={share.status} key={share.share_id}>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">{share.hospital_name}</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-gray-100">{share.hospital_name}</p>
                 <p className="text-xs text-slate-500">
                   {[t(share.record_count === 1 ? "share.recordsOne" : "share.recordsOther", { count: share.record_count }),
                     share.expires_at ? t("share.untilDate", { date: new Date(share.expires_at).toLocaleDateString(locale, { dateStyle: "medium" }) }) : t("share.noEnd"),

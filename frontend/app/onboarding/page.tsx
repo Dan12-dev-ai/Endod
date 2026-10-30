@@ -264,7 +264,7 @@ export default function OnboardingPage() {
       data-purpose="page-wrapper"
     >
       <div className="w-full max-w-[560px]">
-        <div className="bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10">
+        <div className="bg-white dark:bg-gray-800 rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10">
           {/* Brand + Progress */}
           <div className="mb-7" data-purpose="brand-logo">
             <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading mb-5">{t("common.endod")}</h1>
@@ -368,7 +368,7 @@ export default function OnboardingPage() {
                           className={`shrink-0 mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                             selected
                               ? "border-[#000000] bg-[#000000]"
-                              : "border-[#B6C4C3] bg-white"
+                              : "border-[#B6C4C3] bg-white dark:bg-gray-800"
                           }`}
                         >
                           {selected && (

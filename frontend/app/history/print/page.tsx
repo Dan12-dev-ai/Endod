@@ -38,7 +38,7 @@ export default function PrintRecordsPage() {
   const name = profile ? [profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(" ") || profile.dedan_user_id : "";
 
   return (
-    <main className="min-h-screen bg-white text-slate-900 px-4 py-6 sm:px-10 print:p-0" data-purpose="print-records">
+    <main className="min-h-screen bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 px-4 py-6 sm:px-10 print:p-0" data-purpose="print-records">
       <div className="max-w-3xl mx-auto">
         <div className="flex flex-wrap items-center justify-between gap-3 print:hidden mb-6">
           <Link href="/interview" className="text-sm font-semibold text-emerald-700 hover:underline">← {t("print.back")}</Link>

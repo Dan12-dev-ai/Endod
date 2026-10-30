@@ -62,7 +62,7 @@ export function QueueCard() {
       {entries.map((entry) => (
         <div
           aria-live="polite"
-          className={`rounded-2xl border p-4 sm:p-5 card-shadow ${entry.status === "called" ? "bg-emerald-600 border-emerald-700 text-white" : "bg-white border-emerald-200"}`}
+          className={`rounded-2xl border p-4 sm:p-5 card-shadow ${entry.status === "called" ? "bg-emerald-600 border-emerald-700 text-white" : "bg-white dark:bg-gray-800 border-emerald-200"}`}
           data-purpose="queue-card"
           key={entry.entry_id}
         >
@@ -76,7 +76,7 @@ export function QueueCard() {
                 <p className="text-lg sm:text-xl font-bold mt-1" data-purpose="queue-called">{t("queue.called")}</p>
               ) : (
                 <>
-                  <p className="text-lg sm:text-xl font-bold text-slate-900 mt-1" data-purpose="queue-position">
+                  <p className="text-lg sm:text-xl font-bold text-slate-900 dark:text-gray-100 mt-1" data-purpose="queue-position">
                     {t("queue.position", { position: entry.position })}
                   </p>
                   <p className="text-sm text-slate-600" data-purpose="queue-ahead">
@@ -90,7 +90,7 @@ export function QueueCard() {
             </div>
             <div className={`text-center rounded-xl px-3 py-2 flex-shrink-0 ${entry.status === "called" ? "bg-white/15" : "bg-emerald-50 border border-emerald-100"}`}>
               <p className={`text-[10px] font-semibold uppercase ${entry.status === "called" ? "text-emerald-50" : "text-emerald-700"}`}>{t("queue.ticketLabel")}</p>
-              <p className={`text-2xl font-extrabold tabular-nums ${entry.status === "called" ? "text-white" : "text-slate-900"}`}>{entry.ticket}</p>
+              <p className={`text-2xl font-extrabold tabular-nums ${entry.status === "called" ? "text-white" : "text-slate-900 dark:text-gray-100"}`}>{entry.ticket}</p>
             </div>
           </div>
         </div>
@@ -116,8 +116,8 @@ export function FollowUpCards({ onBook, highlight }: { onBook: (preset: BookingP
 
   if (!followUps.length) return null;
   return (
-    <section aria-labelledby="follow-ups-title" className="bg-white rounded-2xl border border-amber-200 card-shadow p-4 sm:p-5" data-purpose="follow-ups">
-      <h2 id="follow-ups-title" className="text-sm font-bold text-slate-900">{t("followUp.title")}</h2>
+    <section aria-labelledby="follow-ups-title" className="bg-white dark:bg-gray-800 rounded-2xl border border-amber-200 card-shadow p-4 sm:p-5" data-purpose="follow-ups">
+      <h2 id="follow-ups-title" className="text-sm font-bold text-slate-900 dark:text-gray-100">{t("followUp.title")}</h2>
       <p className="text-xs text-slate-500 mt-0.5">{t("followUp.hint")}</p>
       <ul className="mt-3 divide-y divide-slate-100">
         {followUps.map((f) => (
@@ -127,7 +127,7 @@ export function FollowUpCards({ onBook, highlight }: { onBook: (preset: BookingP
             key={f.follow_up_id}
           >
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-900">{formatDay(f.follow_up_on, locale)}</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-gray-100">{formatDay(f.follow_up_on, locale)}</p>
               <p className="text-xs text-slate-600 truncate">
                 {f.hospital_name}
                 {f.doctor_name ? ` · ${t("followUp.with", { doctor: f.doctor_name })}` : ""}

@@ -109,7 +109,7 @@ export default function PwaInstallButton() {
             setOpen(true);
           }
         }}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-neutral-400 text-white hover:bg-white hover:text-black transition-colors"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-neutral-400 text-white hover:bg-white dark:bg-gray-800 hover:text-black transition-colors"
         aria-label="Install app"
         data-purpose="pwa-install"
         data-testid="install-app"
@@ -133,11 +133,11 @@ export default function PwaInstallButton() {
           onClick={() => setOpen(false)}
         >
           <div
-            className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200"
+            className="bg-white dark:bg-gray-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3 mb-3">
-              <h3 id="pwa-install-popup-title" className="text-lg font-bold text-slate-900">
+              <h3 id="pwa-install-popup-title" className="text-lg font-bold text-slate-900 dark:text-gray-100">
                 Install Endod Health
               </h3>
               <button

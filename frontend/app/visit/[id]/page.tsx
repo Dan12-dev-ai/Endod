@@ -85,7 +85,7 @@ export default function VisitPage() {
       {error ? (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4" data-purpose="visit-error" role="alert">
           <p className="text-base font-semibold">{error}</p>
-          <a className="px-4 py-2 rounded-xl bg-white text-slate-900 text-sm font-semibold" href="/interview">{t("visit.back")}</a>
+          <a className="px-4 py-2 rounded-xl bg-white dark:bg-gray-800 text-slate-900 dark:text-gray-100 text-sm font-semibold" href="/interview">{t("visit.back")}</a>
         </div>
       ) : state === "ended" ? (
         <div className="flex-1 flex items-center justify-center p-6 text-center" data-purpose="visit-ended">

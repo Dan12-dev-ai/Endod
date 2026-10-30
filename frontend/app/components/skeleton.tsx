@@ -41,7 +41,7 @@ export function InlineSkeleton({ label, children }: { label: string; children: R
 /** A white card with a title line and `lines` lines of text. */
 export function CardBones({ lines = 2, className = "" }: { lines?: number; className?: string }) {
   return (
-    <div className={`bg-white rounded-2xl border border-slate-200 p-5 space-y-3 ${className}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 p-5 space-y-3 ${className}`}>
       <Bone className="h-3 w-1/3 rounded" />
       {Array.from({ length: lines }, (_, i) => (
         <Bone className={`h-3 rounded ${i === lines - 1 ? "w-1/2" : "w-5/6"}`} key={i} />
@@ -53,7 +53,7 @@ export function CardBones({ lines = 2, className = "" }: { lines?: number; class
 /** A row like an appointment, notification or hospital: icon, two lines, an action. */
 export function RowBones({ className = "" }: { className?: string }) {
   return (
-    <div className={`bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-4 ${className}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 p-4 flex items-center gap-4 ${className}`}>
       <Bone className="w-10 h-10 rounded-xl flex-shrink-0" />
       <div className="flex-1 space-y-2">
         <Bone className="h-3.5 w-2/3 rounded" />
@@ -98,7 +98,7 @@ export function HealthCardBones({ className = "" }: { className?: string }) {
 export function AuthPageSkeleton({ label }: { label: string }) {
   return (
     <main className="w-full min-h-screen flex items-center justify-center py-8 px-4 bg-[#DDE9E6]">
-      <Skeleton className="w-full max-w-[460px] bg-white rounded-[32px] border border-slate-100 p-8 sm:p-10 space-y-6" label={label}>
+      <Skeleton className="w-full max-w-[460px] bg-white dark:bg-gray-800 rounded-[32px] border border-slate-100 p-8 sm:p-10 space-y-6" label={label}>
         <Bone className="h-6 w-28 rounded" />
         <Bone className="h-8 w-3/4 rounded-lg" />
         <FieldBones />

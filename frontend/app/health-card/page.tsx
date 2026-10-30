@@ -49,7 +49,7 @@ export default function HealthCardPage() {
           {loadError ? (
             <p className="text-sm text-red-600" role="alert">{loadError}</p>
           ) : (
-          <Skeleton className="bg-white rounded-[32px] border border-slate-100 p-6 sm:p-10 space-y-8" label={t("common.loading")}>
+          <Skeleton className="bg-white dark:bg-gray-800 rounded-[32px] border border-slate-100 p-6 sm:p-10 space-y-8" label={t("common.loading")}>
             <HealthCardBones />
             <div className="space-y-3 flex flex-col items-center">
               <Bone className="h-5 w-44 rounded" />
@@ -284,7 +284,7 @@ export default function HealthCardPage() {
         {/* ===== Digital Health Card ===== */}
         <div
           ref={cardRef}
-          className="bg-white rounded-[32px] shadow-xl shadow-teal-950/10 border border-slate-100 p-3 sm:p-10 mb-8"
+          className="bg-white dark:bg-gray-800 rounded-[32px] shadow-xl shadow-teal-950/10 border border-slate-100 p-3 sm:p-10 mb-8"
           data-purpose="health-card-wrapper"
         >
           <div className="mb-8">

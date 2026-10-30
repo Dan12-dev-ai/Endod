@@ -33,9 +33,9 @@ export default function Pipette() {
           </p>
           {/* CTA Button */}
           <div>
-            <a className="inline-flex items-center gap-3.5 px-6 py-2.5 rounded-full border border-slate-900 bg-white/80 hover:bg-slate-900 hover:text-white text-slate-900 text-sm font-medium transition shadow-sm group" href="/interview">
+            <a className="inline-flex items-center gap-3.5 px-6 py-2.5 rounded-full border border-slate-900 bg-white/80 hover:bg-slate-900 hover:text-white text-slate-900 dark:text-gray-100 text-sm font-medium transition shadow-sm group" href="/interview">
               <span>{t("pipette.cta")}</span>
-              <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center group-hover:bg-white group-hover:text-black">
+              <span className="w-5 h-5 rounded-full bg-slate-900 text-white flex items-center justify-center group-hover:bg-white dark:bg-gray-800 group-hover:text-black">
                 <svg className="w-3 h-3 ml-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" />
                 </svg>

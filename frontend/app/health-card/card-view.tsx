@@ -96,7 +96,7 @@ export default function HealthCardView({ card }: { card: HealthCardInfo }) {
 
           {card.qrSvg && (
             <div
-              className="shrink-0 bg-white rounded-lg flex items-center justify-center"
+              className="shrink-0 bg-white dark:bg-gray-800 rounded-lg flex items-center justify-center"
               style={{ padding: "clamp(4px, 1.4cqi, 10px)" }}
               data-purpose="qr-code"
             >
