@@ -12,14 +12,19 @@ import type { BookingPreset } from "./history-data";
 import SettingsView from "./settings-view";
 import EmergencyPanel from "./emergency-panel";
 import { api, logout } from "../lib/api";
-import { isLanguage, useI18n, type TranslationKey } from "../lib/i18n";
+import { isLanguage, useI18n, type TranslationKey, LANGUAGES } from "../lib/i18n";
+import { useTheme } from "../lib/theme";
+import { rememberLanguageChoice } from "../components/language-switcher";
+import { Drawer } from "../components/ui/drawer";
 
 export default function Interview() {
   const { t, language, setLanguage } = useI18n();
+  const { theme, setTheme } = useTheme();
   const setAccountLanguage = (saved: Parameters<typeof setLanguage>[0]) => {
     if (saved !== language) setLanguage(saved);
   };
   const [activeNav, setActiveNav] = useState("home");
+  const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
   const restoredNavRef = useRef(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
@@ -214,10 +219,7 @@ export default function Interview() {
           <button
             type="button"
             data-purpose="open-settings"
-            onClick={() => {
-              setHighlightTarget(null);
-              navigateTo("setting");
-            }}
+            onClick={() => setSettingsDrawerOpen(true)}
             className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-gray-700 hover:text-slate-900 dark:hover:text-white transition"
             aria-label={t("interview.nav.setting")}
           >
@@ -238,6 +240,49 @@ export default function Interview() {
       </header>
 
       {emergencyOpen && <EmergencyPanel onClose={closeEmergency} />}
+
+      <Drawer open={settingsDrawerOpen} onClose={() => setSettingsDrawerOpen(false)} title={t("interview.nav.setting")}>
+        <details className="group border border-slate-200 dark:border-gray-700 rounded-xl" open={false}>
+          <summary className="cursor-pointer list-none px-4 py-3 font-semibold text-slate-800 dark:text-gray-100 flex items-center justify-between">
+            {t("settings.appearance.title")}
+            <span className="text-slate-400 group-open:rotate-180 transition">▾</span>
+          </summary>
+          <div className="px-4 pb-4 flex items-center gap-2 flex-wrap">
+            {(["system", "light", "dark"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTheme(value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${theme === value ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white" : "bg-white dark:bg-gray-800 text-slate-700 dark:text-gray-200 border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700"}`}
+              >
+                {value === "system" ? t("settings.appearance.system") : value === "light" ? t("settings.appearance.light") : t("settings.appearance.dark")}
+              </button>
+            ))}
+          </div>
+        </details>
+
+        <details className="group border border-slate-200 dark:border-gray-700 rounded-xl" open={false}>
+          <summary className="cursor-pointer list-none px-4 py-3 font-semibold text-slate-800 dark:text-gray-100 flex items-center justify-between">
+            {t("nav.selectLanguage")}
+            <span className="text-slate-400 group-open:rotate-180 transition">▾</span>
+          </summary>
+          <div className="px-4 pb-4 flex items-center gap-2 flex-wrap">
+            {LANGUAGES.map((lang) => (
+              <button
+                key={lang.code}
+                type="button"
+                onClick={() => {
+                  setLanguage(lang.code);
+                  void rememberLanguageChoice(lang.code);
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${language === lang.code ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white" : "bg-white dark:bg-gray-800 text-slate-700 dark:text-gray-200 border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700"}`}
+              >
+                {lang.label}
+              </button>
+            ))}
+          </div>
+        </details>
+      </Drawer>
 
 {mobileSidebarOpen && (
         <div
