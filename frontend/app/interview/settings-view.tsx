@@ -29,7 +29,6 @@ type Profile = ProfileForCard & {
     email_notifications: boolean;
     sms_notifications: boolean;
     care_search_radius_km: number | null;
-    theme: "system" | "light" | "dark";
   };
   consent: {
     treatment_processing: boolean;
@@ -97,7 +96,7 @@ const STRENGTH_BARS = ["bg-slate-200", "bg-rose-500", "bg-amber-500", "bg-black"
 /** Account settings (GET/PATCH /users/me, preferences, consent, health profile; password change). */
 export default function SettingsView({ onToast, onProfileChange }: Props) {
   const { t } = useI18n();
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -153,8 +152,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     setProfile(p);
     applyPersonal(p);
     applyLocation(p);
-    setTheme((p.preferences.theme as "system" | "light" | "dark") ?? "system");
-  }, [applyPersonal, applyLocation, setTheme]);
+  }, [applyPersonal, applyLocation]);
 
   const applyHealth = useCallback((h: HealthProfile) => {
     setHealth(h);
@@ -369,20 +367,8 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     }
   };
 
-  const setAppearance = async (value: "system" | "light" | "dark") => {
-    if (!profile) return;
-    const previous = profile;
-    setProfile({ ...profile, preferences: { ...profile.preferences, theme: value } });
+  const setAppearance = (value: "system" | "light" | "dark") => {
     setTheme(value);
-    try {
-      const preferences = await api<Profile["preferences"]>("users/me/preferences", { method: "PATCH", body: { theme: value } });
-      setProfile((p) => (p ? { ...p, preferences: { ...p.preferences, ...preferences } } : p));
-    } catch (error) {
-      setProfile(previous);
-      onToast(t("common.couldNotUpdate"), message(error, t("common.pleaseTryAgain")));
-    } finally {
-      // no busy state for theme to avoid UI flicker
-    }
   };
 
   const saveCard = async (e: React.FormEvent) => {
@@ -618,7 +604,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                   void setAppearance(value);
                 }}
                 className={`px-4 py-2 rounded-xl border text-sm font-semibold transition ${
-                  profile.preferences.theme === value
+                  theme === value
                     ? "bg-black text-white border-black"
                     : "bg-white dark:bg-gray-800 text-slate-700 border-slate-200 hover:bg-slate-50"
                 }`}
