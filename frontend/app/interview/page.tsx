@@ -15,7 +15,6 @@ import { api, logout } from "../lib/api";
 import { isLanguage, useI18n, type TranslationKey, LANGUAGES } from "../lib/i18n";
 import { useTheme } from "../lib/theme";
 import { rememberLanguageChoice } from "../components/language-switcher";
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "../components/ui/drawer";
 
 export default function Interview() {
   const { t, language, setLanguage } = useI18n();
@@ -24,7 +23,6 @@ export default function Interview() {
     if (saved !== language) setLanguage(saved);
   };
   const [activeNav, setActiveNav] = useState("home");
-  const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
   const restoredNavRef = useRef(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
@@ -219,7 +217,10 @@ export default function Interview() {
           <button
             type="button"
             data-purpose="open-settings"
-            onClick={() => setSettingsDrawerOpen(true)}
+            onClick={() => {
+              setHighlightTarget(null);
+              navigateTo("setting");
+            }}
             className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-slate-200 dark:border-gray-600 text-slate-600 dark:text-gray-200 hover:bg-slate-50 dark:hover:bg-gray-700 hover:text-slate-900 dark:hover:text-white transition"
             aria-label={t("interview.nav.setting")}
           >
@@ -240,17 +241,6 @@ export default function Interview() {
       </header>
 
       {emergencyOpen && <EmergencyPanel onClose={closeEmergency} />}
-
-      <Drawer open={settingsDrawerOpen} onOpenChange={setSettingsDrawerOpen}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>{t("interview.nav.setting")}</DrawerTitle>
-          </DrawerHeader>
-          <div className="drawer-settings p-2">
-            <SettingsView compact onToast={showToast} onProfileChange={(profile) => setHealthCard(healthCardFromProfile(profile))} />
-          </div>
-        </DrawerContent>
-      </Drawer>
 
 {mobileSidebarOpen && (
         <div

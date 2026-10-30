@@ -453,8 +453,8 @@ export default function SettingsView({ onToast, onProfileChange, compact = false
         </div>
 
         {/* Personal information */}
-        <details data-purpose="user-profile-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <summary className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 cursor-pointer list-none">
+        <section data-purpose="user-profile-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 cursor-pointer list-none">
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.personal.title")}</h2>
               <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.personal.subtitle")}</p>
@@ -462,7 +462,7 @@ export default function SettingsView({ onToast, onProfileChange, compact = false
             <span className="self-start sm:self-auto px-3 py-1 bg-gray-50 text-gray-900 text-xs font-semibold rounded-full border border-gray-200">
               {profile.dedan_user_id}
             </span>
-          </summary>
+          </div>
           <form onSubmit={saveProfile} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div>
@@ -526,14 +526,14 @@ export default function SettingsView({ onToast, onProfileChange, compact = false
               <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.personal.saveChanges")}</button>
             </div>
           </form>
-        </details>
+        </section>
 
         {/* Location */}
-        <details data-purpose="location-settings-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <summary className="border-b border-slate-100 pb-4 cursor-pointer list-none">
+        <section data-purpose="location-settings-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="border-b border-slate-100 pb-4 cursor-pointer list-none">
             <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.location.title")}</h2>
             <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.location.subtitle")}</p>
-          </summary>
+          </div>
           <form onSubmit={saveLocation} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
@@ -587,14 +587,14 @@ export default function SettingsView({ onToast, onProfileChange, compact = false
               <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.location.update")}</button>
             </div>
           </form>
-        </details>
+        </section>
 
         {/* Appearance */}
-        <details data-purpose="appearance-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
-          <summary className="border-b border-slate-100 pb-4 mb-2 cursor-pointer list-none">
+        <section data-purpose="appearance-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
+          <div className="border-b border-slate-100 pb-4 mb-2 cursor-pointer list-none">
             <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.appearance.title")}</h2>
             <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.appearance.subtitle")}</p>
-          </summary>
+          </div>
           <div className="flex items-center gap-3">
             {(["system", "light", "dark"] as const).map((value) => (
               <button
@@ -615,28 +615,28 @@ export default function SettingsView({ onToast, onProfileChange, compact = false
               </button>
             ))}
           </div>
-        </details>
+        </section>
 
         {/* Privacy & notifications */}
-        <details data-purpose="privacy-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
-          <summary className="border-b border-slate-100 pb-4 mb-2 cursor-pointer list-none">
+        <section data-purpose="privacy-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
+          <div className="border-b border-slate-100 pb-4 mb-2 cursor-pointer list-none">
             <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.privacy.title")}</h2>
             <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.privacy.subtitle")}</p>
-          </summary>
+          </div>
           {toggle("consent-health", profile.consent.treatment_processing, (v) => void setConsent("treatment_processing", v),
             t("settings.privacy.consentHealth.label"), t("settings.privacy.consentHealth.hint"))}
           {toggle("consent-sharing", profile.consent.data_sharing_with_clinicians, (v) => void setConsent("data_sharing_with_clinicians", v),
             t("settings.privacy.consentSharing.label"), t("settings.privacy.consentSharing.hint"))}
           {toggle("pref-sms", profile.preferences.sms_notifications, (v) => void setNotification("sms_notifications", v),
             t("settings.privacy.sms.label"), t("settings.privacy.sms.hint"))}
-        </details>
+        </section>
 
         {/* Password */}
-        <details data-purpose="security-settings-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <summary className="border-b border-slate-100 pb-4 cursor-pointer list-none">
+        <section data-purpose="security-settings-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="border-b border-slate-100 pb-4 cursor-pointer list-none">
             <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.password.title")}</h2>
             <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.password.subtitle")}</p>
-          </summary>
+          </div>
           <form onSubmit={changePassword} className="space-y-5">
             <div>
               <label className={labelClass} htmlFor="current-password">{t("settings.password.current")}</label>
@@ -681,11 +681,11 @@ export default function SettingsView({ onToast, onProfileChange, compact = false
               <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.password.update")}</button>
             </div>
           </form>
-        </details>
+        </section>
 
         {/* Digital health card */}
-        <details data-purpose="digital-card-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <summary className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 cursor-pointer list-none">
+        <section data-purpose="digital-card-section" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4 cursor-pointer list-none">
             <div>
               <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100">{t("settings.card.title")}</h2>
               <p className={compact ? "hidden" : "text-xs sm:text-sm text-slate-500"}>{t("settings.card.subtitle")}</p>
@@ -698,7 +698,7 @@ export default function SettingsView({ onToast, onProfileChange, compact = false
                 {t("settings.card.open")}
               </Link>
             </div>
-          </summary>
+          </div>
 
           {cardVisible && (
             <div data-purpose="card-preview" className="relative bg-gradient-to-br from-[#1e3a2e] to-[#000000] rounded-2xl p-6 text-white overflow-hidden">
@@ -763,7 +763,7 @@ export default function SettingsView({ onToast, onProfileChange, compact = false
               </div>
             </form>
           )}
-        </details>
+        </section>
       </div>
     </div>
   );
