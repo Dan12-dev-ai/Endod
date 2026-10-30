@@ -79,7 +79,7 @@ export const en = {
   "hero.ctaSignedIn": "Go to your dashboard",
   "hero.facilityPrompt": "Run a clinic or hospital? Register your facility on Endod.",
   "hero.facilityCta": "Register your clinic or hospital",
-  "hero.companyPrompt": "Offer your staff medication benefits? Register your company on TenaCare.",
+  "hero.companyPrompt": "Offer your staff medication benefits? Register your company on Endod.",
   "hero.companyCta": "Register your company",
   "hero.imageAlt": "ENDOD Health hero background",
 
@@ -955,7 +955,7 @@ export const am: Dictionary = {
   "hero.ctaSignedIn": "ወደ ዳሽቦርድዎ ይሂዱ",
   "hero.facilityPrompt": "ክሊኒክ ወይም ሆስፒታል ያስተዳድራሉ? ተቋምዎን በEndod ላይ ያስመዝግቡ።",
   "hero.facilityCta": "ክሊኒክዎን ወይም ሆስፒታልዎን ያስመዝግቡ",
-  "hero.companyPrompt": "ለሰራተኞችዎ የመድሃኒት ጥቅማጥቅም መስጠት ይፈልጋሉ? ድርጅትዎን በTenaCare ያስመዝግቡ።",
+  "hero.companyPrompt": "ለሰራተኞችዎ የመድሃኒት ጥቅማጥቅም መስጠት ይፈልጋሉ? ድርጅትዎን በEndod ያስመዝግቡ።",
   "hero.companyCta": "ድርጅትዎን ያስመዝግቡ",
   "hero.imageAlt": "የENDOD Health የጀርባ ምስል",
 
