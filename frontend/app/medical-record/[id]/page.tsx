@@ -48,7 +48,7 @@ function MedicalRecordDetailContent() {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900 dark:text-gray-100 px-4 py-6 sm:px-10" data-purpose="medical-record-detail">
       <div className="max-w-3xl mx-auto space-y-5">
-        <Link className="text-sm font-semibold text-black hover:underline" data-purpose="back-link" href="/interview?section=followup">
+        <Link className="text-sm font-semibold text-black dark:text-white hover:underline" data-purpose="back-link" href="/interview?section=followup">
           {"← " + t("print.back")}
         </Link>
 

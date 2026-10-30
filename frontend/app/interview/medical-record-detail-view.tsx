@@ -107,7 +107,7 @@ export function MedicalRecordDetailView({ recordId: recordIdProp, onBack }: Prop
   const content = (
     <div className={embedded ? "w-full space-y-5 pb-6" : "max-w-3xl mx-auto space-y-5"} data-purpose="medical-record-detail">
         <button
-          className="text-sm font-semibold text-black hover:underline"
+          className="text-sm font-semibold text-black dark:text-white hover:underline"
           data-purpose="back-link"
           onClick={handleBack}
           type="button"
