@@ -745,7 +745,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
           aria-label={t("appointments.scheduleVisit")}
           data-purpose="appointment-fab"
           onClick={openBook}
-          className="fixed bottom-20 right-4 z-50 lg:hidden flex items-center justify-center w-12 h-12 rounded-full bg-black hover:bg-gray-800 text-white shadow-lg transition"
+          className="fixed bottom-20 right-4 z-50 lg:hidden flex items-center justify-center w-12 h-12 rounded-full bg-black hover:bg-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 text-white shadow-lg transition"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
             <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />
