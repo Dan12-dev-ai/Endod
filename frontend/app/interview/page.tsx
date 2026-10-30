@@ -215,7 +215,7 @@ export default function Interview() {
             type="button"
             data-purpose="sign-out"
             onClick={() => void logout()}
-            className="whitespace-nowrap px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-gray-100 border border-slate-200 hover:bg-slate-50 rounded-lg transition"
+            className="whitespace-nowrap px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 dark:text-gray-100 border border-slate-200 hover:bg-slate-50 dark:hover:bg-gray-700 dark:hover:text-white rounded-lg transition"
           >
             {t("interview.signOut")}
           </button>
