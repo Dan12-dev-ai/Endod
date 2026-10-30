@@ -136,7 +136,7 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
             <button type="button" data-purpose="share-records" onClick={() => setSharing(true)} disabled={!items.length} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-black text-black bg-white dark:bg-gray-800 hover:bg-gray-50 disabled:opacity-50">
               {t("history.share")}
             </button>
-            <Link data-purpose="download-records" href="/history/print" target="_blank" rel="noopener" className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-slate-200 text-slate-700 bg-white dark:bg-gray-800 hover:bg-slate-50">
+            <Link data-purpose="download-records" href="/history/print" target="_blank" rel="noopener" className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold border border-slate-200 text-slate-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-slate-50 dark:hover:bg-gray-700">
               {t("history.download")}
             </Link>
           </div>
