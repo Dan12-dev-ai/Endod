@@ -242,7 +242,9 @@ export default function Interview() {
       {emergencyOpen && <EmergencyPanel onClose={closeEmergency} />}
 
       <Drawer open={settingsDrawerOpen} onClose={() => setSettingsDrawerOpen(false)} title={t("interview.nav.setting")}>
-        <SettingsView onToast={showToast} onProfileChange={(profile) => setHealthCard(healthCardFromProfile(profile))} />
+        <div className="drawer-settings">
+          <SettingsView onToast={showToast} onProfileChange={(profile) => setHealthCard(healthCardFromProfile(profile))} />
+        </div>
       </Drawer>
 
 {mobileSidebarOpen && (

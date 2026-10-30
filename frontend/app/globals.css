@@ -143,3 +143,11 @@ html, body {
 .marquee-track:hover {
   animation-play-state: paused;
 }
+
+/* Drawer settings: avoid nested scroll containers */
+.drawer-settings > div {
+  flex: none !important;
+  min-height: auto !important;
+  overflow: visible !important;
+  max-width: none !important;
+}
