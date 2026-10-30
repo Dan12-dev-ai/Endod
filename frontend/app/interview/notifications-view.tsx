@@ -42,7 +42,7 @@ const CATEGORIES: {
   {
     id: "appointments", titleKey: "notifications.cat.appointments.title", labelKey: "notifications.cat.appointments.label",
     iconPath: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
-    iconWrap: "bg-emerald-50 border border-emerald-100", iconColor: "text-emerald-600",
+    iconWrap: "bg-gray-50 border border-gray-200", iconColor: "text-black",
   },
   {
     id: "records", titleKey: "notifications.cat.records.title", labelKey: "notifications.cat.records.label",
@@ -189,7 +189,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{t("notifications.title")}</h1>
-              <span data-purpose="unread-count" className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${unread.total === 0 ? "bg-slate-100 text-slate-500 border-slate-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
+              <span data-purpose="unread-count" className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${unread.total === 0 ? "bg-slate-100 text-slate-500 border-slate-200" : "bg-gray-50 text-gray-900 border-gray-200"}`}>
                 {t("notifications.unreadCount", { count: unread.total })}
               </span>
             </div>
@@ -259,7 +259,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
                         open(n);
                       }
                     }}
-                    className={`bg-white rounded-xl border p-4 sm:p-5 card-shadow transition relative ${to ? "cursor-pointer hover:border-emerald-300 hover:shadow-md" : "hover:border-slate-300"} ${n.read ? "border-slate-200/90" : "border-slate-300"}`}
+                    className={`bg-white rounded-xl border p-4 sm:p-5 card-shadow transition relative ${to ? "cursor-pointer hover:border-black hover:shadow-md" : "hover:border-slate-300"} ${n.read ? "border-slate-200/90" : "border-slate-300"}`}
                   >
                     <div className="flex items-start space-x-3 sm:space-x-4">
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${category.iconWrap}`}>
@@ -270,7 +270,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
                           <h3 className="text-xs sm:text-sm font-semibold text-slate-900">{n.title}</h3>
                           <div className="flex items-center space-x-2 flex-shrink-0">
                             <time className="text-[11px] text-slate-400" dateTime={n.created_at}>{timeAgo(n.created_at, locale)}</time>
-                            {!n.read && <span data-purpose="unread-dot" className="w-2 h-2 rounded-full bg-emerald-600" title={t("notifications.unreadDot")}></span>}
+                            {!n.read && <span data-purpose="unread-dot" className="w-2 h-2 rounded-full bg-black" title={t("notifications.unreadDot")}></span>}
                           </div>
                         </div>
                         {n.body && <p className="text-xs sm:text-sm text-slate-600 mt-1.5 leading-relaxed">{n.body}</p>}
@@ -280,7 +280,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
                           )}
                           <button type="button" onClick={(e) => { e.stopPropagation(); void dismiss(n); }} className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded transition">{t("common.dismiss")}</button>
                           {to && (
-                            <span className="inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition">
+                            <span className="inline-flex items-center space-x-1 px-3 py-1.5 text-xs font-medium text-white bg-black hover:bg-gray-800 rounded-lg transition">
                               <span>{to.nav === "appointment" ? t("notifications.viewInAppointments") : t("notifications.viewRecord")}</span>
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
                             </span>
