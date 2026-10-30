@@ -138,7 +138,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
 <button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white dark:bg-gray-800 p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white dark:hover:!bg-gray-100 dark:hover:!border-gray-100 transition cursor-pointer min-h-[112px] flex flex-col justify-between">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300 dark:group-hover:text-gray-900">{t("home.nextAppointment")}</p>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300 dark:group-hover:!text-gray-900">{t("home.nextAppointment")}</p>
             {next === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
                 <Bone className="h-5 w-2/3 rounded mt-1.5" />
@@ -146,29 +146,29 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
               </InlineSkeleton>
             ) : (
               <>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100 mt-1 group-hover:text-white dark:group-hover:text-black">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100 mt-1 group-hover:text-white dark:group-hover:!text-black">
                   {next ? formatWhen(next.scheduled_at, locale) : t("home.noneScheduled")}
                 </h2>
-                {next && <p className="text-sm text-emerald-600 font-medium mt-0.5 group-hover:text-emerald-300">{appointmentTitle(next, t)}</p>}
+                {next && <p className="text-sm text-emerald-600 font-medium mt-0.5 group-hover:text-emerald-300 dark:group-hover:!text-emerald-700">{appointmentTitle(next, t)}</p>}
               </>
             )}
           </button>
 <button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white dark:bg-gray-800 p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white dark:hover:!bg-gray-100 dark:hover:!border-gray-100 transition cursor-pointer min-h-[112px] flex flex-col justify-between">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300 dark:group-hover:text-gray-900">{t("home.notifications")}</p>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300 dark:group-hover:!text-gray-900">{t("home.notifications")}</p>
             {unread === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
                 <Bone className="h-5 w-1/2 rounded mt-1.5" />
               </InlineSkeleton>
             ) : (
-              <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100 mt-1 group-hover:text-white dark:group-hover:text-black">
+              <h2 className="text-lg font-bold text-slate-900 dark:text-gray-100 mt-1 group-hover:text-white dark:group-hover:!text-black">
                 {unread === null ? "—" : unread === 0 ? t("home.upToDate") : t("home.unread", { count: unread })}
               </h2>
             )}
           </button>
           {SHORTCUTS.map((s) => (
 <button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white dark:bg-gray-800 p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-gray-800 hover:border-gray-800 hover:text-white dark:hover:!bg-gray-100 dark:hover:!border-gray-100 transition cursor-pointer min-h-[112px] flex flex-col justify-between">
-              <h3 className="text-base font-bold text-slate-900 dark:text-gray-100 group-hover:text-white dark:group-hover:text-black">{t(s.titleKey)}</h3>
-              <p className="text-sm text-slate-500 mt-1 group-hover:text-slate-300 dark:group-hover:text-gray-900">{t(s.hintKey)}</p>
+              <h3 className="text-base font-bold text-slate-900 dark:text-gray-100 group-hover:text-white dark:group-hover:!text-black">{t(s.titleKey)}</h3>
+              <p className="text-sm text-slate-500 mt-1 group-hover:text-slate-300 dark:group-hover:!text-gray-900">{t(s.hintKey)}</p>
             </button>
           ))}
         </div>
