@@ -948,9 +948,9 @@ export const am: Dictionary = {
   "nav.accountMenu": "የመለያ ምናሌ",
 
   // ===== Landing page =====
-  "hero.title": "ጤናዎ በእጅዎ ጫፍ ላይ ኃይል ተሰጥቶታል",
+  "hero.title": "ቀጠሮ ያስይዙ፣ ካርድዎን ይዘው ይጓዙ፣ መዝገብዎን ይኑራቸው",
   "hero.body":
-    "እንዶድ ሄልዝ ኦኤስ ታካሚዎችንና ሆስፒታሎችን በአንድ የታመነ ሥርዓት ያገናኛል። ስለሚሰማዎት ስሜት ከእንዶድ AI ጋር ይነጋገሩ፣ በቀጥታ የሰው መጠን ሁኔታ ያላቸውን በአቅራቢያዎ ያሉ ሆስፒታሎች ያግኙ፣ በሰከንዶች ውስጥ ቀጠሮ ያስይዙ፣ እና በፍቃድዎ ላይ የተመሠረተ ግልጽ የጤና መዝገብ ይዘው ይድረሱ።",
+    "የታመኑ ሆስፒታሎች ይፈልጉ፣ ቀጠሮ ያስይዙ፣ እና በQR ካርድ ይድረሱ። መዝገቦችዎ፣ ቀጠሮዎችዎና ማሳወቂያዎችዎ ከእርስዎ ጋር ይቀራሉ — መረጃዎም በእርስዎ ቁጥጥር ሥር ነው።",
   "hero.cta": "ይጀምሩ",
   "hero.ctaSignedIn": "ወደ ዳሽቦርድዎ ይሂዱ",
   "hero.facilityPrompt": "ክሊኒክ ወይም ሆስፒታል ያስተዳድራሉ? ተቋምዎን በEndod ላይ ያስመዝግቡ።",
@@ -968,30 +968,30 @@ export const am: Dictionary = {
   "bottleneck.cta": "እንዴት እንደሚሠራ ይመልከቱ",
   "bottleneck.imageAlt": "ታካሚዎችና ሆስፒታሎች በአንድ የታመነ ሥርዓት ተገናኝተዋል",
 
-  "buildLab.badge": "ENDOD AI",
-  "buildLab.title": "ምልክቶችዎን በደቂቃዎች ውስጥ ይረዱ",
+  "buildLab.badge": "የሆስፒታል ቀጠሮ",
+  "buildLab.title": "ትክክለኛውን ሆስፒታል በፍጥነት ያግኙ",
   "buildLab.subtitle":
-    "በአማርኛ ወይም በእንግሊዝኛ ይናገሩ ወይም ይጻፉ — እንዶድ AI ያዳምጣል፤ ትክክለኛዎቹን ተከታይ ጥያቄዎችም ይጠይቃል",
+    "በልዩ ሙያና ቦታ ፈልጉ፣ የታመኑ ተቋማትን ያነጻጽሩ፣ በጥቂት ንክኪዎች ቀጠሮ ያስይዙ",
   "buildLab.body":
-    "እንዶድ AI የተረጋጋ ውይይት ይመራል፣ ግልጽ የሚያደርጉ ጥያቄዎችን ይጠይቃል፣ የተካፈሉትንም ሐኪምዎ ከመድረስዎ በፊት ማንበብ የሚችለው ግልጽና የተዋቀረ ማጠቃለያ ያደርገዋል።",
-  "buildLab.cta": "ምርመራ ጀምር",
+    "የአጋርና የተዘረዘሩ ሆስፒታሎችን ያስሱ፣ ርቀትና ተገኝነት ይመልከቱ፣ በአካል ወይም በቪዲዮ ቀጠሮ ያስይዙ። በማንኛውም ጊዜ ይሰርዙ ወይም ይቀይሩ፤ ግልጽ ሁኔታና ማሳሰቢያ ይኖርዎታል።",
+  "buildLab.cta": "ሆስፒታል ፈልግ",
   "buildLab.findHospital": "ሆስፒታል ፈልግ",
-  "buildLab.imageAlt": "የእንዶድ AI የምልክት ውይይት",
+  "buildLab.imageAlt": "የሆስፒታል ማውጫና ቀጠሮ",
 
-  "partners.title": "በጤና አጋሮቻችን የታመነ",
-  "partners.subtitle": "የምንሠራባቸው ሆስፒታሎች፣ ክሊኒኮችና የጤና ድርጅቶች",
+  "partners.title": "በEndod ያሉ ሆስፒታሎች",
+  "partners.subtitle": "ዛሬ ቀጠሮ ማስያዝ የሚችሉባቸው የአጋርና የተዘረዘሩ ተቋማት",
 
-  "cloudLab.badge": "ለሆስፒታሎች",
+  "cloudLab.badge": "ሆስፒታሎች",
   "cloudLab.title": "ትክክለኛውን ሆስፒታል በፍጥነት ይድረሱ",
   "cloudLab.subtitle":
-    "በአቅራቢያዎ ያሉ ሆስፒታሎች ካርታ ከቀጥታ የሰው መጠን ሁኔታ ጋር",
+    "በአቅራቢያዎ ያሉ ሆስፒታሎች ካርታ",
   "cloudLab.body":
-    "እያንዳንዱ ተቋም የሰው መጠን ሁኔታውን በቀጥታ ያሳያል፤ ስለዚህ የመጠበቂያ ጊዜዎችን በማነጻጸር ትክክለኛውን ቀጠሮ በመስመር ላይ ማስያዝ ይችላሉ። በማንኛውም ጊዜ ቀኑን ይቀይሩ ወይም ይሰርዙ፤ በSMS እና በመተግበሪያ ማሳሰቢያዎች ጎዳናዎን እንዳይስቱ።",
+    "ሆስፒታሎችን በካርታ ይመልከቱ፣ በልዩ ሙያና ርቀት ያነጻጽሩ፣ በመስመር ላይ ቀጠሮ ያስይዙ። SMS እና በመተግበሪያ ማሳሰቢያ ቀጠሮዎን እንዳያመልጡ።",
   "cloudLab.findHospital": "ሆስፒታል ፈልግ",
   "cloudLab.hospitalPortal": "የሆስፒታል ፖርታል",
-  "cloudLab.imageAlt": "የሆስፒታል ማውጫና የቀጥታ የሰው መጠን ሁኔታ",
+  "cloudLab.imageAlt": "የሆስፒታል ማውጫና ካርታ",
 
-  "socialProof.title": "ለታካሚዎች፣ ሐኪሞች፣ ነርሶችና የሆስፒታል አስተዳዳሪዎች አንድ ሥርዓት",
+  "socialProof.title": "ለታካሚዎች፣ ሆስፒታሎችና የጤና ቡድኖች አንድ ቦታ",
   "socialProof.patients": "ታካሚዎች",
   "socialProof.doctors": "ሐኪሞች",
   "socialProof.nurses": "ነርሶች",
@@ -999,12 +999,12 @@ export const am: Dictionary = {
   "socialProof.admins": "አስተዳዳሪዎች",
   "socialProof.hospitals": "ሆስፒታሎች",
 
-  "pipette.badge": "የሕክምና ዕቅዶች",
-  "pipette.title": "ዕቅድዎና ታሪክዎ በአንድ ቦታ",
+  "pipette.badge": "የሕክምና መዝገቦች",
+  "pipette.title": "መዝገብዎ ሁልጊዜ ከእርስዎ ጋር",
   "pipette.body":
-    "ግልጽ የጊዜ ሰሌዳዎች፣ የቀሩ የመድኃኒትና የመርፌ ቁጥሮች፣ እንዲሁም ለእርስዎና ለሆስፒታልዎ የመዘግየት ማሳሰቢያዎች ያሉት ክትትል ሕክምና። አንድ የዕድሜ ልክ የሕክምና ታሪክ በየተቋሙ ይዘውዎ ይጓዛል — የሚካፈለውም በፍቃድዎ ብቻ ነው።",
-  "pipette.cta": "ከእንዶድ AI ጋር ይነጋገሩ",
-  "pipette.imageAlt": "የሕክምና ዕቅድን የሚከተል ታካሚ",
+    "ላቦራቶሪ፣ የመድኃኒት ማዘዣና ፋይሎች በአንድ ቦታ። ለተወሰነ ጊዜ ከሆስፒታል ጋር ያጋሩ፣ ከዚያ ይሰርዙ። የጤና ካርድዎ ከእርስዎ ጋር ይጓዛል።",
+  "pipette.cta": "መዝገብዎን ይመልከቱ",
+  "pipette.imageAlt": "መዝገብ የሚመለከት ታካሚ",
 
   "socialLinks.followUs": "ይከተሉን",
 
@@ -1016,10 +1016,10 @@ export const am: Dictionary = {
   "footer.subscribed": "በተሳካ ሁኔታ ተመዝግበዋል!",
   "footer.platform": "መድረክ",
   "footer.company": "ኩባንያ",
-  "footer.aiSymptomAssistant": "የAI ምልክት ረዳት",
+  "footer.aiSymptomAssistant": "የዲጂታል ጤና ካርድ",
   "footer.hospitalDirectoryBooking": "የሆስፒታል ማውጫና ቀጠሮ",
-  "footer.treatmentPlans": "የሕክምና ዕቅዶች",
-  "footer.medicalHistory": "የሕክምና ታሪክ",
+  "footer.treatmentPlans": "የሕክምና መዝገቦች",
+  "footer.medicalHistory": "ቀጠሮዎች",
   "footer.consentPrivacy": "ፍቃድና ግላዊነት",
   "footer.forHospitals": "ለሆስፒታሎች",
   "footer.about": "ስለ እኛ",
