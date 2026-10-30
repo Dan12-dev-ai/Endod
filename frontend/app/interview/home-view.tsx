@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 import { useI18n, type TranslationKey } from "../lib/i18n";
+import { QrCode } from "lucide-react";
 import { type Appointment, appointmentTitle, formatWhen } from "./data";
 import { Bone, HealthCardBones, InlineSkeleton, Skeleton } from "../components/skeleton";
 import HealthCardView from "../health-card/card-view";
@@ -126,9 +127,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
                   onClick={() => setQrOpen(true)}
                   type="button"
                 >
-                  <svg aria-hidden className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2v2h-2zM18 14h2v2h-2z" strokeLinejoin="round" />
-                  </svg>
+                  <QrCode className="w-4 h-4" aria-hidden />
                   {t("home.showQr")}
                 </button>
                 <Link
