@@ -151,3 +151,16 @@ html, body {
   overflow: visible !important;
   max-width: none !important;
 }
+
+/* Simplify settings inside drawer */
+.drawer-settings section,
+.drawer-settings details {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0.5rem 0 !important;
+}
+.drawer-settings .border-b {
+  border-color: rgba(148, 163, 184, 0.2) !important;
+}
