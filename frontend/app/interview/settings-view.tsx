@@ -374,16 +374,14 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     const previous = profile;
     setProfile({ ...profile, preferences: { ...profile.preferences, theme: value } });
     setTheme(value);
-    setBusy("theme");
     try {
       const preferences = await api<Profile["preferences"]>("users/me/preferences", { method: "PATCH", body: { theme: value } });
       setProfile((p) => (p ? { ...p, preferences: { ...p.preferences, ...preferences } } : p));
-      onToast(t("settings.toast.profileSavedTitle"), t("settings.appearance.title"));
     } catch (error) {
       setProfile(previous);
       onToast(t("common.couldNotUpdate"), message(error, t("common.pleaseTryAgain")));
     } finally {
-      setBusy(null);
+      // no busy state for theme to avoid UI flicker
     }
   };
 
