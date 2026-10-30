@@ -1,23 +1,23 @@
 "use client";
 
 import { useI18n } from "../lib/i18n";
-import { MessageSquare, Search, CreditCard } from "lucide-react";
+import { Calendar, ClipboardList, Smartphone } from "lucide-react";
 
 const STEPS = [
   {
-    icon: MessageSquare,
-    title: "Tell us how you feel",
-    body: "Describe your symptoms in plain language. DEDAN triages and points you to the right level of care.",
+    icon: Calendar,
+    title: "Book a hospital visit",
+    body: "Browse verified facilities by specialty and location, then book an in-person or video visit in a few taps.",
   },
   {
-    icon: Search,
-    title: "Find and book a hospital",
-    body: "Browse verified facilities by specialty, distance and availability, then book a visit in a few taps.",
+    icon: ClipboardList,
+    title: "Track appointments and queue",
+    body: "View upcoming and past visits, and see how many patients are registered to receive medication.",
   },
   {
-    icon: CreditCard,
-    title: "Arrive with your digital card",
-    body: "Your health card, records and appointment details travel with you — scanned on arrival.",
+    icon: Smartphone,
+    title: "Access records on your phone",
+    body: "Your medical records, health card and appointment details stay with you — view and share them anytime.",
   },
 ];
 
