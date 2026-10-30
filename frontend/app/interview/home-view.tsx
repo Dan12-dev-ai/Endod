@@ -192,8 +192,8 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
         </div>
       </div>
       {qrOpen && card?.qrSvg && <QrScreen card={card} onClose={closeQr} />}
-      <Drawer open={settingsDrawerOpen} onOpenChange={setSettingsDrawerOpen}>
-        <DrawerContent>
+      <Drawer direction="right" open={settingsDrawerOpen} onOpenChange={setSettingsDrawerOpen}>
+        <DrawerContent direction="right">
           <DrawerHeader>
             <DrawerTitle>{t("interview.nav.setting")}</DrawerTitle>
           </DrawerHeader>
