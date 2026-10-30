@@ -75,7 +75,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
         <FollowUpCards onBook={onBook} />
 
         {/* The card comes first: open the app, show the phone, get scanned. */}
-        <section aria-labelledby="home-card-title" className="bg-white rounded-2xl border border-slate-200 card-shadow p-4 sm:p-6" data-purpose="home-card" style={{ backgroundColor: "#ffffff" }}>
+        <section aria-labelledby="home-card-title" className="bg-white dark:bg-gray-800 rounded-2xl border border-slate-200 card-shadow p-4 sm:p-6" data-purpose="home-card">
           <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-5 md:gap-8 items-center">
             <div className="w-full max-w-[520px] mx-auto md:mx-0">
               {card === undefined ? (
