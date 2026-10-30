@@ -506,7 +506,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
             <div className="xl:col-span-2 space-y-5">
               {/* Tabs & Filters */}
               <div className="bg-white dark:bg-gray-800 p-3.5 rounded-2xl border border-slate-200/90 card-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center space-x-1 p-1 bg-slate-100 rounded-xl overflow-x-auto">
+                <div className="flex items-center space-x-1 p-1 bg-slate-100 dark:bg-gray-700 rounded-xl overflow-x-auto">
                   {([
                     { id: "upcoming" as const, label: t("appointments.tabUpcoming", { count: counts.upcoming }) },
                     { id: "past" as const, label: t("appointments.tabPast", { count: counts.past }) },
