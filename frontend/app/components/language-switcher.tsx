@@ -92,7 +92,7 @@ export default function LanguageSwitcher({ tone = "dark" }: { tone?: keyof typeo
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`${t("nav.selectLanguage")}: ${current.label}`}
-        className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md border transition-all text-[13px] font-medium tracking-wide focus:outline-none cursor-pointer ${styles.button}`}
+        className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md border transition-all text-[13px] font-medium tracking-wide focus:outline-none focus-visible:ring-2 focus-visible:ring-current cursor-pointer ${styles.button}`}
         data-purpose="language-select"
         onClick={() => setOpen((value) => !value)}
         onKeyDown={(event) => {

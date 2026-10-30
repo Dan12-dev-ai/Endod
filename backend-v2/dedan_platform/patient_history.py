@@ -124,7 +124,10 @@ def on_link_requested(session: Session, payload: Dict[str, Any]) -> None:
     echo = {"request_id": request.request_id, "hospital_id": request.hospital_id,
             "patient_id": request.patient_id}
     user = _user_by_dedan(session, request.dedan_id)
-    if user is None or not user.is_active:
+    # A suspended account (an Endod admin, api_admin.py) takes no new links,
+    # by card or by phone, and the hospital is told no more than for an
+    # unknown ID. Links made before the suspension keep working.
+    if user is None or not user.is_active or user.suspended_at is not None:
         eventbus.emit(session, "patient.link_refused", {**echo, "dedan_id": request.dedan_id, "reason": "not_found"})
         return
     profile = session.scalar(select(Profile).where(Profile.user_id == user.id))

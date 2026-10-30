@@ -16,7 +16,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 PASSWORD = "Str0ng-pass!"
 ADDIS = ZoneInfo("Africa/Addis_Ababa")
@@ -256,6 +256,47 @@ class TestLinking:
         run_worker(bus)
         assert [p["reason"] for p in sent(bus, "patient.link_refused")] == ["not_found", "not_found"]
         assert all("name" not in p and "phone" not in p for p in sent(bus, "patient.link_refused"))
+
+    def test_a_suspended_account_is_not_found_by_card_or_phone(self, client, bus, patient, listed):
+        """Suspended by an Endod admin: no new link either way, the same answer
+        as an unknown ID, no inbox item. (Existing links keep working: below.)"""
+        from dedan_platform import cards
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import HospitalLink, InboxItem, User
+
+        with session_scope() as session:
+            session.execute(update(User).where(User.id == patient["id"]).values(suspended_at=datetime.now(timezone.utc)))
+            before = session.scalar(select(func.count()).select_from(HospitalLink)
+                                    .where(HospitalLink.user_id == patient["id"]))
+        by_card = link_request(patient["dedan"], patient_id="MRN-0099",
+                               card_signature=cards.card_signature(patient["dedan"]))
+        by_phone = link_request(patient["dedan"], patient_id="MRN-0100", phone=PHONE)
+        from_hospital(bus, "patient.link_requested", by_card)
+        from_hospital(bus, "patient.link_requested", by_phone)
+        run_worker(bus)
+        assert sent(bus, "patient.linked") == []
+        assert sent(bus, "patient.link_refused") == [
+            {"request_id": r["request_id"], "hospital_id": HOSPITAL, "patient_id": r["patient_id"],
+             "dedan_id": patient["dedan"], "reason": "not_found"} for r in (by_card, by_phone)]
+        with session_scope() as session:
+            assert session.scalar(select(func.count()).select_from(HospitalLink)
+                                  .where(HospitalLink.user_id == patient["id"])) == before
+            assert session.scalar(select(func.count()).select_from(InboxItem).where(
+                InboxItem.user_id == patient["id"], InboxItem.kind == "hospital_linked")) == 0
+
+    def test_a_suspended_account_keeps_its_existing_links(self, client, bus, patient, listed):
+        """Continuity of care: a hospital that linked the patient before the
+        suspension still sends records, and they are kept."""
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import HospitalRecord, User
+
+        with session_scope() as session:
+            session.execute(update(User).where(User.id == patient["id"]).values(suspended_at=datetime.now(timezone.utc)))
+        record = lab_record(patient["dedan"])
+        from_hospital(bus, "record.published", record)
+        run_worker(bus)
+        with session_scope() as session:
+            assert session.get(HospitalRecord, record["record_id"]) is not None
 
     def test_a_malformed_request_is_dead_lettered(self, client, bus, patient):
         from_hospital(bus, "patient.link_requested", {"request_id": "x", "hospital_id": HOSPITAL})
@@ -1097,9 +1138,13 @@ class TestInternalApi:
 
         import main_internal
 
-        # Plus the pharmacy site's two routes (docs/pharmacy.md; test_pharmacy.py).
+        # Plus the pharmacy site's two routes (docs/pharmacy.md; test_pharmacy.py) and the super admin's.
         assert all_paths(main_internal.create_app().routes) == {
-            "/health", "/internal/shares/{share_id}/files/{file_id}", "/pharmacy/lookup", "/pharmacy/dispense"}
+            "/health", "/internal/shares/{share_id}/files/{file_id}", "/pharmacy/lookup", "/pharmacy/dispense",
+            # The super admin's (test_admin_api.py), behind their own key.
+            "/internal/admin/stats", "/internal/admin/users/search", "/internal/admin/users/{dedan_id}",
+            "/internal/admin/users/{dedan_id}/suspend", "/internal/admin/users/{dedan_id}/reactivate",
+            "/internal/admin/cards/{dedan_id}", "/internal/admin/health"}
         internal = self.internal()
         assert internal.get("/health").json()["status"] == "healthy"
         for path in sorted(all_paths(auth_router.routes) | all_paths(profile_router.routes)

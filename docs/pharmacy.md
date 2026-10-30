@@ -34,6 +34,10 @@ category `prescription`, highest version), it gets a dispensing entry:
 A correction (higher version) keeps the same rx_id, QR and code; items are
 re-matched by index, given amounts kept. A retraction or expiry closes it.
 
+A patient whose account an Endod admin suspended keeps their prescriptions:
+lookups and dispenses work as before (continuity of care); only signing in
+to the app and new hospital links are refused.
+
 ## 2. Platform API for the pharmacy site (server to server)
 
 Served by the platform's `internal-api` (bus network, alias

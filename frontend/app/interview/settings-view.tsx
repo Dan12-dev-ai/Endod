@@ -626,7 +626,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
             </div>
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs grid grid-cols-1 sm:grid-cols-3 gap-2">
               {requirements.map((req) => (
-                <div key={req.id} data-purpose={req.id} className={`flex items-center gap-1.5 ${req.met ? "text-black" : "text-slate-400"}`}>
+                <div key={req.id} data-purpose={req.id} data-met={req.met} className={`flex items-center gap-1.5 ${req.met ? "text-black" : "text-slate-400"}`}>
                   <span>{req.met ? "✓" : "•"}</span><span>{req.label}</span>
                 </div>
               ))}
@@ -691,12 +691,12 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className={labelClass} htmlFor="blood-group">{t("settings.card.bloodGroupLabel")}</label>
-                  <Select value={bloodType} onValueChange={setBloodType}>
+                  <Select value={bloodType === "" ? "none" : bloodType} onValueChange={(v) => setBloodType(v === "none" ? "" : v)}>
                     <SelectTrigger className="w-full text-lg" id="blood-group">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">{t("settings.card.notSpecified")}</SelectItem>
+                      <SelectItem value="none">{t("settings.card.notSpecified")}</SelectItem>
                       {BLOOD_TYPES.map((b) => (
                         <SelectItem key={b} value={b}>{b}</SelectItem>
                       ))}

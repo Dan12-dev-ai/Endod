@@ -63,6 +63,8 @@ services:
       RX_SIGNING_KEY: ${RX_SIGNING_KEY:-}
       # The pharmacy API is internal-api's only: the patient API never holds its key.
       PHARMACY_API_KEY: ""
+      # As is the super admin's (/internal/admin).
+      SUPERADMIN_API_KEY: ""
       PLATFORM_MASTER_KEY_FILE: /run/secrets/platform_master_key
       # Names its database connections (tools decrypt-existing waits for none).
       DEDAN_DB_APPLICATION_NAME: endod-backend
@@ -74,7 +76,8 @@ services:
         condition: service_healthy
 
   # The platform's internal API (backend-v2/main_internal.py): /internal/...
-  # (X-Platform-Key), /pharmacy/... (X-Pharmacy-Key, docs/pharmacy.md) and
+  # (X-Platform-Key; /internal/admin/... takes X-Superadmin-Key instead, for the
+  # Endod super admin), /pharmacy/... (X-Pharmacy-Key, docs/pharmacy.md) and
   # /health, nothing else. The only platform service on endod-bus, where the
   # hospital service fetches shared record files from it and the pharmacy
   # site looks up and dispenses prescriptions, as "endod-platform-api"; the
@@ -96,6 +99,13 @@ services:
       # refused), and the key that checks the prescription QR tokens.
       PHARMACY_API_KEY: ${PHARMACY_API_KEY:-}
       RX_SIGNING_KEY: ${RX_SIGNING_KEY:-}
+      # Required on /internal/admin (shared with the Endod super admin's API;
+      # unset, too short or equal to another key: refused).
+      SUPERADMIN_API_KEY: ${SUPERADMIN_API_KEY:-}
+      # Read only by /internal/admin/health: Redis, the dead-letter count and
+      # the events worker's heartbeat.
+      REDIS_SENTINELS: endod-sentinel-1:26379,endod-sentinel-2:26379,endod-sentinel-3:26379
+      REDIS_SENTINEL_MASTER: endod
       # Decrypts prescriptions for pharmacies and shared files for hospitals.
       PLATFORM_MASTER_KEY_FILE: /run/secrets/platform_master_key
       DEDAN_DB_APPLICATION_NAME: endod-internal-api
@@ -237,6 +247,7 @@ services:
       # pharmacies: neither key is needed here.
       PHARMACY_API_KEY: ""
       RX_SIGNING_KEY: ""
+      SUPERADMIN_API_KEY: ""
       # Encrypts the records, files and follow-ups hospitals send.
       PLATFORM_MASTER_KEY_FILE: /run/secrets/platform_master_key
       DEDAN_DB_APPLICATION_NAME: endod-events-worker

@@ -1,5 +1,5 @@
 import { test, expect, BLANK_PNG, type Locator, type Page } from './fixtures';
-import { createAppointment, futureSlot, openSection, PARTNER_ID, payBooking, seed } from './helpers';
+import { chooseOption, createAppointment, futureSlot, openSection, PARTNER_ID, payBooking, seed } from './helpers';
 import { safeCheckoutUrl } from '../app/interview/data';
 
 // Paying for each partner-hospital booking through Chapa (tests/fake-chapa.mjs,
@@ -30,7 +30,7 @@ async function fillVisit(page: Page, days: number, note: string) {
   const slot = futureSlot(days, 9, 30);
   await page.locator('#booking-date').fill(slot.date);
   await page.locator('#booking-time').fill(slot.time);
-  await page.locator('[data-purpose="time-window"]').selectOption('morning');
+  await chooseOption(page, 'time-window', 'Morning (08:00 - 12:00)');
   await page.locator('#booking-note').fill(note);
 }
 

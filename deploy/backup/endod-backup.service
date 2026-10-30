@@ -1,0 +1,11 @@
+[Unit]
+Description=Encrypted backup of Endod's databases and files
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/opt/endod/deploy/backup/backup.env
+ExecStart=/bin/bash /opt/endod/deploy/backup/backup.sh
+Nice=10
+IOSchedulingClass=idle

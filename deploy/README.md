@@ -328,3 +328,43 @@ internal API checks) and calls only the platform's internal API on endod-bus.
 The shared nginx sends it `pharmacy.endod-health.com` and sets
 `X-Endod-Client-IP` (Cloudflare's header only for Cloudflare's addresses), the
 only client address the site trusts for rate limits.
+
+## Super admin (admin.endod-health.com)
+
+The Endod super admin's API (github.com/Habtamu-Semagn/endod-superadmin)
+calls `internal-api` on endod-bus (`http://endod-platform-api:8000`) at
+`/internal/admin/...` with `X-Superadmin-Key`: account counts and search, suspend
+and reactivate (signs the patient out and refuses sign-in, by password or a
+reset by phone, until reactivated), card checks and a health report
+(database, Redis, the events worker's heartbeat, dead letters, the outbox
+backlog). Account data only: never health data.
+
+Suspending signs the patient out and blocks sign-in and new hospital links;
+prescriptions and existing hospital links keep working (continuity of care;
+docs/history-events.md).
+
+- Set `SUPERADMIN_API_KEY` in `deploy/.env` (`openssl rand -base64 48`; at
+  least 32 characters, and a new value: not that of `ADMIN_API_KEY`, which
+  is the platform's session secret, nor of any other key) and the same value
+  as `SUPERADMIN_API_KEY` in the super admin's `.env`.
+  Compose gives it to `internal-api` only. Unset, every `/internal/admin`
+  request is refused (503).
+- Then `docker compose up -d internal-api events-worker backend` (the new
+  `users` columns are added on start; the worker starts its heartbeat).
+
+## Encrypted backups
+
+`deploy/backup/backup.sh` runs nightly (`endod-backup.timer`, 01:30 Addis
+Ababa) and backs up all four databases (platform, hospital, admin,
+organisation) and the uploaded-file volumes into `/opt/endod-backups/<time>/`.
+Every part is streamed straight into `age`, encrypted to
+`deploy/backup/recipient.pub`; nothing unencrypted is written to disk. The
+private key is kept offline by Endod: without it the backups cannot be read,
+so keep two safe copies of it. 14 days are kept on the server; set `OFFSITE`
+(an rclone remote) in `/opt/endod/deploy/backup/backup.env` for an off-site copy.
+
+Install: `apt install age`, copy `deploy/backup` to `/opt/endod/deploy/backup`,
+then `cp endod-backup.service endod-backup.timer /etc/systemd/system/ &&
+systemctl daemon-reload && systemctl enable --now endod-backup.timer`.
+
+Restore a part: `age -d -i endod-backup-key db-platform.gz.age | gunzip > platform.sql`.
