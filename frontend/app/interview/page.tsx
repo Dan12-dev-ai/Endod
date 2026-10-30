@@ -242,46 +242,7 @@ export default function Interview() {
       {emergencyOpen && <EmergencyPanel onClose={closeEmergency} />}
 
       <Drawer open={settingsDrawerOpen} onClose={() => setSettingsDrawerOpen(false)} title={t("interview.nav.setting")}>
-        <details className="group border border-slate-200 dark:border-gray-700 rounded-xl" open={false}>
-          <summary className="cursor-pointer list-none px-4 py-3 font-semibold text-slate-800 dark:text-gray-100 flex items-center justify-between">
-            {t("settings.appearance.title")}
-            <span className="text-slate-400 group-open:rotate-180 transition">▾</span>
-          </summary>
-          <div className="px-4 pb-4 flex items-center gap-2 flex-wrap">
-            {(["system", "light", "dark"] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setTheme(value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${theme === value ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white" : "bg-white dark:bg-gray-800 text-slate-700 dark:text-gray-200 border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700"}`}
-              >
-                {value === "system" ? t("settings.appearance.system") : value === "light" ? t("settings.appearance.light") : t("settings.appearance.dark")}
-              </button>
-            ))}
-          </div>
-        </details>
-
-        <details className="group border border-slate-200 dark:border-gray-700 rounded-xl" open={false}>
-          <summary className="cursor-pointer list-none px-4 py-3 font-semibold text-slate-800 dark:text-gray-100 flex items-center justify-between">
-            {t("nav.selectLanguage")}
-            <span className="text-slate-400 group-open:rotate-180 transition">▾</span>
-          </summary>
-          <div className="px-4 pb-4 flex items-center gap-2 flex-wrap">
-            {LANGUAGES.map((lang) => (
-              <button
-                key={lang.code}
-                type="button"
-                onClick={() => {
-                  setLanguage(lang.code);
-                  void rememberLanguageChoice(lang.code);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${language === lang.code ? "bg-black dark:bg-white text-white dark:text-black border-black dark:border-white" : "bg-white dark:bg-gray-800 text-slate-700 dark:text-gray-200 border-slate-200 dark:border-gray-600 hover:bg-slate-50 dark:hover:bg-gray-700"}`}
-              >
-                {lang.label}
-              </button>
-            ))}
-          </div>
-        </details>
+        <SettingsView onToast={showToast} onProfileChange={(profile) => setHealthCard(healthCardFromProfile(profile))} />
       </Drawer>
 
 {mobileSidebarOpen && (
