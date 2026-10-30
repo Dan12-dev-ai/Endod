@@ -269,7 +269,9 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
     return list;
   }, [allFacilities, ownershipFilter]);
   const mapPoints: MapPoint[] = useMemo(
-    () => facilities.map((f) => ({ id: f.id, latitude: f.latitude, longitude: f.longitude, label: f.name })),
+    () => facilities
+      .filter((f) => Number.isFinite(Number(f.latitude)) && Number.isFinite(Number(f.longitude)))
+      .map((f) => ({ id: f.id, latitude: f.latitude, longitude: f.longitude, label: f.name })),
     [facilities],
   );
   const here = useMemo(() => coords, [coords]);
