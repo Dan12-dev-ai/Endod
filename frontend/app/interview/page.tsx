@@ -15,7 +15,7 @@ import { api, logout } from "../lib/api";
 import { isLanguage, useI18n, type TranslationKey, LANGUAGES } from "../lib/i18n";
 import { useTheme } from "../lib/theme";
 import { rememberLanguageChoice } from "../components/language-switcher";
-import { Drawer } from "../components/ui/drawer";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "../components/ui/drawer";
 
 export default function Interview() {
   const { t, language, setLanguage } = useI18n();
@@ -241,10 +241,15 @@ export default function Interview() {
 
       {emergencyOpen && <EmergencyPanel onClose={closeEmergency} />}
 
-      <Drawer open={settingsDrawerOpen} onClose={() => setSettingsDrawerOpen(false)} title={t("interview.nav.setting")}>
-        <div className="drawer-settings">
-          <SettingsView onToast={showToast} onProfileChange={(profile) => setHealthCard(healthCardFromProfile(profile))} />
-        </div>
+      <Drawer open={settingsDrawerOpen} onOpenChange={setSettingsDrawerOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>{t("interview.nav.setting")}</DrawerTitle>
+          </DrawerHeader>
+          <div className="drawer-settings p-4">
+            <SettingsView onToast={showToast} onProfileChange={(profile) => setHealthCard(healthCardFromProfile(profile))} />
+          </div>
+        </DrawerContent>
       </Drawer>
 
 {mobileSidebarOpen && (
