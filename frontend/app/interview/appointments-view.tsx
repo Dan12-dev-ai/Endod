@@ -429,14 +429,14 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                   {t("appointments.reschedule")}
                 </button>
               )}
-              <button type="button" onClick={() => setConfirmCancelId(a.appointment_id)} className="px-3.5 py-1.5 text-xs font-semibold text-rose-700 bg-white dark:bg-gray-800 border border-rose-200 hover:bg-rose-50 rounded-lg transition">
+              <button type="button" onClick={() => setConfirmCancelId(a.appointment_id)} className="px-3.5 py-1.5 text-xs font-semibold text-rose-400 dark:text-rose-300 bg-white dark:bg-gray-800 border border-rose-200 dark:border-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition">
                 {t("appointments.cancel")}
               </button>
             </div>
           )
         ) : (
           <span className={`px-3 py-1 text-xs font-semibold rounded-lg flex-shrink-0 border ${
-            cancelled ? "text-rose-700 bg-rose-50 border-rose-200"
+            cancelled ? "text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-700"
               : a.status === "COMPLETED" ? "text-gray-900 bg-gray-50 border-gray-200"
               : "text-slate-600 bg-slate-50 border-slate-200"
           }`}>
