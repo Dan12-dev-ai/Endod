@@ -613,8 +613,10 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
                 key={value}
                 type="button"
                 data-purpose={`theme-${value}`}
-                disabled={busy !== null}
-                onClick={() => void setAppearance(value)}
+                onClick={() => {
+                  setTheme(value);
+                  void setAppearance(value);
+                }}
                 className={`px-4 py-2 rounded-xl border text-sm font-semibold transition ${
                   profile.preferences.theme === value
                     ? "bg-black text-white border-black"
