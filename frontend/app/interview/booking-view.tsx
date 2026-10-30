@@ -404,7 +404,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 className="hospital-card bg-white dark:bg-gray-800 rounded-2xl p-4 border border-slate-200 card-shadow hover:border-gray-400 transition-all flex items-center justify-between gap-3"
               >
                 <div className="flex items-center space-x-4 min-w-0">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 ${facility.partner ? "bg-red-50 border border-red-200 text-red-600" : "bg-gray-50 border border-gray-200 text-gray-900"}`}>
+                  <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 text-red-600 flex items-center justify-center font-bold text-sm flex-shrink-0">
                     {initials(facility.name)}
                   </div>
                   <div className="min-w-0">
