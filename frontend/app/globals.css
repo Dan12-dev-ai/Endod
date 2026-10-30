@@ -60,6 +60,10 @@ body {
 .dark .border-slate-100,
 .dark .border-slate-200,
 .dark .border-slate-300 { border-color: #374151 !important; }
+.dark .bg-\[\#F6F9FA\] { background-color: #0a0a0a !important; }
+.dark .bg-\[\#DDE9E6\] { background-color: #111827 !important; }
+.dark .bg-\[\#E6F8F3\] { background-color: #1f2937 !important; }
+.dark .bg-\[\#000000\] { background-color: #000000 !important; }
 .dark .shadow-xs,
 .dark .card-shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4) !important; }
 ::-webkit-scrollbar {
