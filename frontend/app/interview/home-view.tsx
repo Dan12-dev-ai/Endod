@@ -132,16 +132,6 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
                   {t("home.healthDetailsUnavailable")}
                 </p>
               )}
-              {card && !card.medicalUnavailable && !hasMedical(card) && (
-                <button
-                  className="w-full text-left text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 hover:bg-emerald-100 transition"
-                  data-purpose="home-add-health-details"
-                  onClick={() => onNavigate("setting")}
-                  type="button"
-                >
-                  {t("home.addHealthDetails")} →
-                </button>
-              )}
             </div>
           </div>
         </section>
