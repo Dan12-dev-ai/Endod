@@ -197,7 +197,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
           <DrawerHeader>
             <DrawerTitle>{t("interview.nav.setting")}</DrawerTitle>
           </DrawerHeader>
-          <div className="p-4">
+          <div className="drawer-settings p-4">
             <SettingsView compact onToast={() => {}} onProfileChange={() => {}} />
           </div>
         </DrawerContent>
