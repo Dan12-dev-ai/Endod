@@ -257,7 +257,7 @@ export default function Interview() {
               </svg>
             </button>
           </div>
-          <nav className="space-y-1 overflow-y-auto flex-1 min-h-0">
+          <nav className="space-y-1 overflow-hidden flex-1 min-h-0">
             {navItems.map((item) => {
               const isActive = activeNav === item.id;
               return (

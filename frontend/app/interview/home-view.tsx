@@ -68,7 +68,6 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
             {firstName ? t("home.welcomeNamed", { name: firstName }) : t("home.welcome")}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">{t("home.subtitle")}</p>
         </div>
 
         {/* Live: a place in today's queue, and follow-ups to book. */}
@@ -133,22 +132,12 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
                   {t("home.healthDetailsUnavailable")}
                 </p>
               )}
-              {card && !card.medicalUnavailable && !hasMedical(card) && (
-                <button
-                  className="w-full text-left text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 hover:bg-emerald-100 transition"
-                  data-purpose="home-add-health-details"
-                  onClick={() => onNavigate("setting")}
-                  type="button"
-                >
-                  {t("home.addHealthDetails")} →
-                </button>
-              )}
             </div>
           </div>
         </section>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.nextAppointment")}</p>
             {next === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
@@ -164,7 +153,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
               </>
             )}
           </button>
-<button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+<button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.notifications")}</p>
             {unread === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
@@ -177,7 +166,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
             )}
           </button>
           {SHORTCUTS.map((s) => (
-<button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+<button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white p-6 rounded-2xl border border-slate-300 shadow-md hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
               <h3 className="text-base font-bold text-slate-900 group-hover:text-white">{t(s.titleKey)}</h3>
               <p className="text-sm text-slate-500 mt-1 group-hover:text-slate-300">{t(s.hintKey)}</p>
             </button>

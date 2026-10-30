@@ -17,7 +17,7 @@ function Logo({ name, src }: { name: string; src: string }) {
   return (
     <div
       className={`flex-shrink-0 w-24 md:w-80 lg:w-96 flex items-center justify-center drop-shadow-md ${
-        isAfilas ? "bg-slate-900 rounded-xl p-4" : ""
+        isAfilas ? "bg-slate-900 rounded-xl p-4 h-14 md:h-54 lg:h-58" : ""
       }`}
     >
       <img

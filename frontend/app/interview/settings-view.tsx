@@ -101,6 +101,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
 
   // Personal information
   const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   // Phone: changed only by confirming the new number with an SMS code.
@@ -133,6 +134,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
   // section never discards unsaved edits in another.
   const applyPersonal = useCallback((p: Profile) => {
     setFirstName(p.first_name ?? "");
+    setMiddleName(p.middle_name ?? "");
     setLastName(p.last_name ?? "");
     setEmail(p.email ?? "");
   }, []);
@@ -193,7 +195,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     try {
       const updated = await api<Profile>("users/me", {
         method: "PATCH",
-        body: { first_name: firstName.trim(), last_name: lastName.trim(), email: email.trim() || null },
+        body: { first_name: firstName.trim(), middle_name: middleName.trim() || null, last_name: lastName.trim(), email: email.trim() || null },
       });
       setProfile(updated);
       applyPersonal(updated);
@@ -388,7 +390,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
 
   if (!profile) {
     return (
-      <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto">
+      <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         <div className="max-w-5xl mx-auto py-6">
           {loadError ? <p className="text-sm text-red-600" role="alert">{loadError}</p> : (
             <Skeleton className="space-y-6" label={t("settings.loading")}>
@@ -434,7 +436,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
   );
 
   return (
-    <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto">
+    <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
       <div className="max-w-5xl mx-auto space-y-6 py-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2">
           <div>
@@ -458,6 +460,10 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
               <div>
                 <label className={labelClass} htmlFor="first-name">{t("settings.personal.firstName")}</label>
                 <input id="first-name" required maxLength={60} type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="middle-name">{t("settings.personal.middleName")}</label>
+                <input id="middle-name" maxLength={60} type="text" value={middleName} onChange={(e) => setMiddleName(e.target.value)} className={inputClass} />
               </div>
               <div>
                 <label className={labelClass} htmlFor="last-name">{t("settings.personal.lastName")}</label>
