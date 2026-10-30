@@ -7,6 +7,7 @@ import {
   BLOOD_TYPES, formatPhoneDisplay, invalidateHealthCard, splitAllergies, type ProfileForCard,
 } from "../health-card/health-card-data";
 import { useI18n, type TranslationKey } from "../lib/i18n";
+import { useTheme } from "../lib/theme";
 import { Bone, FieldBones, Skeleton } from "../components/skeleton";
 import {
   Select,
@@ -28,6 +29,7 @@ type Profile = ProfileForCard & {
     email_notifications: boolean;
     sms_notifications: boolean;
     care_search_radius_km: number | null;
+    theme: "system" | "light" | "dark";
   };
   consent: {
     treatment_processing: boolean;
@@ -95,6 +97,7 @@ const STRENGTH_BARS = ["bg-slate-200", "bg-rose-500", "bg-amber-500", "bg-black"
 /** Account settings (GET/PATCH /users/me, preferences, consent, health profile; password change). */
 export default function SettingsView({ onToast, onProfileChange }: Props) {
   const { t } = useI18n();
+  const { setTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -150,7 +153,8 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     setProfile(p);
     applyPersonal(p);
     applyLocation(p);
-  }, [applyPersonal, applyLocation]);
+    setTheme((p.preferences.theme as "system" | "light" | "dark") ?? "system");
+  }, [applyPersonal, applyLocation, setTheme]);
 
   const applyHealth = useCallback((h: HealthProfile) => {
     setHealth(h);
@@ -357,6 +361,24 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
     try {
       const preferences = await api<Profile["preferences"]>("users/me/preferences", { method: "PATCH", body: { [field]: value } });
       setProfile((p) => (p ? { ...p, preferences: { ...p.preferences, ...preferences } } : p));
+    } catch (error) {
+      setProfile(previous);
+      onToast(t("common.couldNotUpdate"), message(error, t("common.pleaseTryAgain")));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const setAppearance = async (value: "system" | "light" | "dark") => {
+    if (!profile) return;
+    const previous = profile;
+    setProfile({ ...profile, preferences: { ...profile.preferences, theme: value } });
+    setTheme(value);
+    setBusy("theme");
+    try {
+      const preferences = await api<Profile["preferences"]>("users/me/preferences", { method: "PATCH", body: { theme: value } });
+      setProfile((p) => (p ? { ...p, preferences: { ...p.preferences, ...preferences } } : p));
+      onToast(t("settings.toast.profileSavedTitle"), t("settings.appearance.title"));
     } catch (error) {
       setProfile(previous);
       onToast(t("common.couldNotUpdate"), message(error, t("common.pleaseTryAgain")));
@@ -579,6 +601,32 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
               <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.location.update")}</button>
             </div>
           </form>
+        </section>
+
+        {/* Appearance */}
+        <section data-purpose="appearance-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
+          <div className="border-b border-slate-100 pb-4 mb-2">
+            <h2 className="text-lg font-bold text-slate-900">{t("settings.appearance.title")}</h2>
+            <p className="text-xs sm:text-sm text-slate-500">{t("settings.appearance.subtitle")}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {(["system", "light", "dark"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                data-purpose={`theme-${value}`}
+                disabled={busy !== null}
+                onClick={() => void setAppearance(value)}
+                className={`px-4 py-2 rounded-xl border text-sm font-semibold transition ${
+                  profile.preferences.theme === value
+                    ? "bg-black text-white border-black"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {value === "system" ? t("settings.appearance.system") : value === "light" ? t("settings.appearance.light") : t("settings.appearance.dark")}
+              </button>
+            ))}
+          </div>
         </section>
 
         {/* Privacy & notifications */}
