@@ -25,25 +25,23 @@ test.describe('Interview — Appointment page', () => {
     await expect(page.locator('[data-purpose="next-appointment"]')).not.toContainText('None scheduled');
   });
 
-  test('schedules a video visit from the modal', async ({ page }) => {
-    const doctor = unique('Video');
+  test('"Schedule Visit" opens Booking, where a hospital gets the booking', async ({ page }) => {
     await openSection(page, 'Appointment', 'appointment-view');
     await page.getByRole('button', { name: 'Schedule Visit' }).click();
-    await expect(page.locator('[data-purpose="appointment-modal"]')).toBeVisible();
+    // The real booking flow, not a private note no hospital ever receives.
+    await expect(page.locator('[data-purpose="booking-view"]')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Hospital & Clinic Reservation' })).toBeVisible();
+    await expect(page).toHaveURL(/section=booking/);
+    await expect(page.locator('[data-purpose="appointment-modal"]')).toHaveCount(0);
+  });
 
-    await page.locator('#appointment-provider').fill(doctor);
-    await page.locator('[data-purpose="appointment-modal"]').getByText('Video Telehealth', { exact: true }).click();
-    await page.locator('#appointment-meeting-url').fill('https://meet.example.com/visit');
-    const slot = futureSlot(5, 14, 0);
-    await page.locator('#appointment-date').fill(slot.date);
-    await page.locator('#appointment-time').fill(slot.time);
-    await page.getByRole('button', { name: 'Confirm Booking' }).click();
-
-    await expect(page.locator('[data-purpose="appointment-modal-success"]')).toBeVisible();
-    await page.getByRole('button', { name: 'Done' }).click();
-    const card = page.locator('[data-purpose^="appointment-card-"]', { hasText: doctor });
-    await expect(card).toContainText('Video visit');
-    await expect(card.getByRole('link', { name: 'Join video visit' })).toHaveAttribute('href', 'https://meet.example.com/visit');
+  test('on a phone, the add button opens Booking too', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/interview?section=appointment', { waitUntil: 'networkidle' });
+    await expect(page.locator('[data-purpose="appointment-view"]')).toBeVisible();
+    await page.locator('[data-purpose="appointment-fab"]').click();
+    await expect(page.locator('[data-purpose="booking-view"]')).toBeVisible();
+    await expect(page.locator('[data-purpose="appointment-modal"]')).toHaveCount(0);
   });
 
   test('reschedules an appointment', async ({ page }) => {

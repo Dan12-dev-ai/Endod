@@ -50,7 +50,8 @@ patient arriving through an Endod booking (`appointment.requested` carries
 `patient.dedan_id`) is already identified: checking that booking in links
 the hospital patient without a request (the platform links the account to
 that hospital when the booking is paid: `appointment.requested` is only
-sent once Chapa confirms the payment, see [payments.md](payments.md)).
+sent once Chapa confirms the payment, or at once for a visit paid at the
+hospital while online payment is off, see [payments.md](payments.md)).
 
 The platform accepts records and follow-ups about a patient only from a
 hospital linked to them (a confirmed link, or a paid Endod booking there;

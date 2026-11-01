@@ -134,7 +134,7 @@ def _to_payload(appointment: Appointment) -> Dict[str, Any]:
 def _payment_payload(appointment: Appointment) -> Dict[str, Any]:
     """Where the patient's payment for a partner booking is (booking_payments.py):
     awaiting_payment (with Chapa's page until the hold ends), paid, expired,
-    refund_pending or refunded."""
+    refund_pending, refunded, or at_hospital (paid there: online payment is off)."""
     status = appointment.payment_status
     if status is None:
         # Paid from the old Endod balance, and refunded there when closed early.

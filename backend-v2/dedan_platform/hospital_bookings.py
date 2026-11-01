@@ -20,16 +20,24 @@ The hospital then decides (events from the hospital service):
 
 The patient can cancel (and is refunded) until the visit starts; after that
 it is the hospital's to close. Only the hospital confirms or completes.
+
+Paying at the hospital: while online payment is off (no Chapa key), a priced
+booking is made at once, as a free one is (``appointment.requested`` straight
+away), with payment ``at_hospital``: the patient pays the hospital's price
+there. Endod takes no fee on these (``service_fee`` 0) and holds no hospital
+share (there is no payout), and closing one never refunds anything, since
+nothing was paid to Endod. The event says how the visit is paid:
+``"payment": "online"`` (paid through Chapa, or free) or ``"at_hospital"``.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from dedan_platform import booking_payments, chapa, eventbus, identity, jitsi, partner_config, partners, wallet
@@ -77,7 +85,8 @@ class BookingError(AppointmentError):
 
 
 class TooManyHolds(BookingError):
-    """The patient already has the most bookings waiting for payment."""
+    """The patient already has the most bookings waiting for payment (or, with
+    online payment off, the most upcoming visits to pay at the hospital)."""
 
 
 class PaymentUnavailable(BookingError):
@@ -105,16 +114,29 @@ def _price_for(hospital, mode: str) -> int:
     return hospital.price_in_person
 
 
+#: How a booking is paid, as the hospital is told (``appointment.requested``).
+ONLINE, AT_HOSPITAL = "online", "at_hospital"
+
+
+def _charges(price: int) -> Tuple[int, str]:
+    """Endod's fee and how the visit is paid: online through Chapa (or free),
+    or, while Chapa is not configured, at the hospital with no Endod fee."""
+    if partner_config.chapa_secret_key():
+        return wallet.service_fee(price), ONLINE
+    return 0, (AT_HOSPITAL if price else ONLINE)
+
+
 def quote(hospital_id: str, visit_mode: Optional[str]) -> Dict[str, Any]:
-    """What a visit costs: the hospital's price plus Endod's fee (santim)."""
+    """What a visit costs: the hospital's price plus Endod's fee (santim), and
+    whether it is paid online or at the hospital."""
     hospital = partners.get(hospital_id)
     if hospital is None:
         raise BookingError("This hospital is not taking bookings through Endod right now.")
     mode = _mode(visit_mode)
     price = _price_for(hospital, mode)
-    fee = wallet.service_fee(price)
+    fee, payment = _charges(price)
     return {"hospital_id": hospital.id, "visit_mode": mode, "price": price, "service_fee": fee,
-            "total": price + fee, "currency": "ETB"}
+            "total": price + fee, "currency": "ETB", "payment": payment}
 
 
 def _patient(user_id: str) -> Dict[str, Any]:
@@ -135,6 +157,20 @@ def _quietly(what: str, action, *args, **kwargs) -> None:
         action(*args, **kwargs)
     except Exception:  # noqa: BLE001
         logger.exception("after_payment_side_effect_failed what=%s", what)
+
+
+#: Open visits to pay at the hospital one patient may have at once. Each goes
+#: to a hospital at once with nothing paid, so they are capped as unpaid holds are.
+MAX_OPEN_AT_HOSPITAL = 3
+
+
+def _require_at_hospital_room(session: Session, user_id: str) -> None:
+    open_visits = session.scalar(select(func.count()).select_from(Appointment).where(
+        Appointment.user_id == user_id, Appointment.payment_status == PaymentState.AT_HOSPITAL,
+        Appointment.hospital_state.in_(HospitalState.OPEN), Appointment.scheduled_at > utcnow()))
+    if open_visits >= MAX_OPEN_AT_HOSPITAL:
+        raise TooManyHolds(f"You have {open_visits} upcoming visits to pay at the hospital. Cancel one, or wait "
+                           "until one has happened, before booking another.")
 
 
 def _payment_view(appointment: Dict[str, Any], checkout_url: Optional[str], tx_ref: Optional[str]) -> Dict[str, Any]:
@@ -160,15 +196,16 @@ def book(
     """Hold the slot and open Chapa's checkout for it.
 
     Returns the appointment (``awaiting_payment``) and the payment with its
-    ``checkout_url``. Raises BookingError (PaymentUnavailable when Chapa
-    cannot take it) or AppointmentError.
+    ``checkout_url``. A free visit, or (online payment off) one paid at the
+    hospital, is booked at once instead (no checkout). Raises BookingError
+    (PaymentUnavailable when Chapa cannot take it) or AppointmentError.
     """
     hospital = partners.get(hospital_id)
     if hospital is None:
         raise BookingError("This hospital is not taking bookings through Endod right now.")
     mode = _mode(visit_mode)
     price = _price_for(hospital, mode)
-    fee = wallet.service_fee(price)
+    fee, how_paid = _charges(price)
     if scheduled_at.tzinfo is None:
         raise AppointmentError("scheduled_at must include a timezone offset.")
     scheduled_at = ensure_utc(scheduled_at)
@@ -182,16 +219,19 @@ def book(
         raise BookingError("This hospital does not offer that service.")
     notes = _short_text(notes, "notes", 2000)
     duration = max(5, min(int(duration_minutes or 30), 480))
-    total = price + fee
-    if total and not partner_config.chapa_secret_key():
-        raise PaymentUnavailable("Payments are not set up yet.")
+    at_hospital = how_paid == AT_HOSPITAL
+    # Paid online through Chapa: the slot is held until Chapa confirms. Free,
+    # or paid at the hospital (online payment off): booked at once.
+    online_total = 0 if at_hospital else price + fee
     location = None if mode == VIDEO else \
         ", ".join(p for p in (hospital.name, hospital.address, hospital.city) if p)[:200]
 
-    patient = _patient(user_id) if not total else None
+    patient = _patient(user_id) if not online_total else None
     with session_scope() as session:
         _require_no_overlap(session, user_id, scheduled_at, duration, None)
         booking_payments.require_hold_room(session, user_id)
+        if at_hospital:
+            _require_at_hospital_room(session, user_id)
         appointment = Appointment(
             id=new_uuid(), user_id=user_id, scheduled_at=scheduled_at, appointment_type="consultation",
             duration_minutes=duration, location=location, visit_mode=mode, department=service,
@@ -203,19 +243,20 @@ def book(
         session.add(appointment)
         session.flush()
         tx_ref = None
-        if total:
-            tx_ref = booking_payments.new_payment(session, appointment, total).tx_ref
+        if online_total:
+            tx_ref = booking_payments.new_payment(session, appointment, online_total).tx_ref
         else:
-            on_paid(session, appointment, patient)  # nothing to pay: booked at once
+            # Nothing to pay online (free, or paid at the hospital): booked at once.
+            on_paid(session, appointment, patient, at_hospital=at_hospital)
         actions = list(session.info.get("after_commit", []))
         appointment_id = appointment.id
     for action in actions:
         _quietly("after_commit", action)
 
     checkout = None
-    if total:
+    if online_total:
         try:
-            checkout = booking_payments.open_checkout(appointment_id, tx_ref, total, user_id)
+            checkout = booking_payments.open_checkout(appointment_id, tx_ref, online_total, user_id)
         except chapa.ChapaError as exc:
             # No checkout, no hold: the slot is freed at once.
             with session_scope() as session:
@@ -235,9 +276,13 @@ SEND_GRACE = timedelta(minutes=5)
 
 
 def on_paid(session: Session, appointment: Appointment, patient: Optional[Dict[str, Any]],
-            payment: Optional[BookingPayment] = None) -> bool:
+            payment: Optional[BookingPayment] = None, at_hospital: bool = False) -> bool:
     """Chapa confirmed the payment (booking_payments.settle, with the booking
     locked): the hold becomes a booking and the hospital is told, once.
+
+    Also called at booking for a visit with nothing to pay online: a free one,
+    or (``at_hospital``) one the patient pays at the hospital while online
+    payment is off. Such a booking has no hospital share held by Endod.
 
     Returns False when the payment came too late for the visit (its start,
     less ``SEND_GRACE``, has passed): nothing is sent, the hold ends and the
@@ -251,11 +296,14 @@ def on_paid(session: Session, appointment: Appointment, patient: Optional[Dict[s
         return False
     mode = appointment.visit_mode or IN_PERSON
     appointment.hospital_state = HospitalState.AWAITING_DOCTOR if mode == VIDEO else HospitalState.AWAITING_HOSPITAL
-    appointment.payment_status = PaymentState.PAID
+    appointment.payment_status = PaymentState.AT_HOSPITAL if at_hospital else PaymentState.PAID
     appointment.payment_due_at = None
     appointment.payment_url = None
     price, fee = appointment.price or 0, appointment.service_fee or 0
-    session.add(HospitalPayout(hospital_id=appointment.hospital_id, appointment_id=appointment.id, amount=price))
+    if not at_hospital:
+        # The hospital's share, held by Endod until the visit happens. Paid at
+        # the hospital, the hospital already has its money: no payout.
+        session.add(HospitalPayout(hospital_id=appointment.hospital_id, appointment_id=appointment.id, amount=price))
     # The booking identifies the patient to this hospital (contract section 1):
     # what it then sends about them (records, follow-ups, queue places) is accepted.
     from dedan_platform import patient_history
@@ -266,6 +314,9 @@ def on_paid(session: Session, appointment: Appointment, patient: Optional[Dict[s
         "visit_mode": _EVENT_MODE[mode], "service": appointment.department,
         "scheduled_at": ensure_aware(appointment.scheduled_at).isoformat(),
         "duration_minutes": appointment.duration_minutes, "notes": appointment.notes, "price": price,
+        # How the visit is paid: "online" (through Chapa, or free) or
+        # "at_hospital" (the hospital collects ``price`` at the visit).
+        "payment": AT_HOSPITAL if at_hospital else ONLINE,
     })
     user_id, appointment_id, hospital_id = appointment.user_id, appointment.id, appointment.hospital_id
     scheduled_at, notes, location = ensure_aware(appointment.scheduled_at), appointment.notes, appointment.location
@@ -282,7 +333,8 @@ def on_paid(session: Session, appointment: Appointment, patient: Optional[Dict[s
                  correlation_id=correlation_id)
         _quietly("inbox", _inbox, user_id, "appointment_booked",
                  "Video visit requested" if mode == VIDEO else "Visit booked",
-                 f"Paid {wallet.birr(price + fee)} birr. "
+                 (f"Pay {wallet.birr(price)} birr at the hospital. " if at_hospital
+                  else f"Paid {wallet.birr(price + fee)} birr. ")
                  + ("A doctor will approve it; you will be told here." if mode == VIDEO else
                     f"{name} has your booking."),
                  appointment_id)
@@ -354,7 +406,10 @@ def _refund(session: Session, appointment: Appointment, why: str) -> int:
     """Refund the price and fee (once, whatever retries) and void the hospital's share.
 
     The money goes back through Chapa to how the patient paid: a refund row
-    the events worker sends (booking_payments.process_refunds)."""
+    the events worker sends (booking_payments.process_refunds). A visit paid
+    at the hospital was never paid to Endod: nothing is refunded (0)."""
+    if appointment.payment_status == PaymentState.AT_HOSPITAL:
+        return 0
     amount = (appointment.price or 0) + (appointment.service_fee or 0)
     payment = session.scalar(select(BookingPayment).where(BookingPayment.appointment_id == appointment.id)
                              .with_for_update())

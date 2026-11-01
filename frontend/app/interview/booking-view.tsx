@@ -76,9 +76,11 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
   const [quote, setQuote] = useState<Quote | null>(null);
   // Paid bookings: on the way to Chapa's checkout.
   const [redirecting, setRedirecting] = useState(false);
-  // Whether online payment is on (no Chapa key yet: paid bookings cannot be made).
+  // Whether online payment is on. While it is off (no Chapa key yet), a priced
+  // partner visit is booked at once and paid at the hospital (no Endod fee).
   const [payments, setPayments] = useState<PaymentsStatus | null>(null);
   const paymentsOff = payments !== null && !payments.online_payments;
+  const payAtHospital = quote?.payment === "at_hospital";
 
   useEffect(() => {
     let cancelled = false;
@@ -432,7 +434,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                       </div>
                     )}
                     {facility.partner && paymentsOff && (facility.price_in_person ?? 0) > 0 && (
-                      <p className="text-[11px] text-amber-800 mt-1" data-purpose="payments-off">{t("booking.paymentsOff")}</p>
+                      <p className="text-[11px] text-slate-600 mt-1" data-purpose="pay-at-hospital-tag">{t("booking.payAtHospitalTag")}</p>
                     )}
                   </div>
                 </div>
@@ -576,19 +578,22 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 <textarea id="booking-note" rows={2} maxLength={1000} value={bookingNote} onChange={(e) => setBookingNote(e.target.value)} placeholder={t("booking.reasonPlaceholder")} className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-black" />
               </div>
 
-              {selected.partner && quote && (
+              {selected.partner && quote && payAtHospital && (
+                <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-xs space-y-1" data-purpose="booking-quote" role="status">
+                  <p className="font-bold text-slate-900" data-purpose="pay-at-hospital">
+                    {t("booking.payAtHospital", { amount: formatBirr(quote.price, locale) })}
+                  </p>
+                  <p className="text-[11px] text-slate-500" data-purpose="pay-hint">{t("booking.payAtHospitalHint")}</p>
+                </div>
+              )}
+
+              {selected.partner && quote && !payAtHospital && (
                 <dl className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-xs space-y-1" data-purpose="booking-quote">
                   <div className="flex justify-between"><dt className="text-slate-500">{t("booking.quote.price")}</dt><dd className="font-semibold">{formatBirr(quote.price, locale)}</dd></div>
                   <div className="flex justify-between"><dt className="text-slate-500">{t("booking.quote.fee")}</dt><dd className="font-semibold">{formatBirr(quote.service_fee, locale)}</dd></div>
                   <div className="flex justify-between border-t border-slate-200 pt-1"><dt className="font-bold text-slate-800">{t("booking.quote.total")}</dt><dd className="font-bold" data-purpose="quote-total">{formatBirr(quote.total, locale)}</dd></div>
                   <p className="text-[11px] text-slate-500 pt-1" data-purpose="pay-hint">{t("booking.payHint")}</p>
                 </dl>
-              )}
-
-              {selected.partner && paymentsOff && (quote === null || quote.total > 0) && (
-                <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-purpose="payments-off" role="status">
-                  {t("booking.paymentsOff")}
-                </p>
               )}
 
               {formError && (
@@ -599,13 +604,16 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 <button type="button" onClick={closeBooking} className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
                   {t("common.cancel")}
                 </button>
-                <button type="submit" disabled={isSubmitting || redirecting || (selected.partner && paymentsOff && (quote === null || quote.total > 0))} className="px-5 py-2 rounded-xl bg-black hover:bg-gray-800 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
+                {/* With online payment off, the price to pay at the hospital is shown before booking. */}
+                <button type="submit" disabled={isSubmitting || redirecting || (selected.partner && paymentsOff && quote === null)} className="px-5 py-2 rounded-xl bg-black hover:bg-gray-800 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
                   <span>
                     {redirecting
                       ? t("booking.toChapa")
                       : isSubmitting
                         ? t("booking.submitting")
-                        : selected.partner
+                        : selected.partner && payAtHospital
+                          ? t("booking.bookPayAtHospital")
+                          : selected.partner
                           ? t("booking.payAndBook")
                           : t("booking.submit")}
                   </span>
@@ -647,6 +655,11 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 <span className="font-mono font-bold text-slate-800">{booked.appointment_id.slice(0, 8).toUpperCase()}</span>
               </div>
             </div>
+            {booked.hospital_booking?.payment.status === "at_hospital" && (
+              <p className="text-xs font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4" data-purpose="booked-pay-at-hospital">
+                {t("booking.payAtHospital", { amount: formatBirr(booked.hospital_booking.price, locale) })}
+              </p>
+            )}
             {booked.hospital_booking?.state === "awaiting_doctor" && (
               <p className="text-xs text-sky-800 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2 mb-4" data-purpose="booked-awaiting-doctor">
                 {t("booking.awaitingDoctor")}

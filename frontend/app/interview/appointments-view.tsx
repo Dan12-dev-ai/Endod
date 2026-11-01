@@ -11,9 +11,7 @@ import {
   CHAPA_CHECKOUT_ORIGIN,
   type PaymentsStatus,
   appointmentTitle,
-  browserTimezone,
   departmentLabel,
-  type FacilityList,
   formatBirr,
   formatWhen,
   initials,
@@ -35,10 +33,13 @@ type Props = {
   /** data-purpose of a card to highlight (from a notification link). */
   highlightTarget: string | null;
   onToast: (title: string, message: string) => void;
+  /** "Schedule Visit": opens Booking, where a visit is booked with a hospital. */
+  onBook: () => void;
 };
 
 type Tab = "upcoming" | "past" | "cancelled";
-type ModalState = { mode: "book" } | { mode: "reschedule"; appointment: Appointment } | null;
+/** Moving one of the patient's own entries (partner bookings are cancelled and booked again). */
+type ModalState = { mode: "reschedule"; appointment: Appointment } | null;
 
 /**
  * The column headers of the month grid, in the active locale. Built from a
@@ -71,8 +72,11 @@ function localDateInput(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-/** The patient's appointments (GET/POST /users/me/appointments, reschedule, cancel). */
-export default function AppointmentsView({ highlightTarget, onToast }: Props) {
+/**
+ * The patient's appointments (GET /users/me/appointments, reschedule, cancel).
+ * New visits are booked in Booking (onBook): only a booking there reaches a hospital.
+ */
+export default function AppointmentsView({ highlightTarget, onToast, onBook }: Props) {
   const { t, locale } = useI18n();
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -91,15 +95,9 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
   const [success, setSuccess] = useState("");
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formProvider, setFormProvider] = useState("");
-  const [formFacility, setFormFacility] = useState("");
   const [formDate, setFormDate] = useState(() => localDateInput(new Date(Date.now() + 86_400_000)));
   const [formTime, setFormTime] = useState("10:00");
-  const [formType, setFormType] = useState<"in-person" | "telehealth">("in-person");
-  const [formMeetingUrl, setFormMeetingUrl] = useState("");
-  const [formNotes, setFormNotes] = useState("");
   const [formWindow, setFormWindow] = useState<Appointment["time_window"]>("exact");
-  const [facilities, setFacilities] = useState<FacilityList["facilities"]>([]);
 
   // Where "Pay now" may lead (Chapa's checkout; see safeCheckoutUrl).
   const [checkoutOrigins, setCheckoutOrigins] = useState<string[]>([CHAPA_CHECKOUT_ORIGIN]);
@@ -227,17 +225,6 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
     return days;
   }, [appointments]);
 
-  const openBook = () => {
-    setModal({ mode: "book" });
-    setSuccess("");
-    setFormError("");
-    if (facilities.length === 0) {
-      api<FacilityList>("users/me/care/facilities", { query: { limit: 100 } })
-        .then((list) => setFacilities(list.facilities))
-        .catch(() => undefined);
-    }
-  };
-
   const openReschedule = (appointment: Appointment) => {
     const at = new Date(appointment.scheduled_at);
     setFormDate(localDateInput(at));
@@ -264,29 +251,11 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
     setIsSubmitting(true);
     setFormError("");
     try {
-      if (modal.mode === "reschedule") {
-        await api(`users/me/appointments/${modal.appointment.appointment_id}/reschedule`, {
-          method: "POST",
-          body: { scheduled_at: scheduledAt, time_window: formWindow },
-        });
-        setSuccess(t("appointments.toast.moved"));
-      } else {
-        const telehealth = formType === "telehealth";
-        await api("users/me/appointments", {
-          method: "POST",
-          body: {
-            scheduled_at: scheduledAt,
-            timezone: browserTimezone(),
-            visit_mode: telehealth ? "telehealth" : "in_person",
-            provider_name: formProvider.trim() || null,
-            facility_id: !telehealth && formFacility ? formFacility : null,
-            meeting_url: telehealth ? formMeetingUrl.trim() || null : null,
-            notes: formNotes.trim() || null,
-          },
-        });
-        setSuccess(t("appointments.toast.booked"));
-        setFormNotes("");
-      }
+      await api(`users/me/appointments/${modal.appointment.appointment_id}/reschedule`, {
+        method: "POST",
+        body: { scheduled_at: scheduledAt, time_window: formWindow },
+      });
+      setSuccess(t("appointments.toast.moved"));
       await load();
     } catch (error) {
       setFormError(error instanceof ApiError ? error.message : t("common.somethingWrong"));
@@ -330,6 +299,8 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
     const closed = hb && (hb.state === "rejected" || hb.state === "cancelled" || hb.state === "payment_expired");
     const unpaid = hb?.state === "awaiting_payment";
     const payNow = unpaid ? safeCheckoutUrl(hb.payment.checkout_url, checkoutOrigins) : null;
+    // Booked while online payment was off: paid at the hospital, so never refunded.
+    const atHospital = payment === "at_hospital";
     const amount = hb ? formatBirr(hb.total, locale) : "";
     return (
       <div
@@ -375,6 +346,10 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                     : payment === "refund_pending" ? t("appointments.payment.refundPending", { amount })
                     : payment === "refunded" ? t("appointments.refunded", { amount })
                     : payment === "expired" ? t("appointments.payment.expired")
+                    : atHospital
+                      ? closed ? t("appointments.payment.atHospitalClosed")
+                        : hb.state === "completed" ? t("appointments.payment.atHospitalDone", { amount })
+                        : t("appointments.payment.atHospital", { amount })
                     : t("appointments.paid", { amount })}
                 </span>
                 {hb.reason && closed && hb.state !== "payment_expired" && (
@@ -412,7 +387,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
             <div className="flex items-center gap-2 flex-shrink-0" data-purpose="cancel-confirm">
               <span className="text-xs text-slate-600">
                 {unpaid ? t("appointments.cancelUnpaid")
-                  : hb ? t("appointments.cancelRefund", { amount }) : t("appointments.cancelThis")}
+                  : hb && !atHospital ? t("appointments.cancelRefund", { amount }) : t("appointments.cancelThis")}
               </span>
               <button type="button" disabled={busyId === a.appointment_id} onClick={() => cancelAppointment(a)} className="px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition">
                 {t("appointments.yesCancel")}
@@ -464,7 +439,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                 </span>
               </div>
             </div>
-            <button type="button" onClick={openBook} className="hidden lg:inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-black hover:bg-gray-800 text-white text-xs font-semibold shadow-sm transition self-start md:self-auto">
+            <button type="button" data-purpose="appointment-book" onClick={onBook} className="hidden lg:inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-black hover:bg-gray-800 text-white text-xs font-semibold shadow-sm transition self-start md:self-auto">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
                 <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -611,18 +586,16 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
         </div>
       </div>
 
-      {/* ===== Book / Reschedule Modal ===== */}
+      {/* ===== Reschedule Modal ===== */}
       {modal && (
         <div data-purpose="appointment-modal" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
-                  {modal.mode === "reschedule" ? t("appointments.modal.rescheduleTitle", { name: appointmentTitle(modal.appointment, t) }) : t("appointments.modal.scheduleTitle")}
+                  {t("appointments.modal.rescheduleTitle", { name: appointmentTitle(modal.appointment, t) })}
                 </h3>
-                <p className="text-xs text-slate-500">
-                  {modal.mode === "reschedule" ? t("appointments.modal.chooseNew") : t("appointments.modal.selectDetails")}
-                </p>
+                <p className="text-xs text-slate-500">{t("appointments.modal.chooseNew")}</p>
               </div>
               <button type="button" aria-label={t("common.close")} onClick={closeModal} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -633,7 +606,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
 
             {success ? (
               <div data-purpose="appointment-modal-success" className="mt-4 p-4 rounded-2xl bg-gray-50 border border-gray-200 text-center">
-                <h4 className="text-sm font-bold text-black">{modal.mode === "reschedule" ? t("appointments.modal.moved") : t("appointments.modal.booked")}</h4>
+                <h4 className="text-sm font-bold text-black">{t("appointments.modal.moved")}</h4>
                 <p className="text-xs text-gray-900 mt-1">{success}</p>
                 <button type="button" onClick={closeModal} className="mt-3 px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-gray-800 rounded-lg">
                   {t("common.done")}
@@ -641,51 +614,6 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
               </div>
             ) : (
               <form onSubmit={submit} className="mt-4 space-y-4">
-                {modal.mode === "book" && (
-                  <>
-                    <div>
-                      <label htmlFor="appointment-provider" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.doctor")}</label>
-                      <input id="appointment-provider" maxLength={120} value={formProvider} onChange={(e) => setFormProvider(e.target.value)} placeholder={t("appointments.modal.doctorPlaceholder")} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:bg-white focus:ring-2 focus:ring-black font-medium" />
-                    </div>
-                    <div>
-                      <span className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.type")}</span>
-                      <div className="grid grid-cols-2 gap-2">
-                        <label className={`flex items-center space-x-2 p-2.5 rounded-xl border cursor-pointer ${formType === "in-person" ? "border-black bg-gray-50/50" : "border-slate-200 hover:bg-slate-50"}`}>
-                          <input type="radio" name="apptVisitType" checked={formType === "in-person"} onChange={() => setFormType("in-person")} className="text-black" />
-                          <span className="text-xs font-bold text-black">{t("appointments.modal.inPersonFacility")}</span>
-                        </label>
-                        <label className={`flex items-center space-x-2 p-2.5 rounded-xl border cursor-pointer ${formType === "telehealth" ? "border-black bg-gray-50/50" : "border-slate-200 hover:bg-slate-50"}`}>
-                          <input type="radio" name="apptVisitType" checked={formType === "telehealth"} onChange={() => setFormType("telehealth")} className="text-black" />
-                          <span className="text-xs font-medium text-slate-700">{t("appointments.videoTelehealth")}</span>
-                        </label>
-                      </div>
-                    </div>
-                    {formType === "in-person" ? (
-                      <div>
-                        <label htmlFor="appointment-facility" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.facility")}</label>
-                        <Select value={formFacility === "" ? "none" : formFacility} onValueChange={(v) => setFormFacility(v === "none" ? "" : v)}>
-                          <SelectTrigger className="w-full text-xs" id="appointment-facility">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">{t("appointments.modal.notListed")}</SelectItem>
-                            {facilities.map((f) => (
-                              <SelectItem key={f.id} value={f.id}>
-                                {f.name} — {f.city}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ) : (
-                      <div>
-                        <label htmlFor="appointment-meeting-url" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.videoLink")}</label>
-                        <input id="appointment-meeting-url" type="url" maxLength={500} value={formMeetingUrl} onChange={(e) => setFormMeetingUrl(e.target.value)} placeholder="https://..." className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800" />
-                      </div>
-                    )}
-                  </>
-                )}
-
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor="appointment-date" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.date")}</label>
@@ -697,7 +625,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                   </div>
                 </div>
 
-                {modal.mode === "reschedule" && modal.appointment.visit_mode === "in_person" && (
+                {modal.appointment.visit_mode === "in_person" && (
                   <div>
                     <label htmlFor="appointment-window" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.arrivalWindow")}</label>
                     <Select value={formWindow} onValueChange={(v) => setFormWindow(v as Appointment["time_window"])}>
@@ -715,13 +643,6 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                   </div>
                 )}
 
-                {modal.mode === "book" && (
-                  <div>
-                    <label htmlFor="appointment-notes" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.symptoms")}</label>
-                    <textarea id="appointment-notes" rows={2} maxLength={1000} value={formNotes} onChange={(e) => setFormNotes(e.target.value)} placeholder={t("appointments.modal.symptomsPlaceholder")} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800" />
-                  </div>
-                )}
-
                 {formError && (
                   <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" data-purpose="appointment-error" role="alert">{formError}</p>
                 )}
@@ -731,7 +652,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
                     {t("common.cancel")}
                   </button>
                   <button type="submit" disabled={isSubmitting} className="px-5 py-2 text-xs font-bold text-white bg-black hover:bg-gray-800 disabled:opacity-60 rounded-xl shadow-sm transition">
-                    {isSubmitting ? t("common.saving") : modal.mode === "reschedule" ? t("appointments.modal.confirmReschedule") : t("appointments.modal.confirmBooking")}
+                    {isSubmitting ? t("common.saving") : t("appointments.modal.confirmReschedule")}
                   </button>
                 </div>
               </form>
@@ -744,7 +665,7 @@ export default function AppointmentsView({ highlightTarget, onToast }: Props) {
           type="button"
           aria-label={t("appointments.scheduleVisit")}
           data-purpose="appointment-fab"
-          onClick={openBook}
+          onClick={onBook}
           className="fixed bottom-20 right-4 z-50 lg:hidden flex items-center justify-center w-12 h-12 rounded-full bg-black hover:bg-gray-800 text-white shadow-lg transition"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">

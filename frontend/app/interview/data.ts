@@ -66,8 +66,8 @@ export type HospitalBookingState =
   | "awaiting_payment" | "payment_expired"
   | "awaiting_hospital" | "awaiting_doctor" | "confirmed" | "rejected" | "cancelled" | "completed";
 
-/** Where the patient's payment (through Chapa) for a booking is. */
-export type PaymentStatus = "awaiting_payment" | "paid" | "expired" | "refund_pending" | "refunded";
+/** Where the patient's payment (through Chapa) for a booking is; at_hospital: paid there (online payment off). */
+export type PaymentStatus = "awaiting_payment" | "paid" | "expired" | "refund_pending" | "refunded" | "at_hospital";
 
 export type HospitalBooking = {
   hospital_id: string;
@@ -94,6 +94,8 @@ export type Quote = {
   price: number;
   service_fee: number;
   total: number;
+  /** "at_hospital" while online payment is off: the price is paid there, with no Endod fee. */
+  payment?: "online" | "at_hospital";
 };
 
 /** POST /users/me/appointments for a partner hospital: the hold and its checkout. */
