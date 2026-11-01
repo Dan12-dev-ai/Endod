@@ -204,44 +204,105 @@ test.describe('Paying for each booking through Chapa', () => {
   });
 });
 
-test.describe('Online payment not set up yet', () => {
-  test('paid hospitals say so and "Pay and book" is off; other bookings are unaffected', async ({ page }) => {
-    // As in production before Chapa keys are set (the backend answers paid bookings with 503).
+test.describe('Online payment not set up yet: pay at the hospital', () => {
+  // As in production before Chapa keys are set: the backend books a priced
+  // partner visit at once, to be paid at the hospital with no Endod fee
+  // (payment "at_hospital"; the backend side is covered by its own tests).
+  // The test backend has a Chapa key, so its answers are the ones it gives
+  // without one.
+  async function paymentsOff(page: Page) {
     await page.route('**/api/backend/users/me/payments/status', (route) =>
       route.fulfill({ json: { online_payments: false, checkout_origins: ['https://checkout.chapa.co'] } }),
     );
+    await page.route('**/api/backend/users/me/hospital-bookings/quote?**', (route) => {
+      const mode = new URL(route.request().url()).searchParams.get('visit_mode') ?? 'in_person';
+      const price = mode === 'telehealth' ? 12000 : 20000;
+      return route.fulfill({ json: {
+        hospital_id: PARTNER_ID, visit_mode: mode, price, service_fee: 0, total: price, currency: 'ETB',
+        payment: 'at_hospital',
+      } });
+    });
+  }
+
+  function atHospitalBooking(id: string, scheduledAt: string, price = 20000) {
+    return {
+      appointment_id: id, user_id: 'u', scheduled_at: scheduledAt, appointment_type: 'consultation',
+      status: 'SCHEDULED', duration_minutes: 30, location: 'Endod Test General Hospital', meeting_url: null,
+      visit_mode: 'in_person', department: 'general_medicine', time_window: 'morning',
+      facility: { id: PARTNER_ID, name: 'Endod Test General Hospital' }, provider_name: null, notes: null,
+      timezone: 'Africa/Addis_Ababa', created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      hospital_booking: {
+        hospital_id: PARTNER_ID, state: 'awaiting_hospital', price, service_fee: 0, total: price, reason: null,
+        video_ready: false, payment: { status: 'at_hospital', due_at: null, checkout_url: null },
+      },
+    };
+  }
+
+  test('a priced partner hospital is bookable, showing what to pay at the hospital', async ({ page }) => {
+    await paymentsOff(page);
+    let posted: Record<string, unknown> | null = null;
+    await page.route('**/api/backend/users/me/appointments', async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      posted = route.request().postDataJSON();
+      return route.fulfill({ status: 201, json: {
+        appointment: atHospitalBooking('a7a7a7a7-0000-4000-8000-000000000001', posted!.scheduled_at as string),
+        payment: { price: 20000, service_fee: 0, total: 20000, currency: 'ETB', status: 'at_hospital',
+                   checkout_url: null, tx_ref: null, expires_at: null },
+        reminders: { queued: 0, job_ids: [], skipped: [], offsets: [], channels: {} },
+      } });
+    });
     await openSection(page, 'Booking', 'booking-view');
     await page.locator('[data-purpose="hospital-search"]').fill('Endod Test General');
     const card = page.locator(PARTNER);
-    await expect(card.locator('[data-purpose="payments-off"]')).toHaveText(
-      "Online payment isn't available yet. Please try again later.",
-    );
+    await expect(card.locator('[data-purpose="pay-at-hospital-tag"]')).toHaveText('Pay at the hospital');
     await card.getByRole('button', { name: 'Book Now' }).click();
-    const modal = page.locator('[data-purpose="booking-modal"]');
-    await expect(modal.locator('[data-purpose="payments-off"]')).toBeVisible();
-    await expect(modal.getByRole('button', { name: 'Pay and book' })).toBeDisabled();
-    await modal.getByRole('button', { name: 'Cancel' }).click();
 
-    // A hospital outside Endod's partners books as before.
-    await page.locator('[data-purpose="hospital-search"]').fill('Peter');
-    const other = page.locator('[data-purpose="hospital-et-addis-stpeter"]');
-    await expect(other.locator('[data-purpose="payments-off"]')).toHaveCount(0);
-    await other.getByRole('button', { name: 'Book Now' }).click();
-    await expect(modal.locator('[data-purpose="payments-off"]')).toHaveCount(0);
-    await expect(modal.getByRole('button', { name: 'Submit Booking' })).toBeEnabled();
+    const modal = page.locator('[data-purpose="booking-modal"]');
+    await expect(modal.locator('[data-purpose="pay-at-hospital"]')).toHaveText('Pay ETB 200.00 at the hospital');
+    await expect(modal.locator('[data-purpose="pay-hint"]')).toContainText('no Endod fee');
+    await expect(modal).not.toContainText("Online payment isn't available yet. Please try again later.");
+    await expect(modal.locator('[data-purpose="quote-total"]')).toHaveCount(0);
+    // A video visit has its own price.
+    await modal.locator('[data-purpose="visit-mode"]').getByText('Video').click();
+    await expect(modal.locator('[data-purpose="pay-at-hospital"]')).toHaveText('Pay ETB 120.00 at the hospital');
+    await modal.locator('[data-purpose="visit-mode"]').getByText('In person', { exact: true }).click();
+    await expect(modal.locator('[data-purpose="pay-at-hospital"]')).toHaveText('Pay ETB 200.00 at the hospital');
+
+    await fillVisit(page, 8, 'Pay at the hospital test');
+    const book = modal.getByRole('button', { name: 'Book, pay at the hospital' });
+    await expect(book).toBeEnabled();
+    await book.click();
+    await expect(page.locator('[data-purpose="success-modal"]')).toBeVisible();
+    await expect(page.locator('[data-purpose="booked-pay-at-hospital"]')).toHaveText('Pay ETB 200.00 at the hospital');
+    expect(posted).toMatchObject({ facility_id: PARTNER_ID, visit_mode: 'in_person' });
+    // Never sent to a checkout.
+    await expect(page).toHaveURL(/section=booking/);
+  });
+
+  test('Appointments shows what to pay at the hospital, and cancelling promises no refund', async ({ page }) => {
+    const id = 'a7a7a7a7-0000-4000-8000-000000000002';
+    await page.route('**/api/backend/users/me/appointments?**', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      const real = await (await route.fetch()).json();
+      return route.fulfill({ json: [atHospitalBooking(id, futureSlot(9, 9, 30).iso), ...real] });
+    });
+    await openSection(page, 'Appointment', 'appointment-view');
+    const card = page.locator(`[data-purpose="appointment-card-${id}"]`);
+    await expect(card.locator('[data-purpose="payment-status"]')).toHaveText('Pay at the hospital: ETB 200.00');
+    await expect(card.locator('[data-purpose="pay-now"]')).toHaveCount(0);
+    await card.getByRole('button', { name: 'Cancel' }).click();
+    await expect(card.locator('[data-purpose="cancel-confirm"]')).not.toContainText('refund');
   });
 
   test('in Amharic too', async ({ page }) => {
-    await page.route('**/api/backend/users/me/payments/status', (route) =>
-      route.fulfill({ json: { online_payments: false, checkout_origins: ['https://checkout.chapa.co'] } }),
-    );
+    await paymentsOff(page);
     await page.request.patch('/api/backend/users/me/preferences', { data: { language: 'am' } });
     try {
       await page.goto('/interview?section=booking', { waitUntil: 'networkidle' });
       await page.locator('[data-purpose="hospital-search"]').fill('Endod Test General');
-      await expect(page.locator(PARTNER).locator('[data-purpose="payments-off"]')).toHaveText(
-        'የመስመር ላይ ክፍያ ገና አልተጀመረም። እባክዎ ቆይተው እንደገና ይሞክሩ።',
-      );
+      await expect(page.locator(PARTNER).locator('[data-purpose="pay-at-hospital-tag"]')).toHaveText('ክፍያው በሆስፒታሉ ነው');
+      await page.locator(PARTNER).locator('button').last().click();
+      await expect(page.locator('[data-purpose="pay-at-hospital"]')).toHaveText('200.00 ብር በሆስፒታሉ ይከፍላሉ');
     } finally {
       await page.request.patch('/api/backend/users/me/preferences', { data: { language: 'en' } });
     }

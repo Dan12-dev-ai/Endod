@@ -3,8 +3,8 @@
 Endod keeps **no stored balance**. A patient pays for each paid booking at a
 partner hospital (in person or video) on Chapa's checkout, choosing telebirr,
 CBE Birr, M-Pesa, a bank or a card there. Refunds go back through Chapa to the
-original payment method. The hospital side is unchanged: it still receives
-only paid bookings (`appointment.requested`, see
+original payment method. The hospital receives only paid bookings, or, while
+online payment is off, bookings paid at the hospital (`appointment.requested`, see
 [history-events.md](history-events.md) and `backend-v2/dedan_platform/hospital_bookings.py`).
 
 Code: `backend-v2/dedan_platform/booking_payments.py` (holds, confirmation,
@@ -49,6 +49,28 @@ callbacks and returns change nothing.
 hospital: the hold ends (`payment_expired`) and the payment is refunded at
 once, with a notice to the patient.
 
+## Paying at the hospital (online payment off)
+
+While `CHAPA_SECRET_KEY` is not set (`GET /users/me/payments/status` answers
+`online_payments: false`), a priced partner booking, in person or video, is
+not held for payment: it is booked at once, as a free one is.
+
+* `payment_status` is `at_hospital`; the patient pays the hospital's `price`
+  there. **Endod takes no service fee on these** (`service_fee` 0, so `total`
+  is the price), since Endod collects nothing; the quote
+  (`GET /users/me/hospital-bookings/quote`) says the same with
+  `"payment": "at_hospital"`.
+* There is no `booking_payments` row and no hospital payout (the hospital
+  is paid directly).
+* `appointment.requested` is emitted at once with `"payment": "at_hospital"`.
+  Bookings paid through Chapa, and free ones, carry `"payment": "online"`.
+* A rejection, a cancellation (by the hospital or the patient) or an
+  unanswered booking closes it with **no refund**: nothing was paid to Endod.
+  This holds even if Chapa is configured later (the check is on the
+  booking's own `payment_status`).
+
+Once `CHAPA_SECRET_KEY` is set, new priced bookings are paid online as above.
+
 **Another amount or currency** is never accepted: the payment becomes
 `mismatch`, the hold ends (`payment_expired`), an `ALERT
 booking_payment_mismatch` is logged, and a refund is recorded as
@@ -75,20 +97,21 @@ booking_payment_mismatch` is logged, and a refund is recorded as
   (`MAX_OPEN_HOLDS`); a 4th is refused with 409.
 * The patient may cancel an unpaid booking at any time; the hospital is not
   told (it never heard of it).
-* Only paid bookings count as a link between a patient and a hospital
+* Only paid bookings (or ones booked to pay at the hospital) count as a link between a patient and a hospital
   (`patient_history.may_act_for`).
 
 `hospital_booking.payment` in every appointment shows where the payment is:
 `awaiting_payment` (with `due_at` and the `checkout_url` for "Pay now" until
-the hold ends), `paid`, `expired`, `refund_pending`, `refunded` or `reversed`.
+the hold ends), `paid`, `expired`, `refund_pending`, `refunded`, `reversed` or
+`at_hospital` (shown as "Pay at the hospital: ETB X").
 
 The app only ever sends a patient to `https://checkout.chapa.co` (plus, in
 tests, the origin of the configured `CHAPA_BASE_URL` when that is not
 Chapa's), as `GET /payments/status` (also `/users/me/payments/status`) lists
 in `checkout_origins`. The same endpoint says whether online payment is on
 (`online_payments`: a Chapa key is set). While it is off, partner hospitals
-and the booking modal say "Online payment isn't available yet. Please try
-again later." and "Pay and book" is disabled; free bookings are unaffected.
+say "Pay at the hospital", the booking modal shows "Pay ETB X at the
+hospital" and books with "Book, pay at the hospital" (no checkout).
 
 ## Chargebacks
 
@@ -182,7 +205,7 @@ refunded there. The patient app has no balance section.
 
 | Variable | |
 | --- | --- |
-| `CHAPA_SECRET_KEY` | Chapa secret key (`CHASECK-...`, test keys `CHASECK_TEST-...`). Without it paid bookings answer 503. |
+| `CHAPA_SECRET_KEY` | Chapa secret key (`CHASECK-...`, test keys `CHASECK_TEST-...`). Without it priced bookings are paid at the hospital (see above). |
 | `CHAPA_WEBHOOK_SECRET` | Chapa > Settings > Webhooks: the secret hash. Webhook URL: `https://endod-health.com/api/payments/chapa/webhook` |
 | `CHAPA_BASE_URL` | default `https://api.chapa.co/v1` |
 | `PUBLIC_APP_URL` | where Chapa sends the patient back |

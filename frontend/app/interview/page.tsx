@@ -323,7 +323,16 @@ export default function Interview() {
           )}
 
           {/* ===== Appointment View ===== */}
-          {activeNav === "appointment" && <AppointmentsView highlightTarget={highlightTarget} onToast={showToast} />}
+          {activeNav === "appointment" && (
+            <AppointmentsView
+              highlightTarget={highlightTarget}
+              onToast={showToast}
+              onBook={() => {
+                setHighlightTarget(null);
+                navigateTo("booking");
+              }}
+            />
+          )}
 
           {/* ===== Medical Record View ===== */}
           {activeNav === "followup" && (

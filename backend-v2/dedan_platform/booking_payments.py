@@ -28,6 +28,10 @@ CBE Birr, M-Pesa, a bank or a card.
   chargeback) is cancelled, the hospital told and its payout stopped.
 * Rows are always locked appointment first, then payment (``lock_booking``).
 
+While Chapa is not configured, a priced booking is not held for payment: it is
+made at once with ``PaymentState.AT_HOSPITAL`` (the patient pays the hospital
+there, no Endod fee) and has no payment row, so nothing here ever refunds it.
+
 Money is in santim (integers).
 """
 
@@ -76,6 +80,10 @@ class PaymentState:
     REFUNDED = "refunded"
     #: Chapa reversed the payment (a chargeback): the booking was cancelled.
     REVERSED = "reversed"
+    #: Online payment is off (no Chapa key): booked at once, and the patient
+    #: pays the hospital's price at the hospital (no Endod fee). Nothing was
+    #: paid to Endod, so closing it never refunds (hospital_bookings._refund).
+    AT_HOSPITAL = "at_hospital"
 
 
 class PaymentNotFound(LookupError):

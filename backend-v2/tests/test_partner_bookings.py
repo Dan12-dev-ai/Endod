@@ -229,12 +229,149 @@ class TestTopUpsAreGone:
         # The old balance stays readable (empty: production never had money in it).
         assert client.get("/users/me/wallet", headers=auth).json()["balance"] == 0
 
-    def test_the_quote_is_the_price_and_fee_without_a_balance(self, client, auth, listed):
+    def test_the_quote_is_the_price_and_fee_without_a_balance(self, client, auth, listed, chapa_api):
         quote = client.get("/users/me/hospital-bookings/quote", headers=auth,
                            params={"hospital_id": HOSPITAL, "visit_mode": "telehealth"}).json()
         # 100 birr + 5 birr flat + 2% = 107 birr.
         assert quote == {"hospital_id": HOSPITAL, "visit_mode": "telehealth", "price": 10000, "service_fee": 700,
-                         "total": 10700, "currency": "ETB"}
+                         "total": 10700, "currency": "ETB", "payment": "online"}
+
+    def test_without_online_payment_the_quote_is_the_price_paid_at_the_hospital(self, client, auth, listed):
+        quote = client.get("/users/me/hospital-bookings/quote", headers=auth,
+                           params={"hospital_id": HOSPITAL, "visit_mode": "telehealth"}).json()
+        # No Endod fee on a visit paid at the hospital.
+        assert quote == {"hospital_id": HOSPITAL, "visit_mode": "telehealth", "price": 10000, "service_fee": 0,
+                         "total": 10000, "currency": "ETB", "payment": "at_hospital"}
+
+
+def payouts():
+    from sqlalchemy import select
+
+    from dedan_platform.db import session_scope
+    from dedan_platform.models import HospitalPayout
+
+    with session_scope() as session:
+        return {p.appointment_id: p.status for p in session.scalars(select(HospitalPayout))}
+
+
+class TestPayingAtTheHospital:
+    """No Chapa key (online payment off): priced visits are booked at once and
+    paid at the hospital; nothing is ever refunded for them."""
+
+    @pytest.mark.parametrize("mode,price,event_mode,state", [
+        ("in_person", 15000, "in_person", "awaiting_hospital"),
+        ("telehealth", 10000, "video", "awaiting_doctor"),
+    ])
+    def test_a_priced_visit_is_booked_at_once_to_pay_at_the_hospital(self, client, auth, bus, listed,
+                                                                      mode, price, event_mode, state):
+        from sqlalchemy import select
+
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import BookingPayment
+
+        resp = book(client, auth, mode=mode, notes="Headache")
+        assert resp.status_code == 201, resp.text
+        appointment, payment = resp.json()["appointment"], resp.json()["payment"]
+        booking = appointment["hospital_booking"]
+        assert booking["state"] == state
+        assert booking["price"] == price and booking["service_fee"] == 0 and booking["total"] == price
+        assert booking["payment"] == {"status": "at_hospital", "due_at": None, "checkout_url": None}
+        assert payment == {"price": price, "service_fee": 0, "total": price, "currency": "ETB",
+                           "status": "at_hospital", "checkout_url": None, "tx_ref": None, "expires_at": None}
+        aid = appointment["appointment_id"]
+        # No payment to Endod, and no hospital share held by Endod.
+        with session_scope() as session:
+            assert session.scalar(select(BookingPayment).where(BookingPayment.appointment_id == aid)) is None
+        assert payouts() == {}
+        # The hospital is told straight away, with how the visit is paid.
+        run_worker(bus)
+        [request] = requested(bus)
+        assert request["appointment_id"] == aid and request["price"] == price
+        assert request["visit_mode"] == event_mode and request["payment"] == "at_hospital"
+        assert request["patient"]["name"] == "Almaz Tefera"
+        [item] = [i for i in inbox_items(client, auth) if i["kind"] == "appointment_booked"]
+        assert item["body"].startswith(f"Pay {price / 100:,.2f} birr at the hospital.")
+        assert "Paid" not in item["body"]
+
+    def test_a_hospital_rejection_refunds_nothing(self, client, auth, bus, listed):
+        aid = book(client, auth, mode="telehealth").json()["appointment"]["appointment_id"]
+        from_hospital(bus, "appointment.rejected", {"appointment_id": aid, "hospital_id": HOSPITAL,
+                                                    "status": "rejected", "reason": "No doctor available"})
+        run_worker(bus)
+        appointment = appointment_of(client, auth, aid)
+        assert appointment["status"] == "CANCELLED" and appointment["hospital_booking"]["state"] == "rejected"
+        assert appointment["hospital_booking"]["payment"]["status"] == "at_hospital"
+        assert refunds() == []
+        [item] = [i for i in inbox_items(client, auth) if i["title"] == "Visit declined by the hospital"]
+        assert "refund" not in item["body"].lower()
+
+    def test_a_hospital_cancellation_refunds_nothing(self, client, auth, bus, listed):
+        aid = book(client, auth).json()["appointment"]["appointment_id"]
+        from_hospital(bus, "appointment.confirmed", {"appointment_id": aid, "hospital_id": HOSPITAL,
+                                                     "status": "confirmed"})
+        from_hospital(bus, "appointment.cancelled", {"appointment_id": aid, "hospital_id": HOSPITAL,
+                                                     "status": "cancelled", "reason": "Doctor ill", "by": "hospital"})
+        run_worker(bus)
+        appointment = appointment_of(client, auth, aid)
+        assert appointment["hospital_booking"]["state"] == "cancelled"
+        assert appointment["hospital_booking"]["payment"]["status"] == "at_hospital"
+        assert refunds() == [] and payouts() == {}
+
+    def test_a_patient_cancel_refunds_nothing_and_tells_the_hospital(self, client, auth, bus, listed):
+        aid = book(client, auth).json()["appointment"]["appointment_id"]
+        resp = client.patch(f"/users/me/appointments/{aid}/status", headers=auth, json={"status": "CANCELLED"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["hospital_booking"]["state"] == "cancelled"
+        assert resp.json()["hospital_booking"]["payment"]["status"] == "at_hospital"
+        run_worker(bus)
+        assert sent(bus)[-1] == ("appointment.cancelled", {"appointment_id": aid, "hospital_id": HOSPITAL,
+                                                            "by": "patient"})
+        assert refunds() == []
+        assert not [i for i in inbox_items(client, auth) if "refund" in (i.get("body") or "").lower()]
+
+    def test_an_unanswered_one_is_closed_without_a_refund(self, client, auth, bus, listed):
+        from dedan_platform import hospital_bookings
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import Appointment
+
+        aid = book(client, auth).json()["appointment"]["appointment_id"]
+        with session_scope() as session:
+            session.get(Appointment, aid).scheduled_at = datetime.now(timezone.utc) - timedelta(hours=3)
+        assert hospital_bookings.refund_unanswered() == 1
+        assert refunds() == []
+        assert appointment_of(client, auth, aid)["hospital_booking"]["payment"]["status"] == "at_hospital"
+
+    def test_completion_makes_no_payout(self, client, auth, bus, listed):
+        aid = book(client, auth).json()["appointment"]["appointment_id"]
+        from_hospital(bus, "appointment.completed", {"appointment_id": aid, "hospital_id": HOSPITAL,
+                                                     "status": "completed"})
+        run_worker(bus)
+        assert appointment_of(client, auth, aid)["status"] == "COMPLETED"
+        assert payouts() == {}
+
+    def test_one_booked_this_way_is_never_refunded_once_chapa_is_set_up(self, client, auth, bus, listed,
+                                                                        chapa_api):
+        from dedan_platform import booking_payments
+
+        # Booked while online payment was off, then the Chapa key is set.
+        with pytest.MonkeyPatch.context() as mp:
+            mp.delenv("CHAPA_SECRET_KEY")
+            aid = book(client, auth).json()["appointment"]["appointment_id"]
+        from_hospital(bus, "appointment.rejected", {"appointment_id": aid, "hospital_id": HOSPITAL,
+                                                    "status": "rejected"})
+        run_worker(bus)
+        booking_payments.process_refunds()
+        assert appointment_of(client, auth, aid)["hospital_booking"]["state"] == "rejected"
+        assert refunds() == [] and chapa_api.refund_requests == []
+
+    def test_with_chapa_set_up_a_priced_visit_is_still_paid_online(self, client, auth, bus, listed, chapa_api):
+        resp = book(client, auth)
+        assert resp.status_code == 201, resp.text
+        payment = resp.json()["payment"]
+        assert payment["status"] == "awaiting_payment" and payment["service_fee"] == 800
+        assert payment["checkout_url"]
+        run_worker(bus)
+        assert requested(bus) == []
 
 
 class TestPayingForABooking:
@@ -281,9 +418,10 @@ class TestPayingForABooking:
         assert appointment["hospital_booking"]["payment"] == {"status": "paid", "due_at": None, "checkout_url": None}
         run_worker(bus)
         [request] = requested(bus)
-        # The hospital's event is exactly what it was before per-booking payments.
+        # The hospital's event is as before per-booking payments, plus how the visit is paid.
         assert set(request) == {"appointment_id", "hospital_id", "patient", "visit_mode", "service", "scheduled_at",
-                                "duration_minutes", "notes", "price"}
+                                "duration_minutes", "notes", "price", "payment"}
+        assert request["payment"] == "online"
         assert request["hospital_id"] == HOSPITAL and request["price"] == 15000 and request["visit_mode"] == "in_person"
         assert request["patient"]["name"] == "Almaz Tefera" and request["patient"]["dedan_id"].startswith("DE")
         assert request["notes"] == "Headache" and request["service"] == "general_medicine"
@@ -384,11 +522,6 @@ class TestPayingForABooking:
         monkeypatch.setattr(chapa, "_transport", httpx.MockTransport(swapped))
         assert client.get(f"/payments/chapa/callback?trx_ref={tx_ref}").status_code == 503
         assert appointment_of(client, auth, aid)["hospital_booking"]["state"] == "awaiting_payment"
-
-    def test_no_chapa_key_means_no_paid_bookings(self, client, auth, listed):
-        resp = book(client, auth)
-        assert resp.status_code == 503
-        assert client.get("/users/me/appointments", headers=auth).json() == []
 
     def test_chapa_refusing_the_checkout_frees_the_slot(self, client, auth, listed, chapa_api, monkeypatch):
         import httpx

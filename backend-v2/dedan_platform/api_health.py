@@ -140,7 +140,8 @@ def create_appointment(
     if body.facility_id and partners.get(body.facility_id) is not None:
         # An Endod partner hospital: the slot is held and the patient pays on
         # Chapa's checkout (hospital_bookings.py, booking_payments.py). The
-        # hospital hears of it, and reminders are set, once it is paid.
+        # hospital hears of it, and reminders are set, once it is paid (at once
+        # when it is paid at the hospital, while online payment is off).
         try:
             result = hospital_bookings.book(
                 user_id=user_id, hospital_id=body.facility_id, scheduled_at=body.scheduled_at,
