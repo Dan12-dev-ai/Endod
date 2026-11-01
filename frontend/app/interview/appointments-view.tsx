@@ -346,7 +346,10 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
                     : payment === "refund_pending" ? t("appointments.payment.refundPending", { amount })
                     : payment === "refunded" ? t("appointments.refunded", { amount })
                     : payment === "expired" ? t("appointments.payment.expired")
-                    : atHospital ? t("appointments.payment.atHospital", { amount })
+                    : atHospital
+                      ? closed ? t("appointments.payment.atHospitalClosed")
+                        : hb.state === "completed" ? t("appointments.payment.atHospitalDone", { amount })
+                        : t("appointments.payment.atHospital", { amount })
                     : t("appointments.paid", { amount })}
                 </span>
                 {hb.reason && closed && hb.state !== "payment_expired" && (

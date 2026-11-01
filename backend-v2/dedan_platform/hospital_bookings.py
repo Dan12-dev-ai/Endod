@@ -37,7 +37,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Tuple
 
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from dedan_platform import booking_payments, chapa, eventbus, identity, jitsi, partner_config, partners, wallet
@@ -85,7 +85,8 @@ class BookingError(AppointmentError):
 
 
 class TooManyHolds(BookingError):
-    """The patient already has the most bookings waiting for payment."""
+    """The patient already has the most bookings waiting for payment (or, with
+    online payment off, the most upcoming visits to pay at the hospital)."""
 
 
 class PaymentUnavailable(BookingError):
@@ -158,6 +159,20 @@ def _quietly(what: str, action, *args, **kwargs) -> None:
         logger.exception("after_payment_side_effect_failed what=%s", what)
 
 
+#: Open visits to pay at the hospital one patient may have at once. Each goes
+#: to a hospital at once with nothing paid, so they are capped as unpaid holds are.
+MAX_OPEN_AT_HOSPITAL = 3
+
+
+def _require_at_hospital_room(session: Session, user_id: str) -> None:
+    open_visits = session.scalar(select(func.count()).select_from(Appointment).where(
+        Appointment.user_id == user_id, Appointment.payment_status == PaymentState.AT_HOSPITAL,
+        Appointment.hospital_state.in_(HospitalState.OPEN), Appointment.scheduled_at > utcnow()))
+    if open_visits >= MAX_OPEN_AT_HOSPITAL:
+        raise TooManyHolds(f"You have {open_visits} upcoming visits to pay at the hospital. Cancel one, or wait "
+                           "until one has happened, before booking another.")
+
+
 def _payment_view(appointment: Dict[str, Any], checkout_url: Optional[str], tx_ref: Optional[str]) -> Dict[str, Any]:
     booking = appointment["hospital_booking"]
     return {"price": booking["price"], "service_fee": booking["service_fee"], "total": booking["total"],
@@ -215,6 +230,8 @@ def book(
     with session_scope() as session:
         _require_no_overlap(session, user_id, scheduled_at, duration, None)
         booking_payments.require_hold_room(session, user_id)
+        if at_hospital:
+            _require_at_hospital_room(session, user_id)
         appointment = Appointment(
             id=new_uuid(), user_id=user_id, scheduled_at=scheduled_at, appointment_type="consultation",
             duration_minutes=duration, location=location, visit_mode=mode, department=service,

@@ -60,6 +60,9 @@ not held for payment: it is booked at once, as a free one is.
   is the price), since Endod collects nothing; the quote
   (`GET /users/me/hospital-bookings/quote`) says the same with
   `"payment": "at_hospital"`.
+* A patient may have at most **3** upcoming visits to pay at the hospital
+  (`MAX_OPEN_AT_HOSPITAL`; a 4th is refused with 409), since each reaches a
+  hospital with nothing paid.
 * There is no `booking_payments` row and no hospital payout (the hospital
   is paid directly).
 * `appointment.requested` is emitted at once with `"payment": "at_hospital"`.

@@ -281,10 +281,14 @@ test.describe('Online payment not set up yet: pay at the hospital', () => {
 
   test('Appointments shows what to pay at the hospital, and cancelling promises no refund', async ({ page }) => {
     const id = 'a7a7a7a7-0000-4000-8000-000000000002';
+    const declinedId = 'a7a7a7a7-0000-4000-8000-000000000003';
+    const declined = atHospitalBooking(declinedId, futureSlot(10, 9, 30).iso);
+    declined.status = 'CANCELLED';
+    declined.hospital_booking.state = 'rejected';
     await page.route('**/api/backend/users/me/appointments?**', async (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       const real = await (await route.fetch()).json();
-      return route.fulfill({ json: [atHospitalBooking(id, futureSlot(9, 9, 30).iso), ...real] });
+      return route.fulfill({ json: [atHospitalBooking(id, futureSlot(9, 9, 30).iso), declined, ...real] });
     });
     await openSection(page, 'Appointment', 'appointment-view');
     const card = page.locator(`[data-purpose="appointment-card-${id}"]`);
@@ -292,6 +296,12 @@ test.describe('Online payment not set up yet: pay at the hospital', () => {
     await expect(card.locator('[data-purpose="pay-now"]')).toHaveCount(0);
     await card.getByRole('button', { name: 'Cancel' }).click();
     await expect(card.locator('[data-purpose="cancel-confirm"]')).not.toContainText('refund');
+    await card.getByRole('button', { name: 'Keep' }).click();
+
+    // A visit that will not happen asks for nothing.
+    await page.locator('[data-purpose="appointment-tab-cancelled"]').click();
+    await expect(page.locator(`[data-purpose="appointment-card-${declinedId}"] [data-purpose="payment-status"]`))
+      .toHaveText('Nothing to pay: this visit will not happen');
   });
 
   test('in Amharic too', async ({ page }) => {

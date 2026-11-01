@@ -341,6 +341,25 @@ class TestPayingAtTheHospital:
         assert refunds() == []
         assert appointment_of(client, auth, aid)["hospital_booking"]["payment"]["status"] == "at_hospital"
 
+    def test_open_visits_to_pay_at_the_hospital_are_limited(self, client, auth, bus, listed):
+        from dedan_platform import hospital_bookings
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import Appointment
+
+        limit = hospital_bookings.MAX_OPEN_AT_HOSPITAL
+        ids = [book(client, auth, at=when(days=2 + i)).json()["appointment"]["appointment_id"] for i in range(limit)]
+        refused = book(client, auth, at=when(days=2 + limit))
+        assert refused.status_code == 409 and "pay at the hospital" in refused.json()["detail"]
+        run_worker(bus)
+        assert len(requested(bus)) == limit  # the hospital never hears of the refused one
+        # A cancelled one frees a place, and so does one whose time has passed.
+        client.patch(f"/users/me/appointments/{ids[0]}/status", headers=auth, json={"status": "CANCELLED"})
+        assert book(client, auth, at=when(days=2 + limit)).status_code == 201
+        assert book(client, auth, at=when(days=3 + limit)).status_code == 409
+        with session_scope() as session:
+            session.get(Appointment, ids[1]).scheduled_at = datetime.now(timezone.utc) - timedelta(days=1)
+        assert book(client, auth, at=when(days=3 + limit)).status_code == 201
+
     def test_completion_makes_no_payout(self, client, auth, bus, listed):
         aid = book(client, auth).json()["appointment"]["appointment_id"]
         from_hospital(bus, "appointment.completed", {"appointment_id": aid, "hospital_id": HOSPITAL,
