@@ -24,9 +24,15 @@
   --color-brand-muted: #536e6b;
   --color-brand-border: #e2e8f0;
   --color-brand-inputbg: #f8fafb;
+  --color-app-green: #70C13B;
+  --color-app-green-light: #85CE53;
+  --color-app-action-blue: #0082CA;
+  --color-app-amber: #F39C12;
+  --color-app-charcoal: #2C3E50;
+  --color-app-muted: #95A5A6;
+  --color-app-bg: #F8FAF7;
   --color-brand-accent: #000000;
 }
-
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
@@ -98,7 +104,19 @@ body {
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15);
 }
 
-/* ===== Landing page: partners marquee ===== */
+/* telebirr dashboard custom utilities */
+.shadow-card { box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.05); }
+.shadow-floating { box-shadow: 0 8px 24px -4px rgba(130, 202, 0.35); }
+.shadow-nav { box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06); }
+.concentric-waves {
+  background-image:
+    radial-gradient(circle at 50% -20%, rgba(255, 255, 255, 0.22) 0%, transparent 45%),
+    radial-gradient(circle at 50% -20%, rgba(255, 255, 255, 0.15) 50%, transparent 70%),
+    repeating-radial-gradient(circle at 50% -10%, transparent 0, transparent 18px, rgba(255, 255, 255, 0.08) 19px, rgba(255, 255, 255, 0.08) 20px);
+}
+.amber-wave-divider { position: absolute; bottom: -1px; left: 0; width: 100%; overflow: hidden; line-height: 0; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 @keyframes scroll {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
