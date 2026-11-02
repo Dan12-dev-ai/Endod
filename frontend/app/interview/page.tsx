@@ -375,9 +375,7 @@ export default function Interview() {
             return (
               <button
                 aria-current={isActive ? "page" : undefined}
-                className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-lg transition-colors ${
-                  isActive ? "text-black bg-gray-100" : "text-slate-500 hover:text-black"
-                }`}
+                className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-0.5 rounded-lg transition-colors [&>svg]:!text-black ${isActive ? "text-black bg-gray-100 font-bold" : "text-slate-500 hover:text-black"}`}
                 data-purpose={`mobile-nav-${item.id}`}
                 key={item.id}
                 onClick={() => {
@@ -387,7 +385,7 @@ export default function Interview() {
                 type="button"
               >
                 {item.icon}
-                <span className={`text-[10px] mt-1 w-full truncate text-center ${isActive ? "font-semibold" : "font-medium"}`}>
+                <span className={`text-[10px] mt-1 w-full truncate text-center ${isActive ? "font-bold" : "font-medium"}`}>
                   {t(item.labelKey)}
                 </span>
               </button>

@@ -109,7 +109,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
               </div>
               <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row gap-2.5">
                 <button
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#000000] hover:bg-[#174640] text-white text-sm font-semibold transition disabled:opacity-50"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-3 sm:px-4 sm:py-2.5 rounded-xl bg-[#000000] hover:bg-[#174640] text-white text-base sm:text-sm font-semibold transition disabled:opacity-50"
                   data-purpose="home-show-qr"
                   disabled={!card?.qrSvg}
                   onClick={() => setQrOpen(true)}
@@ -121,7 +121,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
                   {t("home.showQr")}
                 </button>
                 <Link
-                  className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition"
+                  className="inline-flex items-center justify-center px-5 py-3 sm:px-4 sm:py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-base sm:text-sm font-semibold transition"
                   data-purpose="home-open-card"
                   href="/health-card"
                 >
@@ -133,22 +133,25 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
                   {t("home.healthDetailsUnavailable")}
                 </p>
               )}
-              {card && !card.medicalUnavailable && !hasMedical(card) && (
-                <button
-                  className="w-full text-left text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 hover:bg-emerald-100 transition"
-                  data-purpose="home-add-health-details"
-                  onClick={() => onNavigate("setting")}
-                  type="button"
-                >
-                  {t("home.addHealthDetails")} →
-                </button>
-              )}
-            </div>
           </div>
+        </div>
         </section>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+        <div className="md:hidden flex justify-center">
+          <button
+            type="button"
+            onClick={() => onNavigate("booking")}
+            className="inline-flex items-center gap-1 text-lg font-semibold text-black underline underline-offset-4"
+          >
+            {t("home.shortcut.booking.title")}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+              <path d="M5 12h14m-7-7l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+        <button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
             <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.nextAppointment")}</p>
             {next === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
@@ -187,12 +190,6 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
       {qrOpen && card?.qrSvg && <QrScreen card={card} onClose={closeQr} />}
     </div>
   );
-}
-
-/** True when the card has any of the emergency details. */
-function hasMedical(card: HealthCardInfo): boolean {
-  const m = card.medical;
-  return Boolean(m && (m.bloodType || m.allergies.length || m.emergencyName || m.emergencyPhone));
 }
 
 /**
