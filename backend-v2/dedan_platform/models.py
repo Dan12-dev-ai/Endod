@@ -89,6 +89,11 @@ class User(Base):
     #: Tokens issued before this are rejected (an admin signed the account
     #: out); see credentials.tokens_valid_from.
     sessions_revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: Created by a hospital for a patient without a smartphone (sms_enrol.py):
+    #: a verified phone and no password. Cleared when the patient signs up in
+    #: the app with the same phone and takes the account over. Null (rows
+    #: from before the column) means false.
+    sms_only: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     credential: Mapped[Optional["Credential"]] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
@@ -1270,6 +1275,74 @@ class ThrottleHit(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
     bucket: Mapped[str] = mapped_column(String(120), nullable=False)
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True, nullable=False)
+
+
+# ===========================================================================
+# SMS-first: SMS-only patients, PINs and inbound commands (docs/sms.md)
+# ===========================================================================
+
+class SmsPin(Base):
+    """The PIN a patient texts with each command to the short code (sms_inbound.py).
+
+    Stored only as an HMAC under the server's signing secret, bound to the
+    account (so a copy of the database alone does not give 10,000 guesses
+    offline). Five wrong PINs lock it for an hour."""
+
+    __tablename__ = "sms_pins"
+
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    pin_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class SmsEnrolment(Base):
+    """A hospital's request to enrol a patient by SMS (sms_enrol.py): the
+    6-digit code texted to the phone (an HMAC only), its expiry and guesses.
+    ``id`` is the hospital's request id. Only the newest request of a
+    hospital patient can be verified."""
+
+    __tablename__ = "sms_enrolments"
+    __table_args__ = (
+        Index("ix_sms_enrolments_phone_created", "phone", "created_at"),
+        Index("ix_sms_enrolments_patient", "hospital_id", "patient_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    patient_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: The account enrolled (new, or the phone's existing one).
+    user_id: Mapped[Optional[str]] = mapped_column(String(32))
+
+
+class SmsInboundMessage(Base):
+    """The audit of every text received on the short code (sms_inbound.py).
+
+    Never the text, a PIN or anything sent back: the command, the outcome
+    and the sender's phone, masked (the account, when known)."""
+
+    __tablename__ = "sms_inbound_messages"
+    __table_args__ = (UniqueConstraint("provider", "provider_message_id", name="uq_sms_inbound_provider_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    provider: Mapped[str] = mapped_column(String(24), nullable=False)
+    #: The provider's id for the message (a retried callback is answered once).
+    provider_message_id: Mapped[Optional[str]] = mapped_column(String(100))
+    phone_masked: Mapped[str] = mapped_column(String(32), nullable=False)
+    user_id: Mapped[Optional[str]] = mapped_column(String(32), index=True)
+    command: Mapped[Optional[str]] = mapped_column(String(16))
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True,
+                                                  nullable=False)
 
 
 # ===========================================================================

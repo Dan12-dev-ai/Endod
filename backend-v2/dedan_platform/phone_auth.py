@@ -297,6 +297,19 @@ def _claim(verification_id: str) -> None:
         raise InvalidVerification("This verification was already used. Please verify your phone again.")
 
 
+def _end_sms_only(internal_user_id: str) -> bool:
+    """Clear ``sms_only`` (the patient set a password). True when it was set."""
+    from dedan_platform.models import User, UserEvent
+
+    with session_scope() as session:
+        changed = session.execute(
+            update(User).where(User.id == internal_user_id, User.sms_only.is_(True)).values(sms_only=False)
+        ).rowcount
+        if changed:
+            session.add(UserEvent(user_id=internal_user_id, event_type="sms_only_taken_over"))
+    return bool(changed)
+
+
 def complete(
     verification_token: str,
     password: str,
@@ -346,7 +359,15 @@ def complete(
     # For an existing account this is a password reset; it also signs out the
     # account's other sessions (credentials.password_changed_at).
     credentials.set_credential(internal_user_id, password)
-    if not created:
+    # An SMS-only account a hospital created (sms_enrol.py): the patient now
+    # takes it over in the app, with their records, card number and PIN.
+    taken_over = not created and _end_sms_only(internal_user_id)
+    if taken_over:
+        inbox.add_item(
+            internal_user_id, "security", "app_account_activated", "Welcome to the Endod app",
+            body="Your hospital records and card number are here. Your SMS PIN still works.",
+        )
+    elif not created:
         inbox.add_item(
             internal_user_id, "security", "password_reset", "Your password was reset by phone",
             body="If this wasn't you, contact support immediately.",

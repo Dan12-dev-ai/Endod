@@ -117,36 +117,63 @@ def create_user(
     otherwise surface as a 500 the first time someone changes a preference).
     """
     with session_scope() as session:
-        if email:
-            email = _normalise_email(email)
-            if _email_taken(session, email):
-                raise EmailInUse("An account with this email address already exists.")
-        user = _allocate_user(session)
-        user.profile = Profile(
-            display_name=display_name, email=email, phone=phone,
-            first_name=(first_name or "").strip()[:60] or None,
-            last_name=(last_name or "").strip()[:60] or None,
-            phone_verified_at=utcnow() if phone and phone_verified else None,
-            locale=locale, timezone=timezone_name, country_code=country_code,
+        user = new_account(
+            session, display_name=display_name, email=email, phone=phone, locale=locale,
+            timezone_name=timezone_name, country_code=country_code, phone_verified=phone_verified,
+            first_name=first_name, last_name=last_name,
         )
-        # A patient who signed up by phone has no other channel, so appointment
-        # reminders (transactional, not marketing) go by SMS unless they turn
-        # them off in settings.
-        user.preferences = Preferences(
-            language=_language_from_locale(locale),
-            sms_notifications=bool(phone and phone_verified)
-        )
-        user.health_profile = HealthProfile()
-        # Consent starts fully withdrawn: nothing is assumed on the user's behalf.
-        user.consent = Consent()
-
-        _record_event(session, user.id, "user_created", payload={"locale": locale})
-        _flush_checking_email(session)
         return {
             "internal_user_id": user.id,
             "dedan_user_id": user.dedan_user_id,
             "created_at": user.created_at.isoformat(),
         }
+
+
+def new_account(
+    session: Session,
+    *,
+    display_name: Optional[str] = None,
+    email: Optional[str] = None,
+    phone: Optional[str] = None,
+    locale: str = "en",
+    timezone_name: str = "UTC",
+    country_code: str = "ET",
+    phone_verified: bool = False,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    sms_only: bool = False,
+    audit: Optional[Dict[str, Any]] = None,
+) -> User:
+    """`create_user` in the caller's transaction (an event handler's: a
+    hospital enrolling an SMS-only patient, sms_enrol.py). Raises
+    `PhoneInUse`/`EmailInUse` when a unique index refuses it."""
+    if email:
+        email = _normalise_email(email)
+        if _email_taken(session, email):
+            raise EmailInUse("An account with this email address already exists.")
+    user = _allocate_user(session)
+    user.sms_only = sms_only
+    user.profile = Profile(
+        display_name=display_name, email=email, phone=phone,
+        first_name=(first_name or "").strip()[:60] or None,
+        last_name=(last_name or "").strip()[:60] or None,
+        phone_verified_at=utcnow() if phone and phone_verified else None,
+        locale=locale, timezone=timezone_name, country_code=country_code,
+    )
+    # A patient who signed up by phone has no other channel, so appointment
+    # reminders (transactional, not marketing) go by SMS unless they turn
+    # them off in settings.
+    user.preferences = Preferences(
+        language=_language_from_locale(locale),
+        sms_notifications=bool(phone and phone_verified)
+    )
+    user.health_profile = HealthProfile()
+    # Consent starts fully withdrawn: nothing is assumed on the user's behalf.
+    user.consent = Consent()
+
+    _record_event(session, user.id, "user_created", payload={"locale": locale, **(audit or {})})
+    _flush_checking_email(session)
+    return user
 
 
 def _allocate_user(session: Session) -> User:
@@ -159,13 +186,15 @@ def _allocate_user(session: Session) -> User:
     for _ in range(_ID_ALLOCATION_ATTEMPTS):
         candidate = generate_dedan_user_id()
         user = User(id=new_uuid(), dedan_user_id=candidate)
-        session.add(user)
         try:
-            session.flush()
+            # A savepoint, so a collision undoes only this insert, never the
+            # rest of the caller's transaction (an event handler's).
+            with session.begin_nested():
+                session.add(user)
+                session.flush()
             return user
         except IntegrityError as exc:
             # Only the ID collision is retried; anything else is a real fault.
-            session.rollback()
             if "dedan_user_id" not in str(exc):
                 raise
             last_error = exc

@@ -68,7 +68,7 @@ Categories (closed set): `diagnosis`, `prescription`, `lab_result`,
 `details` by category (unknown keys ignored):
 - diagnosis: `{condition, code (ICD-10, optional), status: active|resolved|chronic, notes}`
 - prescription: `{items: [{drug, dose, route, frequency, duration, quantity, notes}], notes}`
-- lab_result: `{items: [{test, value, unit, reference_range, flag: low|normal|high|critical|null}], specimen, notes}`
+- lab_result: `{items: [{test, code (LOINC, optional), value, unit, reference_range, flag: low|normal|high|critical|null}], specimen, notes}`
 - imaging: `{modality, body_part, findings, impression}`
 - visit_note: `{complaint, findings, plan, vitals: {bp, pulse, temp, weight, height, spo2}}`
 - document: `{description}`
@@ -171,3 +171,39 @@ why) before anything is saved. Imported records are published like any other.
 - Internal endpoints (`/platform/...` on the hospital API, `/internal/...`
   on the platform API) require `X-Platform-Key` (constant-time compare), are
   never reachable through either public portal, and refuse when no key is set.
+
+## 8. SMS-only patients (hospital -> platform -> hospital)
+
+A patient without an Endod account (and often without a smartphone) is
+enrolled at reception by an SMS code (platform: docs/sms.md). Nothing about
+the patient but the phone number reaches Endod before the code is checked.
+
+hospital -> platform `patient.sms_enrol_requested`
+`{"request_id", "hospital_id", "patient_id", "phone": "+2519..."}`
+
+Endod texts a 6-digit code to the phone (valid 10 minutes, 5 guesses; one a
+minute and 5 an hour per phone). Replies:
+
+platform -> hospital `patient.sms_enrol_code_sent`
+`{"request_id", "hospital_id", "patient_id", "expires_at"}`
+
+hospital -> platform `patient.sms_enrol_verify` (reception typed the code the patient read out)
+`{"request_id", "hospital_id", "patient_id", "code", "name", "language": "am"|"en"}`
+
+platform -> hospital `patient.sms_enrolled`
+`{"request_id", "hospital_id", "patient_id", "dedan_id", "name", "phone", "created": bool}`
+(`created`: a new SMS-only account; false: the phone's existing account).
+The platform has linked the hospital patient (as for `patient.linked`) and
+texted the patient their card number and SMS PIN. The hospital stores
+`dedan_id` and publishes the patient's history, as on `patient.linked`.
+
+platform -> hospital `patient.sms_enrol_refused`
+`{"request_id", "hospital_id", "patient_id", "reason", "attempts_left": int|null}`
+with `reason` `invalid_phone`, `rate_limited`, `sms_unavailable` (the code
+was not sent), `wrong_code` (`attempts_left` > 0: the code can be typed
+again), `too_many_attempts`, `expired`, `superseded` (a newer request for
+the patient), `no_code`, `not_allowed` (the phone's account is closed or
+suspended).
+
+Only the newest request of a hospital patient can be verified. A request
+for a patient already linked is refused by the hospital service itself.

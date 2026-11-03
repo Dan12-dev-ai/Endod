@@ -11,6 +11,13 @@ services:
       shared_edge:
         aliases: [endod-frontend]
 
+  # The short code's inbound callbacks (api.endod-health.com/sms/v1/, endod.conf).
+  sms-inbound:
+    networks:
+      default: {}
+      shared_edge:
+        aliases: [endod-sms-inbound]
+
 networks:
   shared_edge:
     external: true
