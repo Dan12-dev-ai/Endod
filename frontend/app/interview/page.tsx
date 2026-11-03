@@ -7,6 +7,7 @@ import AppointmentsView from "./appointments-view";
 import BookingView from "./booking-view";
 import HomeView from "./home-view";
 import NotificationsView from "./notifications-view";
+import BillsView from "./bills-view";
 import HistoryView from "./history-view";
 import type { BookingPreset } from "./history-data";
 import SettingsView from "./settings-view";
@@ -48,7 +49,7 @@ export default function Interview() {
     if (restoredNavRef.current) return;
     restoredNavRef.current = true;
     const section = new URLSearchParams(window.location.search).get("section");
-    const valid = new Set(["home", "booking", "appointment", "followup", "message", "setting"]);
+    const valid = new Set(["home", "booking", "appointment", "followup", "bills", "message", "setting"]);
     let restored: string | null = null;
     if (section && valid.has(section)) restored = section;
     else {
@@ -79,6 +80,7 @@ export default function Interview() {
     { id: "booking", labelKey: "interview.nav.booking", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "appointment", labelKey: "interview.nav.appointment", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "followup", labelKey: "interview.nav.medicalRecord", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
+    { id: "bills", labelKey: "interview.nav.bills", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "message", labelKey: "interview.nav.notification", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
     { id: "setting", labelKey: "interview.nav.setting", icon: (<svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" strokeLinecap="round" strokeLinejoin="round" /><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" /></svg>) },
   ];
@@ -349,6 +351,9 @@ export default function Interview() {
               onSelectRecord={setSelectedRecordId}
             />
           )}
+
+          {/* ===== Bills View ===== */}
+          {activeNav === "bills" && <BillsView />}
 
           {/* ===== Notification View ===== */}
           {activeNav === "message" && <NotificationsView onOpen={openNotifTarget} onToast={showToast} />}

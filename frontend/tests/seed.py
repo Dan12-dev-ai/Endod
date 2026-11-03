@@ -14,6 +14,8 @@
     python seed.py queue <dedan_id> <entry> <seq> <ahead> <status>
                                                    the patient's place in today's queue (Africa/Addis_Ababa)
     python seed.py prescription <dedan_id> <tag>   the hospital publishes a prescription ("Chest infection <tag>")
+    python seed.py charge <dedan_id> <tag>         the hospital charges the patient for a lab test ("Complete
+                                                   blood count <tag>", 350 birr plus the 25 birr Endod fee)
     python seed.py dispense <tag> <pharmacy> <amount>
                                                    a pharmacy gives <amount> of its first medicine
                                                    (as internal-api's /pharmacy/dispense does)
@@ -34,7 +36,7 @@ from zoneinfo import ZoneInfo
 sys.path.insert(0, os.getcwd())
 
 from dedan_platform import (  # noqa: E402
-    booking_payments, hospital_bookings, partners, patient_history, prescriptions, record_files,
+    booking_payments, hospital_bookings, hospital_charges, partners, patient_history, prescriptions, record_files,
 )
 from dedan_platform.db import create_all, session_scope  # noqa: E402
 
@@ -152,7 +154,7 @@ def main(argv):
     create_all()
     deferred = []
     with session_scope() as session:
-        if argv[0] in ("records", "records-arriving", "follow-up", "queue", "prescription"):
+        if argv[0] in ("records", "records-arriving", "follow-up", "queue", "prescription", "charge"):
             _link(session, argv[1])
         if argv[0] in ("download", "dispense", "refunds", "expire"):
             pass
@@ -163,6 +165,13 @@ def main(argv):
             })
         elif argv[0] == "prescription":
             patient_history.on_record_published(session, _prescription(argv[1], argv[2]))
+        elif argv[0] == "charge":
+            hospital_charges.on_created(session, {
+                "charge_id": uuid.uuid4().hex, "hospital_id": PARTNER_ID, "dedan_id": argv[1],
+                "items": [{"category": "lab_test", "code": "CBC", "name": f"Complete blood count {argv[2]}",
+                           "amount": 35000, "quantity": 1}],
+                "subtotal": 35000, "service_fee": 2500, "total": 37500, "currency": "ETB",
+            })
         elif argv[0] == "partner":
             partners.on_listed(session, LISTING)
         elif argv[0] == "confirm":

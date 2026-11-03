@@ -40,6 +40,14 @@ ROUTES = [
     ("POST", "/internal/admin/users/DE123456/reactivate", {"reason": "cleared", "actor_email": ACTOR}),
     ("GET", "/internal/admin/cards/DE123456", None),
     ("GET", "/internal/admin/health", None),
+    # Endod's service fee (test_service_fee.py).
+    ("GET", "/internal/admin/fees", None),
+    ("PUT", "/internal/admin/fees", {"enabled": True, "flat_santim": 2500, "percent_bp": 0, "reason": "set",
+                                     "actor_email": ACTOR}),
+    ("GET", "/internal/admin/fees/summary", None),
+    ("GET", "/internal/admin/fees/entries", None),
+    ("POST", "/internal/admin/fees/settle", {"hospital_id": "a" * 32, "entry_ids": ["b" * 32], "reference": "R-1",
+                                            "actor_email": ACTOR}),
 ]
 
 

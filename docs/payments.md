@@ -55,18 +55,21 @@ While `CHAPA_SECRET_KEY` is not set (`GET /users/me/payments/status` answers
 `online_payments: false`), a priced partner booking, in person or video, is
 not held for payment: it is booked at once, as a free one is.
 
-* `payment_status` is `at_hospital`; the patient pays the hospital's `price`
-  there. **Endod takes no service fee on these** (`service_fee` 0, so `total`
-  is the price), since Endod collects nothing; the quote
+* `payment_status` is `at_hospital`; the patient pays the hospital the
+  `total` there: the `price` **plus Endod's service fee** (changed by the
+  CEO's decision, see [service-fee.md](service-fee.md); it was 0 before). The
+  hospital owes Endod the fee (Endod's fee ledger). The quote
   (`GET /users/me/hospital-bookings/quote`) says the same with
-  `"payment": "at_hospital"`.
+  `"payment": "at_hospital"`. A free visit has no fee.
 * A patient may have at most **3** upcoming visits to pay at the hospital
   (`MAX_OPEN_AT_HOSPITAL`; a 4th is refused with 409), since each reaches a
   hospital with nothing paid.
 * There is no `booking_payments` row and no hospital payout (the hospital
   is paid directly).
-* `appointment.requested` is emitted at once with `"payment": "at_hospital"`.
-  Bookings paid through Chapa, and free ones, carry `"payment": "online"`.
+* `appointment.requested` is emitted at once with `"payment": "at_hospital"`,
+  `service_fee` and `total`. Bookings paid through Chapa, and free ones, carry
+  `"payment": "online"`. The hospital says when the patient paid
+  (`appointment.paid`); a completed visit counts as paid.
 * A rejection, a cancellation (by the hospital or the patient) or an
   unanswered booking closes it with **no refund**: nothing was paid to Endod.
   This holds even if Chapa is configured later (the check is on the
@@ -212,7 +215,7 @@ refunded there. The patient app has no balance section.
 | `CHAPA_WEBHOOK_SECRET` | Chapa > Settings > Webhooks: the secret hash. Webhook URL: `https://endod-health.com/api/payments/chapa/webhook` |
 | `CHAPA_BASE_URL` | default `https://api.chapa.co/v1` |
 | `PUBLIC_APP_URL` | where Chapa sends the patient back |
-| `SERVICE_FEE_FLAT_SANTIM`, `SERVICE_FEE_PERCENT_BP` | Endod's fee |
+| `SERVICE_FEE_FLAT_SANTIM`, `SERVICE_FEE_PERCENT_BP`, `SERVICE_FEE_ENABLED` | only the initial defaults of Endod's fee (2500 santim, 0, true); the super admin sets it ([service-fee.md](service-fee.md)) |
 
 ## Tests
 
