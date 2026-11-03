@@ -30,7 +30,11 @@ CBE Birr, M-Pesa, a bank or a card.
 
 While Chapa is not configured, a priced booking is not held for payment: it is
 made at once with ``PaymentState.AT_HOSPITAL`` (the patient pays the hospital
-there, no Endod fee) and has no payment row, so nothing here ever refunds it.
+there, the price plus Endod's service fee, which the hospital owes Endod) and
+has no payment row, so nothing here ever refunds it.
+
+A paid booking is an entry of Endod's fee ledger (fee_ledger.py); a refund or
+a reversal marks it ``refunded``.
 
 Money is in santim (integers).
 """
@@ -393,6 +397,9 @@ def _on_reversed(tx_ref: str) -> Dict[str, Any]:
             return _payload(payment)
         payment.status = BookingPaymentStatus.REVERSED
         appointment.payment_status = PaymentState.REVERSED
+        from dedan_platform import fee_ledger
+
+        fee_ledger.mark_refunded(session, fee_ledger.BOOKING, appointment.id)
         payout = session.scalar(select(HospitalPayout).where(HospitalPayout.appointment_id == appointment.id)
                                 .with_for_update())
         if payout is not None and payout.status == PayoutStatus.HELD:

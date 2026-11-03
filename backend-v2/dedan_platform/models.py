@@ -1387,6 +1387,115 @@ class PlatformSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
+class FeeSettingChange(Base):
+    """One change of Endod's service fee settings by a super admin (fee_settings.py):
+    who, why, and the settings before and after (JSON). Append-only."""
+
+    __tablename__ = "fee_setting_changes"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    actor_email: Mapped[str] = mapped_column(String(254), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    before: Mapped[str] = mapped_column(Text, nullable=False)
+    after: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class FeeCollector:
+    """Who took the patient's money (and so holds Endod's fee)."""
+
+    ENDOD = "endod"  # paid online through Chapa
+    HOSPITAL = "hospital"  # paid at the hospital: the hospital owes Endod the fee
+    ALL = (ENDOD, HOSPITAL)
+
+
+class FeeSettlement:
+    """Where Endod's fee on one payment is."""
+
+    COLLECTED = "collected"  # Endod has it (online payment)
+    OWED = "owed"  # the hospital collected it and owes it to Endod
+    SETTLED = "settled"  # the hospital paid it to Endod (marked by a super admin)
+    REFUNDED = "refunded"  # the payment was refunded: no fee is due
+    ALL = (COLLECTED, OWED, SETTLED, REFUNDED)
+
+
+class FeeLedgerEntry(Base):
+    """Endod's books: one row per paid hospital service (fee_ledger.py).
+
+    A booking (``source_type`` booking, ``source_id`` the appointment id) or a
+    hospital charge (``charge``, the hospital service's charge id), paid online
+    (Endod collected) or at the hospital (the hospital owes Endod the fee
+    until it is settled). Money in santim. No health data: amounts, ids, times.
+    """
+
+    __tablename__ = "fee_ledger"
+    __table_args__ = (
+        UniqueConstraint("source_type", "source_id", name="uq_fee_ledger_source"),
+        Index("ix_fee_ledger_hospital_paid", "hospital_id", "paid_at"),
+        Index("ix_fee_ledger_settlement", "settlement_status", "hospital_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: The patient's account, when they have one (a charge for a patient not on Endod has none).
+    user_id: Mapped[Optional[str]] = mapped_column(String(32), index=True)
+    dedan_id: Mapped[Optional[str]] = mapped_column(String(16))
+    subtotal: Mapped[int] = mapped_column(Integer, nullable=False)
+    fee: Mapped[int] = mapped_column(Integer, nullable=False)
+    total: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="ETB")
+    #: chapa (online), cash, card, mobile_money, other, or unrecorded (a visit
+    #: paid at the hospital that was completed without saying how).
+    method: Mapped[str] = mapped_column(String(16), nullable=False)
+    reference: Mapped[Optional[str]] = mapped_column(String(100))
+    collected_by: Mapped[str] = mapped_column(String(8), nullable=False)
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    settlement_status: Mapped[str] = mapped_column(String(10), nullable=False)
+    settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    settlement_reference: Mapped[Optional[str]] = mapped_column(String(100))
+    settled_by: Mapped[Optional[str]] = mapped_column(String(254))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class BillStatus:
+    OPEN = "open"
+    PAID = "paid"
+    VOIDED = "voided"
+    ALL = (OPEN, PAID, VOIDED)
+
+
+class PatientBill(Base):
+    """A hospital's charge to a patient, as the patient sees it in the app
+    (hospital_charges.py; from ``charge.created`` / ``charge.paid`` /
+    ``charge.voided``). The items (what was done) are encrypted at rest."""
+
+    __tablename__ = "patient_bills"
+    __table_args__ = (Index("ix_patient_bills_user", "user_id", "created_at"),)
+    __encrypted__ = ("items_json",)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: The charge's id in the hospital service.
+    charge_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    booking_id: Mapped[Optional[str]] = mapped_column(String(64))
+    items_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    subtotal: Mapped[int] = mapped_column(Integer, nullable=False)
+    service_fee: Mapped[int] = mapped_column(Integer, nullable=False)
+    total: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="ETB")
+    status: Mapped[str] = mapped_column(String(8), nullable=False, default=BillStatus.OPEN)
+    method: Mapped[Optional[str]] = mapped_column(String(16))
+    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    voided_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 # Encrypts and decrypts the ``__encrypted__`` columns above on every flush and
 # load. Imported last: it reads the classes defined here.
 from dedan_platform import field_encryption  # noqa: E402,F401

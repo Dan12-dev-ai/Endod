@@ -243,9 +243,9 @@ class TestTopUpsAreGone:
     def test_without_online_payment_the_quote_is_the_price_paid_at_the_hospital(self, client, auth, listed):
         quote = client.get("/users/me/hospital-bookings/quote", headers=auth,
                            params={"hospital_id": HOSPITAL, "visit_mode": "telehealth"}).json()
-        # No Endod fee on a visit paid at the hospital.
-        assert quote == {"hospital_id": HOSPITAL, "visit_mode": "telehealth", "price": 10000, "service_fee": 0,
-                         "total": 10000, "currency": "ETB", "payment": "at_hospital"}
+        # Endod's fee applies at the hospital too (paid there with the price).
+        assert quote == {"hospital_id": HOSPITAL, "visit_mode": "telehealth", "price": 10000, "service_fee": 700,
+                         "total": 10700, "currency": "ETB", "payment": "at_hospital"}
 
 
 def payouts():
@@ -260,7 +260,8 @@ def payouts():
 
 class TestPayingAtTheHospital:
     """No Chapa key (online payment off): priced visits are booked at once and
-    paid at the hospital; nothing is ever refunded for them."""
+    paid at the hospital, the price plus Endod's fee (owed to Endod by the
+    hospital); nothing is ever refunded for them."""
 
     @pytest.mark.parametrize("mode,price,event_mode,state", [
         ("in_person", 15000, "in_person", "awaiting_hospital"),
@@ -278,9 +279,10 @@ class TestPayingAtTheHospital:
         appointment, payment = resp.json()["appointment"], resp.json()["payment"]
         booking = appointment["hospital_booking"]
         assert booking["state"] == state
-        assert booking["price"] == price and booking["service_fee"] == 0 and booking["total"] == price
+        fee = 500 + price * 2 // 100  # 5 birr flat + 2% (the test's settings)
+        assert booking["price"] == price and booking["service_fee"] == fee and booking["total"] == price + fee
         assert booking["payment"] == {"status": "at_hospital", "due_at": None, "checkout_url": None}
-        assert payment == {"price": price, "service_fee": 0, "total": price, "currency": "ETB",
+        assert payment == {"price": price, "service_fee": fee, "total": price + fee, "currency": "ETB",
                            "status": "at_hospital", "checkout_url": None, "tx_ref": None, "expires_at": None}
         aid = appointment["appointment_id"]
         # No payment to Endod, and no hospital share held by Endod.
@@ -292,9 +294,12 @@ class TestPayingAtTheHospital:
         [request] = requested(bus)
         assert request["appointment_id"] == aid and request["price"] == price
         assert request["visit_mode"] == event_mode and request["payment"] == "at_hospital"
+        # The hospital collects the total and owes Endod the fee.
+        assert request["service_fee"] == fee and request["total"] == price + fee
         assert request["patient"]["name"] == "Almaz Tefera"
         [item] = [i for i in inbox_items(client, auth) if i["kind"] == "appointment_booked"]
-        assert item["body"].startswith(f"Pay {price / 100:,.2f} birr at the hospital.")
+        assert item["body"].startswith(f"Pay ETB {(price + fee) / 100:.2f} at the hospital (including the Endod "
+                                       f"service fee of ETB {fee / 100:.2f}).")
         assert "Paid" not in item["body"]
 
     def test_a_hospital_rejection_refunds_nothing(self, client, auth, bus, listed):
@@ -441,9 +446,11 @@ class TestPayingForABooking:
         assert appointment["hospital_booking"]["payment"] == {"status": "paid", "due_at": None, "checkout_url": None}
         run_worker(bus)
         [request] = requested(bus)
-        # The hospital's event is as before per-booking payments, plus how the visit is paid.
+        # The hospital's event is as before per-booking payments, plus how the
+        # visit is paid and Endod's fee (already collected online by Endod).
         assert set(request) == {"appointment_id", "hospital_id", "patient", "visit_mode", "service", "scheduled_at",
-                                "duration_minutes", "notes", "price", "payment"}
+                                "duration_minutes", "notes", "price", "payment", "service_fee", "total"}
+        assert request["service_fee"] == 800 and request["total"] == 15800
         assert request["payment"] == "online"
         assert request["hospital_id"] == HOSPITAL and request["price"] == 15000 and request["visit_mode"] == "in_person"
         assert request["patient"]["name"] == "Almaz Tefera" and request["patient"]["dedan_id"].startswith("DE")

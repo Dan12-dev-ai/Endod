@@ -24,11 +24,19 @@ it is the hospital's to close. Only the hospital confirms or completes.
 
 Paying at the hospital: while online payment is off (no Chapa key), a priced
 booking is made at once, as a free one is (``appointment.requested`` straight
-away), with payment ``at_hospital``: the patient pays the hospital's price
-there. Endod takes no fee on these (``service_fee`` 0) and holds no hospital
-share (there is no payout), and closing one never refunds anything, since
-nothing was paid to Endod. The event says how the visit is paid:
-``"payment": "online"`` (paid through Chapa, or free) or ``"at_hospital"``.
+away), with payment ``at_hospital``: the patient pays the hospital there.
+Endod's service fee applies to these too (docs/service-fee.md): the patient
+pays the price plus the fee at the hospital, the hospital is told the total to
+collect and that the fee is owed to Endod. Endod holds no hospital share
+(there is no payout), and closing one never refunds anything, since nothing
+was paid to Endod. The event says how the visit is paid: ``"payment":
+"online"`` (paid through Chapa, or free) or ``"at_hospital"``, with
+``service_fee`` and ``total``.
+
+A free visit (price 0) carries no fee. Every paid booking is written to
+Endod's fee ledger (fee_ledger.py): online when Chapa confirms it; at the
+hospital when the hospital says it was paid (``appointment.paid``) or, at the
+latest, when it completes the visit.
 """
 
 from __future__ import annotations
@@ -41,7 +49,9 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from dedan_platform import booking_payments, chapa, eventbus, identity, jitsi, partner_config, partners, wallet
+from dedan_platform import (
+    booking_payments, chapa, eventbus, fee_ledger, fee_settings, identity, jitsi, partner_config, partners, wallet,
+)
 from dedan_platform.appointments import (
     AppointmentError, AppointmentNotFound, _require_future, _require_no_overlap, _short_text, _to_payload,
     _transition, _validate_time_window, _zone,
@@ -51,7 +61,7 @@ from dedan_platform.db import ensure_aware, ensure_utc, new_uuid, session_scope
 from dedan_platform.eventbus import PermanentEventError
 from dedan_platform.models import (
     Appointment, BookingPayment, BookingPaymentStatus, EventStatus, HealthEventType, HospitalPayout, PayoutStatus,
-    WalletEntryKind, utcnow,
+    User, WalletEntryKind, utcnow,
 )
 from dedan_platform.timeline import record_event, update_appointment_event
 
@@ -126,11 +136,15 @@ ONLINE, AT_HOSPITAL = "online", "at_hospital"
 
 
 def _charges(price: int) -> Tuple[int, str]:
-    """Endod's fee and how the visit is paid: online through Chapa (or free),
-    or, while Chapa is not configured, at the hospital with no Endod fee."""
+    """Endod's fee (fee_settings: the super admin's settings) and how the visit
+    is paid: online through Chapa, or, while Chapa is not configured, at the
+    hospital (price plus fee, the fee owed to Endod). A free visit: no fee."""
+    if not price:
+        return 0, ONLINE
+    fee = fee_settings.fee_for(price)
     if partner_config.chapa_secret_key():
-        return wallet.service_fee(price), ONLINE
-    return 0, (AT_HOSPITAL if price else ONLINE)
+        return fee, ONLINE
+    return fee, AT_HOSPITAL
 
 
 def quote(hospital_id: str, visit_mode: Optional[str]) -> Dict[str, Any]:
@@ -322,9 +336,17 @@ def on_paid(session: Session, appointment: Appointment, patient: Optional[Dict[s
         "scheduled_at": ensure_aware(appointment.scheduled_at).isoformat(),
         "duration_minutes": appointment.duration_minutes, "notes": appointment.notes, "price": price,
         # How the visit is paid: "online" (through Chapa, or free) or
-        # "at_hospital" (the hospital collects ``price`` at the visit).
-        "payment": AT_HOSPITAL if at_hospital else ONLINE,
+        # "at_hospital" (the hospital collects ``total`` at the visit: the
+        # price plus Endod's ``service_fee``, which it owes to Endod).
+        "payment": AT_HOSPITAL if at_hospital else ONLINE, "service_fee": fee, "total": price + fee,
     })
+    if payment is not None:
+        # Paid online: Endod collected the fee (its books, fee_ledger.py).
+        fee_ledger.record(session, source_type=fee_ledger.BOOKING, source_id=appointment.id,
+                          hospital_id=appointment.hospital_id, user_id=appointment.user_id,
+                          dedan_id=(patient or {}).get("dedan_id"), subtotal=price, fee=fee, method="chapa",
+                          reference=payment.provider_reference or payment.tx_ref, collected_by="endod",
+                          paid_at=payment.paid_at or utcnow())
     user_id, appointment_id, hospital_id = appointment.user_id, appointment.id, appointment.hospital_id
     scheduled_at, notes, location = ensure_aware(appointment.scheduled_at), appointment.notes, appointment.location
     correlation_id = appointment.correlation_id
@@ -340,7 +362,7 @@ def on_paid(session: Session, appointment: Appointment, patient: Optional[Dict[s
                  correlation_id=correlation_id)
         _quietly("inbox", _inbox, user_id, "appointment_booked",
                  "Video visit requested" if mode == VIDEO else "Visit booked",
-                 (f"Pay {wallet.birr(price)} birr at the hospital. " if at_hospital
+                 (at_hospital_sentence(price, fee) + " " if at_hospital
                   else f"Paid {wallet.birr(price + fee)} birr. ")
                  + ("A doctor will approve it; you will be told here." if mode == VIDEO else
                     f"{name} has your booking."),
@@ -354,6 +376,14 @@ def on_paid(session: Session, appointment: Appointment, patient: Optional[Dict[s
 
     eventbus.after_commit(session, booked)
     return True
+
+
+def at_hospital_sentence(price: int, fee: int) -> str:
+    """What the patient is told to pay at the hospital."""
+    if fee:
+        return (f"Pay ETB {wallet.birr(price + fee)} at the hospital "
+                f"(including the Endod service fee of ETB {wallet.birr(fee)}).")
+    return f"Pay ETB {wallet.birr(price)} at the hospital."
 
 
 def on_reversed(session: Session, appointment: Appointment) -> bool:
@@ -424,6 +454,7 @@ def _refund(session: Session, appointment: Appointment, why: str) -> int:
         if payment.status == BookingPaymentStatus.PAID and amount:
             booking_payments.request_refund(session, payment, amount, why)
             appointment.payment_status = PaymentState.REFUND_PENDING
+            fee_ledger.mark_refunded(session, fee_ledger.BOOKING, appointment.id)
         else:
             amount = 0
     elif amount:
@@ -613,11 +644,51 @@ def on_completed(session: Session, payload: Dict[str, Any]) -> None:
     if appointment.status in (EventStatus.CONFIRMED, EventStatus.RESCHEDULED):
         _transition(appointment, EventStatus.COMPLETED)
     update_appointment_event(session, appointment.user_id, appointment.id, EventStatus.COMPLETED)
+    if appointment.payment_status == PaymentState.AT_HOSPITAL and (appointment.price or 0) > 0:
+        # The visit happened, so the hospital collected the total: if it did
+        # not say how (appointment.paid), the fee is owed from now.
+        _record_at_hospital(session, appointment, "unrecorded", None, eventbus.event_time(session) or utcnow())
     payout = session.scalar(select(HospitalPayout).where(HospitalPayout.appointment_id == appointment.id)
                             .with_for_update())
     if payout is not None and payout.status == PayoutStatus.HELD:
         payout.status = PayoutStatus.DUE
         payout.updated_at = utcnow()
+
+
+def _record_at_hospital(session: Session, appointment: Appointment, method: str, reference: Optional[str],
+                        paid_at: datetime) -> None:
+    user = session.get(User, appointment.user_id)
+    fee_ledger.record(session, source_type=fee_ledger.BOOKING, source_id=appointment.id,
+                      hospital_id=appointment.hospital_id, user_id=appointment.user_id,
+                      dedan_id=user.dedan_user_id if user is not None else None, subtotal=appointment.price or 0,
+                      fee=appointment.service_fee or 0, method=method, reference=reference, collected_by="hospital",
+                      paid_at=paid_at)
+
+
+class PaidAtHospital(BaseModel):
+    appointment_id: str = Field(min_length=1, max_length=64)
+    hospital_id: str = Field(min_length=1, max_length=32)
+    method: str = Field(pattern=r"^(cash|card|mobile_money|other)$")
+    reference: Optional[str] = Field(default=None, max_length=100)
+    paid_at: Optional[datetime] = None
+
+
+def on_paid_at_hospital(session: Session, payload: Dict[str, Any]) -> None:
+    """``appointment.paid``: the hospital says the patient paid a booking at the
+    hospital (the price plus Endod's fee): the fee is owed to Endod."""
+    try:
+        paid = PaidAtHospital.model_validate(payload)
+    except ValidationError as exc:
+        raise PermanentEventError(str(exc).splitlines()[0]) from exc
+    appointment = session.scalar(select(Appointment).where(
+        Appointment.id == paid.appointment_id, Appointment.hospital_id == paid.hospital_id).with_for_update())
+    if appointment is None:
+        raise PermanentEventError(f"no appointment {paid.appointment_id} at this hospital")
+    if appointment.payment_status != PaymentState.AT_HOSPITAL or not (appointment.price or 0):
+        raise PermanentEventError(f"appointment {paid.appointment_id} is not paid at the hospital")
+    when = paid.paid_at if paid.paid_at is not None and paid.paid_at.tzinfo is not None else None
+    _record_at_hospital(session, appointment, paid.method, paid.reference,
+                        ensure_utc(when) if when else (eventbus.event_time(session) or utcnow()))
 
 
 HANDLERS = {
@@ -627,6 +698,7 @@ HANDLERS = {
     "appointment.rejected": on_rejected,
     "appointment.cancelled": on_cancelled,
     "appointment.completed": on_completed,
+    "appointment.paid": on_paid_at_hospital,
 }
 
 
