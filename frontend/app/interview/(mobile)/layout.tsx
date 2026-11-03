@@ -62,7 +62,13 @@ export default function MobileLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-screen md:h-screen md:overflow-hidden bg-gray-100 font-sans antialiased text-app-charcoal flex">
-      <aside className="hidden md:flex sticky top-0 h-screen w-64 flex-col bg-app-green text-white p-4 pt-10 gap-3">
+      <aside className="hidden md:flex sticky top-0 h-screen w-64 flex-col bg-app-green text-white p-4 pt-4 gap-3">
+        <div className="flex items-center gap-2 px-2 pb-3 mb-1 border-b border-white/15">
+          <Link href="/" aria-label={t("nav.homeAria")} className="flex items-center gap-2">
+            <img alt={t("nav.logoAlt")} className="h-8 w-auto object-contain" src="/endod_logo.png" />
+            <span className="text-lg font-black tracking-tight text-white">Endod</span>
+          </Link>
+        </div>
         {navItems.map((item) => (
           <Link
             key={item.label}

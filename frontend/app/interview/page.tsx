@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import EmergencyPanel from "./emergency-panel";
 import LanguageSwitcher from "../components/language-switcher";
 import { useI18n } from "../lib/i18n";
-import { logout } from "../lib/api";
+import { api, logout } from "../lib/api";
 
 const services = [
   { labelKey: "mobile.nav.card", href: "/interview/mobile-card", icon: <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" strokeWidth="2" /><path d="M2 10h20" strokeWidth="2" /></svg> },
@@ -16,10 +16,30 @@ const services = [
 
 export default function InterviewDashboard() {
   const [emergencyOpen, setEmergencyOpen] = useState(false);
+  const [firstName, setFirstName] = useState("");
   const { t } = useI18n();
+  useEffect(() => {
+    let cancelled = false;
+    api<{ first_name?: string }>("users/me")
+      .then((profile) => {
+        if (cancelled) return;
+        if (profile.first_name) setFirstName(profile.first_name);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   return (
     <div className="min-h-screen md:h-screen md:overflow-hidden bg-gray-100 font-sans antialiased text-app-charcoal flex">
-      <aside className="hidden md:flex sticky top-0 h-screen w-64 flex-col bg-app-green text-white p-4 pt-10 gap-3 z-40">
+      <aside className="hidden md:flex sticky top-0 h-screen w-64 flex-col bg-app-green text-white p-4 pt-4 gap-3 z-40">
+        {/* Brand: moved here from the top bar on tablet/desktop widths */}
+        <div className="flex items-center gap-2 px-2 pb-3 mb-1 border-b border-white/15">
+          <Link href="/" aria-label={t("nav.homeAria")} className="flex items-center gap-2">
+            <img alt={t("nav.logoAlt")} className="h-8 w-auto object-contain" src="/endod_logo.png" />
+            <span className="text-lg font-black tracking-tight text-white">Endod</span>
+          </Link>
+        </div>
         {services
           .filter((s) => s.labelKey !== "mobile.nav.setting")
           .map((s) => (
@@ -41,14 +61,16 @@ export default function InterviewDashboard() {
             </Link>
           ))}
       </aside>
-      <main className="flex-1 md:h-screen md:overflow-y-auto w-full bg-white min-h-screen flex flex-col">
+      <main className="flex-1 md:h-screen md:overflow-y-auto w-full bg-white min-h-screen flex flex-col pb-16 md:pb-0">
         {/* Brand header */}
-        <section className="bg-white px-5 py-2.5 flex justify-between items-center z-20 border-b border-gray-100">
-          <Link href="/" aria-label={t("nav.homeAria")} className="flex items-center gap-2">
+        <section className="bg-white px-5 py-2.5 flex justify-between md:justify-end items-center z-20 border-b border-gray-100 md:hidden">
+          <Link href="/" aria-label={t("nav.homeAria")} className="flex items-center gap-2 md:hidden">
             <img alt={t("nav.logoAlt")} className="h-8 w-auto object-contain" src="/endod_logo.png" />
             <span className="text-lg font-black tracking-tight text-slate-800">Endod</span>
           </Link>
-          <LanguageSwitcher tone="mobile" />
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher tone="mobile" />
+          </div>
         </section>
 
         {/* Hero balance section */}
@@ -66,7 +88,7 @@ export default function InterviewDashboard() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-semibold tracking-wide text-white drop-shadow-sm">{t("mobile.dashboard.greeting", { name: "Etalem" })}</p>
+                <p className="text-sm font-semibold tracking-wide text-white drop-shadow-sm">{t("mobile.dashboard.greeting", { name: firstName || "there" })}</p>
               </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -87,16 +109,16 @@ export default function InterviewDashboard() {
 
         {/* Service grid */}
         <section className="px-4 pt-5 pb-3" data-purpose="services-grid">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-5xl">
             {services.map((s) => (
-              <Link key={s.labelKey} href={s.href} className="bg-white rounded-2xl p-4 md:p-6 flex flex-col items-center justify-center text-center shadow-card border border-gray-100 hover:shadow-md transition active:scale-95 cursor-pointer min-h-[110px] md:min-h-[125px]">
+              <Link key={s.labelKey} href={s.href} className="bg-white rounded-2xl p-4 md:p-6 flex flex-col items-center justify-center text-center shadow-[0_20px_40px_-10px_rgba(0,0,0,0.25)] border border-gray-100 hover:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.35)] hover:-translate-y-1 transition active:scale-95 cursor-pointer min-h-[110px] md:min-h-0 md:aspect-[4/3]">
                 <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl text-app-green flex items-center justify-center mb-2.5">
                   {s.icon}
                 </div>
                 <span className="text-base font-semibold text-app-charcoal leading-tight">{t(s.labelKey as any)}</span>
               </Link>
             ))}
-            <Link href="/interview/mobile-notification" className="bg-white rounded-2xl p-4 md:p-6 flex flex-col items-center justify-center text-center shadow-card border border-gray-100 relative hover:shadow-md transition active:scale-95 cursor-pointer min-h-[110px] md:min-h-[125px]">
+            <Link href="/interview/mobile-notification" className="bg-white rounded-2xl p-4 md:p-6 flex flex-col items-center justify-center text-center shadow-[0_20px_40px_-10px_rgba(0,0,0,0.25)] border border-gray-100 relative hover:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.35)] hover:-translate-y-1 transition active:scale-95 cursor-pointer min-h-[110px] md:min-h-0 md:aspect-[4/3]">
               <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-red-500 rounded-full animate-ping" />
               <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-red-500 rounded-full" />
               <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl text-app-green flex items-center justify-center mb-2.5">
@@ -110,17 +132,17 @@ export default function InterviewDashboard() {
         </section>
 
         {/* Emergency */}
-        <div className="px-4 pb-6 pt-2 flex-1 flex items-center">
-          <button type="button" onClick={() => setEmergencyOpen(true)} className="w-full flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-600/90 text-white font-bold py-3.5 px-4 rounded-2xl shadow-card active:scale-95 transition">
-            <svg className="w-5 h-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" stroke-linecap="round" stroke-linejoin="round" strokeWidth="2.5" />
-            </svg>
-            <span className="text-base font-bold tracking-wide">{t("mobile.dashboard.emergency")}</span>
-          </button>
-        </div>
+        <div className="px-4 pb-6 pt-2 flex justify-center mt-8">
+                  <button type="button" onClick={() => setEmergencyOpen(true)} className="w-full md:w-64 flex items-center justify-center space-x-2 bg-red-600 hover:bg-red-600/90 text-white font-bold py-3.5 px-4 md:py-3 md:px-4 rounded-2xl md:rounded-full shadow-card active:scale-95 transition text-base md:text-base">
+                    <svg className="w-5 h-5 md:w-4 md:h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" stroke-linecap="round" stroke-linejoin="round" strokeWidth="2.5" />
+                    </svg>
+                    <span>{t("mobile.dashboard.emergency")}</span>
+                  </button>
+                </div>
 
         {/* Bottom nav */}
-        <nav className="md:hidden sticky bottom-0 inset-x-0 bg-app-green border-t border-white/20 shadow-nav px-3 py-2 flex justify-around items-center z-40">
+        <nav className="md:hidden fixed bottom-0 inset-x-0 bg-app-green border-t border-white/20 shadow-nav px-3 py-2 flex justify-around items-center z-40">
           <Link href="/interview/mobile-card" className="flex flex-col items-center text-white space-y-1 focus:outline-none flex-1">
             <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>
             <span className="text-[10px] font-bold text-white">{t("mobile.nav.card")}</span>
