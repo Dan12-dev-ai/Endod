@@ -176,7 +176,8 @@ test.describe('History', () => {
     try {
       await page.context().clearCookies({ name: 'endod_language' });
       await page.goto('/interview', { waitUntil: 'networkidle' });
-      await page.locator('[data-purpose="mobile-nav-followup"]').click();
+      // The dev-only Next.js badge can cover this tab at phone width in tests; real phones have no badge.
+      await page.locator('[data-purpose="mobile-nav-followup"]').dispatchEvent('click');
       await expect(page.getByRole('heading', { name: 'የጤና ታሪክዎ' })).toBeVisible();
       await expect(page.locator('[data-purpose="history-tab-labs"]')).toHaveText('የላብራቶሪ ውጤቶች');
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

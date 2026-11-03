@@ -24,6 +24,20 @@ queries below select plain columns of ``users``, ``profiles`` and
 * ``GET  /internal/admin/cards/{dedan_id}?s=``: whether the card is valid.
 * ``GET  /internal/admin/health``: database, Redis, the events worker, the
   dead-letter count and the outbox backlog (no secrets).
+
+Endod's service fee (fee_settings.py, fee_ledger.py, docs/service-fee.md):
+
+* ``GET  /internal/admin/fees``: the settings, what a 200 ETB bill becomes,
+  the limits and the latest changes.
+* ``PUT  /internal/admin/fees``: ``{"enabled", "flat_santim", "percent_bp",
+  "reason", "actor_email"}``; validated, kept in ``fee_setting_changes`` and
+  sent to the hospital service (``fees.updated``).
+* ``GET  /internal/admin/fees/summary?from=&to=``: per hospital, fees
+  collected online, owed by the hospital, settled, refunded (payments in
+  [from, to), dates in Addis Ababa).
+* ``GET  /internal/admin/fees/entries?hospital_id=&status=&source=&from=&to=&limit=&offset=``.
+* ``POST /internal/admin/fees/settle``: ``{"hospital_id", "entry_ids",
+  "reference", "actor_email"}``; owed fees the hospital paid to Endod.
 """
 
 from __future__ import annotations
@@ -32,7 +46,7 @@ import hmac
 import json
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
@@ -40,7 +54,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, or_, select, text
 
-from dedan_platform import cards, identity
+from dedan_platform import cards, fee_ledger, fee_settings, identity
 from dedan_platform import partner_config as config
 from dedan_platform.db import ensure_aware, session_scope
 from dedan_platform.models import (
@@ -442,3 +456,114 @@ def health() -> Dict[str, Any]:
         "outbox": outbox,
     }
 
+
+
+# --- Endod's service fee --------------------------------------------------------------------
+
+def _actor(value: str) -> str:
+    value = value.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
+        raise ValueError("must be an email address")
+    return value
+
+
+def _reason_text(value: str) -> str:
+    value = value.strip()
+    if len(value) < 3:
+        raise ValueError("give a reason")
+    return value
+
+
+@router.get("/fees")
+def read_fees() -> Dict[str, Any]:
+    return fee_settings.view()
+
+
+class FeeChange(BaseModel):
+    enabled: bool
+    #: Santim (2500 = 25 birr).
+    flat_santim: int = Field(ge=0, le=fee_settings.MAX_FLAT_SANTIM, strict=True)
+    #: Hundredths of a percent (150 = 1.5%).
+    percent_bp: int = Field(default=0, ge=0, le=fee_settings.MAX_PERCENT_BP, strict=True)
+    reason: str = Field(min_length=3, max_length=500)
+    actor_email: str = Field(min_length=3, max_length=254)
+
+    _reason = field_validator("reason")(classmethod(lambda cls, v: _reason_text(v)))
+    _actor_email = field_validator("actor_email")(classmethod(lambda cls, v: _actor(v)))
+
+
+@router.put("/fees")
+def change_fees(body: FeeChange) -> Dict[str, Any]:
+    from sqlalchemy.exc import IntegrityError
+
+    try:
+        return fee_settings.change(body.enabled, body.flat_santim, body.percent_bp, body.actor_email, body.reason)
+    except fee_settings.FeeSettingsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    except IntegrityError:
+        # Another admin saved the first settings at the same moment: nothing was changed by this call.
+        raise HTTPException(status_code=409, detail="The fee was changed at the same moment; reload and try "
+                                                    "again.") from None
+
+
+def _day_bounds(start: Optional[date], end: Optional[date]):
+    """[start, end] as days in Addis Ababa -> [start 00:00, end+1 00:00) in UTC."""
+    if start and end and end < start:
+        raise HTTPException(status_code=400, detail="'to' must not be before 'from'.")
+    low = datetime.combine(start, datetime.min.time(), ADDIS).astimezone(timezone.utc) if start else None
+    high = (datetime.combine(end + timedelta(days=1), datetime.min.time(), ADDIS).astimezone(timezone.utc)
+            if end else None)
+    return low, high
+
+
+@router.get("/fees/summary")
+def fee_summary(start: Optional[date] = Query(default=None, alias="from"),
+                end: Optional[date] = Query(default=None, alias="to")) -> Dict[str, Any]:
+    low, high = _day_bounds(start, end)
+    with session_scope() as session:
+        result = fee_ledger.summary(session, low, high)
+    result["from"], result["to"] = (start.isoformat() if start else None), (end.isoformat() if end else None)
+    result["timezone"] = "Africa/Addis_Ababa"
+    return result
+
+
+@router.get("/fees/entries")
+def fee_entries(hospital_id: Optional[str] = Query(default=None, max_length=32, pattern=r"^[A-Za-z0-9_-]+$"),
+                status: Optional[str] = Query(default=None, max_length=10),
+                source: Optional[str] = Query(default=None, max_length=10),
+                start: Optional[date] = Query(default=None, alias="from"),
+                end: Optional[date] = Query(default=None, alias="to"),
+                limit: int = Query(default=100, ge=1, le=500),
+                offset: int = Query(default=0, ge=0, le=100_000)) -> Dict[str, Any]:
+    from dedan_platform.models import FeeSettlement
+
+    if status is not None and status not in FeeSettlement.ALL:
+        raise HTTPException(status_code=400, detail=f"status must be one of {list(FeeSettlement.ALL)}.")
+    if source is not None and source not in fee_ledger.SOURCES:
+        raise HTTPException(status_code=400, detail=f"source must be one of {list(fee_ledger.SOURCES)}.")
+    low, high = _day_bounds(start, end)
+    with session_scope() as session:
+        return fee_ledger.entries(session, hospital_id=hospital_id, status=status, source_type=source,
+                                  start=low, end=high, limit=limit, offset=offset)
+
+
+class Settlement(BaseModel):
+    hospital_id: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_-]+$")
+    entry_ids: List[str] = Field(min_length=1, max_length=500)
+    #: The hospital's payment to Endod (a bank transfer reference, a receipt number).
+    reference: str = Field(min_length=2, max_length=100)
+    actor_email: str = Field(min_length=3, max_length=254)
+
+    _reference = field_validator("reference")(classmethod(lambda cls, v: _reason_text(v)))
+    _actor_email = field_validator("actor_email")(classmethod(lambda cls, v: _actor(v)))
+
+
+@router.post("/fees/settle")
+def settle_fees(body: Settlement) -> Dict[str, Any]:
+    if any(not re.fullmatch(r"[0-9a-f]{32}", i) for i in body.entry_ids):
+        raise HTTPException(status_code=404, detail="Unknown ledger entry.")
+    try:
+        with session_scope() as session:
+            return fee_ledger.settle(session, body.hospital_id, body.entry_ids, body.reference, body.actor_email)
+    except fee_ledger.LedgerError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None

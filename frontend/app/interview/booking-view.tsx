@@ -588,9 +588,13 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
               {selected.partner && quote && payAtHospital && (
                 <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-xs space-y-1" data-purpose="booking-quote" role="status">
                   <p className="font-bold text-slate-900" data-purpose="pay-at-hospital">
-                    {t("booking.payAtHospital", { amount: formatBirr(quote.price, locale) })}
+                    {t("booking.payAtHospital", { amount: formatBirr(quote.total, locale) })}
                   </p>
-                  <p className="text-[11px] text-slate-500" data-purpose="pay-hint">{t("booking.payAtHospitalHint")}</p>
+                  <p className="text-[11px] text-slate-500" data-purpose="pay-hint">
+                    {quote.service_fee > 0
+                      ? t("booking.payAtHospitalHintFee", { price: formatBirr(quote.price, locale), fee: formatBirr(quote.service_fee, locale) })
+                      : t("booking.payAtHospitalHint")}
+                  </p>
                 </div>
               )}
 
@@ -664,7 +668,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
             </div>
             {booked.hospital_booking?.payment.status === "at_hospital" && (
               <p className="text-xs font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4" data-purpose="booked-pay-at-hospital">
-                {t("booking.payAtHospital", { amount: formatBirr(booked.hospital_booking.price, locale) })}
+                {t("booking.payAtHospital", { amount: formatBirr(booked.hospital_booking.total, locale) })}
               </p>
             )}
             {booked.hospital_booking?.state === "awaiting_doctor" && (

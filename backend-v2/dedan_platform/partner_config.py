@@ -108,12 +108,14 @@ def demo_directory() -> bool:
 # --- payments ---
 
 def service_fee_flat() -> int:
-    """Endod's fee per payment, in santim (default 5 birr)."""
-    return max(0, _int("SERVICE_FEE_FLAT_SANTIM", 500))
+    """The INITIAL flat fee per payment, in santim (default 25 birr). The fee in
+    force is the super admin's (fee_settings.py); this is only its default."""
+    return max(0, _int("SERVICE_FEE_FLAT_SANTIM", 2500))
 
 
 def service_fee_percent_hundredths() -> int:
-    """Endod's fee as a share of the price, in hundredths of a percent (150 = 1.5%)."""
+    """The INITIAL share of the price, in hundredths of a percent (150 = 1.5%);
+    only the default of fee_settings.py."""
     return max(0, _int("SERVICE_FEE_PERCENT_BP", 0))
 
 

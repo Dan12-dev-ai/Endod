@@ -87,7 +87,8 @@ test.describe('Prescriptions at the pharmacy', () => {
     try {
       await page.context().clearCookies({ name: 'endod_language' });
       await page.goto('/interview', { waitUntil: 'networkidle' });
-      await page.locator('[data-purpose="mobile-nav-followup"]').click();
+      // The dev-only Next.js badge can cover this tab at phone width in tests; real phones have no badge.
+      await page.locator('[data-purpose="mobile-nav-followup"]').dispatchEvent('click');
       const rx = prescription(page, tag);
       await rx.getByRole('button', { expanded: false }).click();
       const panel = recordDetail(page).locator('[data-purpose="rx-pharmacy"]');

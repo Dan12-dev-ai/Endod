@@ -207,3 +207,25 @@ suspended).
 
 Only the newest request of a hospital patient can be verified. A request
 for a patient already linked is refused by the hospital service itself.
+
+## 9. Endod's service fee and charges (docs/service-fee.md)
+
+platform -> hospital `fees.updated`
+`{"version", "enabled", "flat_santim", "percent_bp", "currency": "ETB", "updated_at"}`
+on every change by the super admin and every 6 hours; the hospital service
+keeps the newest version and adds that fee to bookings and charges.
+
+`appointment.requested` also carries `service_fee` and `total` (santim): for
+`"payment": "at_hospital"` the hospital collects `total` and owes Endod
+`service_fee`.
+
+hospital -> platform `appointment.paid`
+`{"appointment_id", "hospital_id", "method": "cash"|"card"|"mobile_money"|"other", "reference", "paid_at"}`
+(a booking paid at the hospital).
+
+hospital -> platform `charge.created` (linked patients only), `charge.paid`
+(every charge), `charge.voided`:
+`{"charge_id", "hospital_id", "dedan_id", "appointment_id", "items", "subtotal", "service_fee", "total", "currency"}`
+(`items` on `charge.created` only; `method`, `reference`, `paid_at` on
+`charge.paid`). The patient sees the bill in the app and gets a non-clinical
+SMS; every paid one is in Endod's fee ledger.

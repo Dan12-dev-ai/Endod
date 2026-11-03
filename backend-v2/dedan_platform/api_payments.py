@@ -9,6 +9,8 @@
 * ``/payments/chapa/...``: Chapa's webhook and callback (public; they only
   trigger a verification with Chapa, see booking_payments.settle).
 * ``/users/me/wallet``: the old Endod balance, readable; top-ups are gone (410).
+* ``/users/me/bills``: the patient's bills from partner hospitals (charges:
+  hospital_charges.py), each with Endod's service fee; paid at the hospital.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 
-from dedan_platform import booking_payments, chapa, deposits, hospital_bookings, partners, wallet
+from dedan_platform import booking_payments, chapa, deposits, hospital_bookings, hospital_charges, partners, wallet
 from dedan_platform.api_profile import current_user_id
 from dedan_platform.appointments import AppointmentError, AppointmentNotFound
 from dedan_platform.care_navigation import haversine_km
@@ -32,6 +34,13 @@ router = APIRouter(tags=["payments"])
 def read_wallet(user_id: str = Depends(current_user_id),
                 limit: int = Query(default=50, ge=1, le=200)) -> Dict[str, Any]:
     return wallet.summary(user_id, limit=limit)
+
+
+@router.get("/users/me/bills")
+def read_bills(user_id: str = Depends(current_user_id),
+               limit: int = Query(default=50, ge=1, le=200)) -> Dict[str, Any]:
+    """Bills from partner hospitals (lab tests, imaging, procedures...), newest first."""
+    return hospital_charges.list_bills(user_id, limit=limit)
 
 
 #: Patients pay for each booking through Chapa: there is no balance to top up.

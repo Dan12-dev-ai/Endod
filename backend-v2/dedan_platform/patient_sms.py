@@ -76,6 +76,8 @@ DEMO_MOVED = "sms_demo_moved"
 RX_CODE = "sms_rx_code"
 RX_DISPENSED = "sms_rx_dispensed"
 RECORD_READY = "sms_record_ready"
+#: A hospital charged the patient (hospital_charges.py): the amount and Endod's fee only.
+BILL = "sms_bill"
 
 #: Always Amharic, then English (whatever the account's language).
 _BILINGUAL = frozenset({RX_CODE, RX_DISPENSED})
@@ -128,6 +130,12 @@ _TEXTS: Dict[str, Dict[str, str]] = {
     RX_CODE: {
         "en": "{brand}: prescription code {code} from {hospital}. Show it with your phone number at the pharmacy.",
         "am": "{brand}፦ ከ{hospital} የመድኃኒት ማዘዣ ኮድ {code}። በፋርማሲው ከስልክ ቁጥርዎ ጋር ያሳዩት።",
+    },
+    BILL: {
+        "en": "{brand}: your bill at the hospital is ETB {total} (incl. Endod service fee ETB {fee}). "
+              "Please pay at the hospital.",
+        "am": "{brand}፦ በሆስፒታሉ የሚከፍሉት ሂሳብ ETB {total} ነው (የEndod አገልግሎት ክፍያ ETB {fee}ን ጨምሮ)። "
+              "እባክዎ በሆስፒታሉ ይክፈሉ።",
     },
     RX_DISPENSED: {
         "en": "{brand}: medicine from your prescription was given at a pharmacy. Details in the {brand} app.",
@@ -232,6 +240,7 @@ def _render_one(template: str, params: Dict[str, Any], language: str, sms_only: 
     values = {"brand": BRAND, "when": when, "date": params.get("date", ""),
               "hospital": params.get("hospital", ""),
               "ticket": params.get("ticket", ""), "code": params.get("code", ""),
+              "total": params.get("total", ""), "fee": params.get("fee", ""),
               "refund": _refund_text(params.get("amount"), language),
               "ahead_text": _ahead_text(params.get("ahead"), language)}
     texts = _SMS_ONLY_TEXTS.get(template, _TEXTS[template]) if sms_only else _TEXTS[template]
