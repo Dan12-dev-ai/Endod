@@ -232,7 +232,7 @@ function VerifyOtp() {
             </div>
           </div>
 
-          <footer className="mt-8 pt-6" data-purpose="partner-logos-section">
+          <footer className="mt-8 pt-6 hidden lg:block" data-purpose="partner-logos-section">
             <div className="flex items-center space-x-4 mb-5">
               <span className="text-xs italic text-brand-heading/75 font-serif tracking-normal whitespace-nowrap">
                 {t("common.trustedBy")}
@@ -356,7 +356,7 @@ function VerifyOtp() {
                   <path d="M12 2v19M8 6c2-1 6-1 8 0M7 11c2.5-1.5 7.5-1.5 10 0M8 16c2-1 6-1 8 0M12 2c-1.5 0-3 1.5-3 3s1.5 3 3 3 3-1.5 3-3-1.5-3-3-3z" />
                 </svg>
               </div>
-              <p>{t("common.secureNotice")}</p>
+              <p className="hidden lg:block">{t("common.secureNotice")}</p>
             </aside>
           </div>
         </section>

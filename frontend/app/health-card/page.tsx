@@ -8,6 +8,8 @@ import { ApiError } from "../lib/api";
 import HealthCardView from "./card-view";
 import { fitAllergies, loadHealthCard, medicalLines, type HealthCardInfo } from "./health-card-data";
 import { useI18n } from "../lib/i18n";
+import jsPDF from "jspdf";
+import { createPortal } from "react-dom";
 import { Bone, HealthCardBones, Skeleton } from "../components/skeleton";
 
 
@@ -24,6 +26,7 @@ export default function HealthCardPage() {
   const [card, setCard] = useState<HealthCardInfo | null>(null);
   const [loadError, setLoadError] = useState("");
   const [isDownloading, setIsDownloading] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +47,7 @@ export default function HealthCardPage() {
   // Show a loading state during SSR / before mount to avoid hydration mismatch
   if (!mounted) {
     return (
-      <main className="w-full min-h-screen flex items-center justify-center py-6 px-2 sm:py-12 sm:px-8 bg-[#DDE9E6] text-brand-primary font-sans antialiased">
+      <main className="w-full min-h-screen flex items-center justify-center py-6 px-2 sm:py-12 sm:px-8 bg-white text-brand-primary font-sans antialiased">
         <div className="w-full max-w-[720px] text-center">
           {loadError ? (
             <p className="text-sm text-red-600" role="alert">{loadError}</p>
@@ -100,35 +103,139 @@ export default function HealthCardPage() {
 
   const cardHtml = buildHealthCardHtml(cardData);
 
-  const downloadAsPdf = () => {
+  const renderCardCanvas = async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 720;
+    canvas.height = 480;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas unavailable");
+
+    // White background
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Gradient card background with rounded corners
+    const grad = ctx.createLinearGradient(40, 40, 680, 440);
+    grad.addColorStop(0, "#1e3a2e");
+    grad.addColorStop(1, "#000000");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    const radius = 24;
+    ctx.moveTo(40 + radius, 40);
+    ctx.lineTo(680 - radius, 40);
+    ctx.arcTo(680, 40, 680, 80, radius);
+    ctx.lineTo(680, 440 - radius);
+    ctx.arcTo(680, 440, 680 - radius, 440, radius);
+    ctx.lineTo(40 + radius, 440);
+    ctx.arcTo(40, 440, 40, 440 - radius, radius);
+    ctx.lineTo(40, 40 + radius);
+    ctx.arcTo(40, 40, 40 + radius, 40, radius);
+    ctx.fill();
+
+    // Render QR code via qrcode library
+    // A white margin of 4 modules (the QR "quiet zone") is part of the
+    // code: without it, scanners cannot find the code on the dark card.
+    // Drawn 1:1 at a whole number of pixels per module (scaling a QR code by
+    // a fraction makes some modules wider than others, which scanners
+    // misread), as large as fits the 132 px white box while leaving at
+    // least 3 modules of white around it: the box is the quiet zone.
+    const modules = QRCode.create(qrData, { errorCorrectionLevel: "M" }).modules.size;
+    const scale = Math.max(1, Math.floor(132 / (modules + 6)));
+    const qrCanvas = await QRCode.toCanvas(qrData, {
+    scale,
+    margin: 0,
+    color: { dark: "#000000", light: "#ffffff" },
+    errorCorrectionLevel: "M",
+    });
+    const qrSide = modules * scale;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(80, 268, 132, 132);
+    ctx.drawImage(qrCanvas, 80 + Math.floor((132 - qrSide) / 2), 268 + Math.floor((132 - qrSide) / 2));
+
+    // Brand
+    ctx.fillStyle = "#94e0c0";
+    ctx.font = "bold 11px Arial";
+    ctx.fillText(labels.digitalId.toUpperCase(), 80, 152);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 26px Arial";
+    ctx.fillText(labels.brand, 80, 120);
+
+    ctx.fillStyle = "#6ee7b7";
+    ctx.font = "bold 16px Arial";
+    ctx.fillText(userId, 80, 240);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 32px Georgia";
+    ctx.fillText(fullName, 80, 200);
+
+    // "Scan to verify" under the QR code
+    ctx.fillStyle = "#94a3a8";
+    ctx.font = "bold 10px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(labels.scanToVerify.toUpperCase(), 146, 420);
+    ctx.textAlign = "left";
+
+    // Details beside the QR code: phone | blood group; allergies across the
+    // width; emergency contact (name, then phone) | expiry.
+    const fitText = (text: string, maxWidth: number) => {
+    if (ctx.measureText(text).width <= maxWidth) return text;
+    let cut = text;
+    while (cut.length > 1 && ctx.measureText(`${cut}…`).width > maxWidth) cut = cut.slice(0, -1);
+    return `${cut}…`;
+    };
+    const label = (text: string, x: number, y: number) => {
+    ctx.fillStyle = "#94a3a8";
+    ctx.font = "bold 10px Arial";
+    ctx.fillText(fitText(text.toUpperCase(), 200), x, y);
+    };
+    const value = (text: string, x: number, y: number, colour = "#ffffff", width = 200) => {
+    ctx.fillStyle = colour;
+    ctx.font = "bold 15px Arial";
+    ctx.fillText(fitText(text, width), x, y);
+    };
+    label(labels.phone, 244, 276);
+    value(phoneDisplay, 244, 296);
+    label(labels.bloodGroup, 470, 276);
+    value(lines.blood, 470, 296, card.medical?.bloodType ? "#fca5a5" : "#ffffff");
+
+    label(labels.allergies, 244, 324);
+    ctx.fillStyle = "#ffffff";
+    let allergySize = 15;
+    const allergyWidth = 426;
+    const allergyFits = (text: string) => ctx.measureText(text).width <= allergyWidth;
+    ctx.font = `bold ${allergySize}px Arial`;
+    while (allergySize > 11 && !allergyFits(lines.allergies)) {
+    allergySize -= 1;
+    ctx.font = `bold ${allergySize}px Arial`;
+    }
+    ctx.fillText(fitAllergies(card.medical?.allergies ?? [], allergyFits), 244, 344);
+
+    label(labels.emergency, 244, 372);
+    value(lines.emergency, 244, 392);
+    if (lines.emergencyPhone) {
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.font = "bold 13px Arial";
+    ctx.fillText(lines.emergencyPhone, 244, 410);
+    }
+    label(labels.expires, 470, 372);
+    value(expiryDate, 470, 392, "#6ee7b7");
+
+
+    return canvas;
+  };
+
+
+  const downloadAsPdf = async () => {
     setIsDownloading(true);
     try {
-      const printWindow = window.open("", "_blank", "width=720,height=480");
-      if (!printWindow) return;
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html lang="${document.documentElement.lang || "en"}">
-        <head>
-          <meta charset="utf-8" />
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Newsreader:wght@400;500;600;700&family=Noto+Sans+Ethiopic:wght@400;500;600;700&display=swap');
-            body { margin: 0; padding: 0; background: #dde9e6; font-family: 'Plus Jakarta Sans', Arial, sans-serif; }
-            .page { width: 720px; height: 480px; margin: 0 auto; padding: 40px; box-sizing: border-box; }
-          </style>
-        </head>
-        <body>
-          <div class="page">${cardHtml}</div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 1000);
-            };
-          </script>
-        </body>
-        </html>
-      `);
-      printWindow.document.close();
-    } catch {
+      const canvas = await renderCardCanvas();
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [720, 480] });
+      pdf.addImage(imgData, "PNG", 0, 0, 720, 480);
+      pdf.save(`${userId}.pdf`);
+    } catch (e) {
+      console.error(e);
       alert(t("healthCard.printError"));
     } finally {
       setIsDownloading(false);
@@ -148,124 +255,7 @@ export default function HealthCardPage() {
       // Create a canvas and draw the card manually using Canvas 2D API.
       // We use the qrcode library's toCanvas for the QR portion to guarantee
       // a scannable code, then draw all other elements with fillText/rect.
-      const canvas = document.createElement("canvas");
-      canvas.width = 720;
-      canvas.height = 480;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas unavailable");
-
-      // White background
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Gradient card background with rounded corners
-      const grad = ctx.createLinearGradient(40, 40, 680, 440);
-      grad.addColorStop(0, "#1e3a2e");
-      grad.addColorStop(1, "#000000");
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      const radius = 24;
-      ctx.moveTo(40 + radius, 40);
-      ctx.lineTo(680 - radius, 40);
-      ctx.arcTo(680, 40, 680, 80, radius);
-      ctx.lineTo(680, 440 - radius);
-      ctx.arcTo(680, 440, 680 - radius, 440, radius);
-      ctx.lineTo(40 + radius, 440);
-      ctx.arcTo(40, 440, 40, 440 - radius, radius);
-      ctx.lineTo(40, 40 + radius);
-      ctx.arcTo(40, 40, 40 + radius, 40, radius);
-      ctx.fill();
-
-      // Render QR code via qrcode library
-      // A white margin of 4 modules (the QR "quiet zone") is part of the
-      // code: without it, scanners cannot find the code on the dark card.
-      // Drawn 1:1 at a whole number of pixels per module (scaling a QR code by
-      // a fraction makes some modules wider than others, which scanners
-      // misread), as large as fits the 132 px white box while leaving at
-      // least 3 modules of white around it: the box is the quiet zone.
-      const modules = QRCode.create(qrData, { errorCorrectionLevel: "M" }).modules.size;
-      const scale = Math.max(1, Math.floor(132 / (modules + 6)));
-      const qrCanvas = await QRCode.toCanvas(qrData, {
-        scale,
-        margin: 0,
-        color: { dark: "#000000", light: "#ffffff" },
-        errorCorrectionLevel: "M",
-      });
-      const qrSide = modules * scale;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(80, 268, 132, 132);
-      ctx.drawImage(qrCanvas, 80 + Math.floor((132 - qrSide) / 2), 268 + Math.floor((132 - qrSide) / 2));
-
-      // Brand
-      ctx.fillStyle = "#94e0c0";
-      ctx.font = "bold 11px Arial";
-      ctx.fillText(labels.digitalId.toUpperCase(), 80, 152);
-
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 26px Arial";
-      ctx.fillText(labels.brand, 80, 120);
-
-      ctx.fillStyle = "#6ee7b7";
-      ctx.font = "bold 16px Arial";
-      ctx.fillText(userId, 80, 240);
-
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 32px Georgia";
-      ctx.fillText(fullName, 80, 200);
-
-      // "Scan to verify" under the QR code
-      ctx.fillStyle = "#94a3a8";
-      ctx.font = "bold 10px Arial";
-      ctx.textAlign = "center";
-      ctx.fillText(labels.scanToVerify.toUpperCase(), 146, 420);
-      ctx.textAlign = "left";
-
-      // Details beside the QR code: phone | blood group; allergies across the
-      // width; emergency contact (name, then phone) | expiry.
-      const fitText = (text: string, maxWidth: number) => {
-        if (ctx.measureText(text).width <= maxWidth) return text;
-        let cut = text;
-        while (cut.length > 1 && ctx.measureText(`${cut}…`).width > maxWidth) cut = cut.slice(0, -1);
-        return `${cut}…`;
-      };
-      const label = (text: string, x: number, y: number) => {
-        ctx.fillStyle = "#94a3a8";
-        ctx.font = "bold 10px Arial";
-        ctx.fillText(fitText(text.toUpperCase(), 200), x, y);
-      };
-      const value = (text: string, x: number, y: number, colour = "#ffffff", width = 200) => {
-        ctx.fillStyle = colour;
-        ctx.font = "bold 15px Arial";
-        ctx.fillText(fitText(text, width), x, y);
-      };
-      label(labels.phone, 244, 276);
-      value(phoneDisplay, 244, 296);
-      label(labels.bloodGroup, 470, 276);
-      value(lines.blood, 470, 296, card.medical?.bloodType ? "#fca5a5" : "#ffffff");
-
-      label(labels.allergies, 244, 324);
-      ctx.fillStyle = "#ffffff";
-      let allergySize = 15;
-      const allergyWidth = 426;
-      const allergyFits = (text: string) => ctx.measureText(text).width <= allergyWidth;
-      ctx.font = `bold ${allergySize}px Arial`;
-      while (allergySize > 11 && !allergyFits(lines.allergies)) {
-        allergySize -= 1;
-        ctx.font = `bold ${allergySize}px Arial`;
-      }
-      ctx.fillText(fitAllergies(card.medical?.allergies ?? [], allergyFits), 244, 344);
-
-      label(labels.emergency, 244, 372);
-      value(lines.emergency, 244, 392);
-      if (lines.emergencyPhone) {
-        ctx.fillStyle = "rgba(255,255,255,0.8)";
-        ctx.font = "bold 13px Arial";
-        ctx.fillText(lines.emergencyPhone, 244, 410);
-      }
-      label(labels.expires, 470, 372);
-      value(expiryDate, 470, 392, "#6ee7b7");
-
-      // Trigger download
+      const canvas = await renderCardCanvas();      // Trigger download
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
       link.download = `${userId}.png`;
@@ -279,7 +269,7 @@ export default function HealthCardPage() {
   };
 
   return (
-    <main className="w-full min-h-screen flex items-center justify-center py-6 px-2 sm:py-12 sm:px-8 bg-[#DDE9E6] text-brand-primary font-sans antialiased">
+    <main className="w-full min-h-screen flex items-center justify-center py-6 px-2 sm:py-12 sm:px-8 bg-white text-brand-primary font-sans antialiased">
       <div className="w-full max-w-[720px]">
         {/* ===== Digital Health Card ===== */}
         <div
@@ -301,7 +291,7 @@ export default function HealthCardPage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <button
-                className="flex-1 flex items-center justify-center gap-2 bg-[#E5ECEB] hover:bg-[#D5E3E0] text-brand-heading font-medium py-3 px-4 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-2 bg-app-green hover:bg-app-green-light text-white font-medium py-3 px-4 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed"
                 data-purpose="download-pdf"
                 disabled={isDownloading}
                 onClick={downloadAsPdf}
@@ -323,7 +313,7 @@ export default function HealthCardPage() {
                 {isDownloading ? t("healthCard.preparing") : t("healthCard.downloadPdf")}
               </button>
               <button
-                className="flex-1 flex items-center justify-center gap-2 bg-[#E5ECEB] hover:bg-[#D5E3E0] text-brand-heading font-medium py-3 px-4 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-2 bg-app-green hover:bg-app-green-light text-white font-medium py-3 px-4 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed"
                 data-purpose="download-image"
                 disabled={isDownloading}
                 onClick={downloadAsImage}
@@ -350,12 +340,15 @@ export default function HealthCardPage() {
           {/* ===== Continue to App ===== */}
           <div className="mt-8 text-center">
             <button
-              className="text-sm text-brand-accent hover:underline font-semibold"
+              className="text-lg text-brand-accent hover:underline font-semibold underline inline-flex items-center gap-1"
               data-purpose="continue-to-app"
-              onClick={() => router.push("/interview")}
+              onClick={() => setQrOpen(true)}
               type="button"
             >
-              {t("healthCard.continue")}
+              Scan QR
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
           </div>
         </div>
@@ -364,6 +357,18 @@ export default function HealthCardPage() {
           {t("healthCard.footer")}
         </p>
       </div>
+      {qrOpen && card?.qrSvg && createPortal(
+        <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6" onClick={() => setQrOpen(false)} role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm flex flex-col items-center text-center" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{t("healthCard.scanToVerify")}</p>
+            <div className="w-full aspect-square max-w-[min(80vw,360px)] my-6" role="img" aria-label={t("healthCard.scanToVerify")} dangerouslySetInnerHTML={{ __html: card.qrSvg }} />
+            <p className="text-2xl font-bold text-slate-900">{card.fullName}</p>
+            <p className="text-base font-semibold text-app-green mt-1">{card.userId}</p>
+            <button type="button" onClick={() => setQrOpen(false)} className="mt-8 px-8 py-3 rounded-full border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">{t("common.close")}</button>
+          </div>
+        </div>,
+        document.body
+      )}
     </main>
   );
 }

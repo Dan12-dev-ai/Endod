@@ -129,7 +129,7 @@ export default function LoginPage() {
 
   return (
     <main
-      className="w-full min-h-screen flex items-center justify-center py-6 px-4 sm:px-8 lg:px-16 bg-[#DDE9E6] text-brand-primary font-sans antialiased"
+      className="w-full min-h-screen flex items-center justify-center py-6 px-4 sm:px-8 lg:px-16 bg-gray-100 lg:bg-[#DDE9E6] text-brand-primary font-sans antialiased"
       data-purpose="page-wrapper"
     >
       <div className="max-w-[1360px] w-full grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center my-auto">
@@ -139,11 +139,11 @@ export default function LoginPage() {
           data-purpose="social-proof-and-branding"
         >
           <div>
-            <div className="mb-10 lg:mb-12" data-purpose="brand-logo">
+            <div className="mb-10 lg:mb-12 hidden lg:block" data-purpose="brand-logo">
               <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">{t("common.endod")}</h1>
             </div>
 
-            <div className="mb-10" data-purpose="quote-carousel" id="testimonial-container">
+            <div className="mb-10 hidden md:block" data-purpose="quote-carousel" id="testimonial-container">
               <div className="overflow-hidden">
                 <div
                   className={`flex ease-in-out ${isAnimating ? "transition-transform duration-500" : ""}`}
@@ -183,7 +183,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <footer className="mt-8 pt-6" data-purpose="partner-logos-section">
+          <footer className="mt-8 pt-6 hidden lg:block" data-purpose="partner-logos-section">
             <div className="flex items-center space-x-4 mb-5">
               <span className="text-xs italic text-brand-heading/75 font-serif tracking-normal whitespace-nowrap">
                 {t("common.trustedBy")}
@@ -226,10 +226,10 @@ export default function LoginPage() {
         <section className="order-1 lg:order-2 lg:col-span-6 xl:col-span-6 flex justify-end mt-6 lg:mt-0" data-purpose="login-form-card">
           <div className="w-full max-w-[540px] bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10 lg:p-11">
             {/* Card Heading */}
-            <h2 className="font-serif text-4xl sm:text-[42px] font-medium text-brand-heading tracking-tight mb-2">
+            <h2 className="font-serif text-4xl sm:text-[42px] font-medium text-brand-heading tracking-tight mb-2 text-center lg:text-left">
               {t("login.title")}
             </h2>
-            <p className="text-sm text-brand-muted mb-7">
+            <p className="text-sm text-brand-muted mb-7 hidden lg:block">
               {t("login.subtitle")}
             </p>
 
@@ -251,7 +251,7 @@ export default function LoginPage() {
                   type="tel"
                   value={phone}
                 />
-                <p className="mt-1.5 text-[11px] text-brand-muted">
+                <p className="mt-1.5 text-[11px] text-brand-muted hidden lg:block">
                   {t("login.phoneHint")}
                 </p>
               </div>
@@ -310,7 +310,7 @@ export default function LoginPage() {
               {/* Submit Button */}
               <div className="pt-2">
                 <button
-                  className="w-full bg-[#E5ECEB] hover:bg-[#D5E3E0] active:scale-[0.99] text-brand-heading/80 font-medium py-3 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
+                  className="w-full bg-app-green lg:bg-[#E5ECEB] hover:bg-app-green-light lg:hover:bg-[#D5E3E0] active:scale-[0.99] text-white lg:text-brand-heading/80 font-medium py-3 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                   disabled={isSubmitting}
                   type="submit"
                 >
@@ -331,7 +331,7 @@ export default function LoginPage() {
 
             {/* HIPAA Compliance Badge & Notice */}
             <aside
-              className="mt-8 pt-5 border-t border-slate-100 flex items-start space-x-3 text-[11px] text-brand-muted leading-snug"
+              className="mt-8 pt-5 border-t border-slate-100 flex items-start space-x-3 text-[11px] text-brand-muted leading-snug hidden lg:flex"
               data-purpose="security-compliance-badge"
             >
               <div className="shrink-0 text-brand-accent/80 mt-0.5">
@@ -339,7 +339,7 @@ export default function LoginPage() {
                   <path d="M12 2v19M8 6c2-1 6-1 8 0M7 11c2.5-1.5 7.5-1.5 10 0M8 16c2-1 6-1 8 0M12 2c-1.5 0-3 1.5-3 3s1.5 3 3 3 3-1.5 3-3-1.5-3-3-3z" />
                 </svg>
               </div>
-              <p>{t("common.secureNotice")}</p>
+              <p className="hidden lg:block">{t("common.secureNotice")}</p>
             </aside>
           </div>
         </section>

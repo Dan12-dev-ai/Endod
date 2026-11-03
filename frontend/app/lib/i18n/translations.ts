@@ -156,7 +156,7 @@ export const en = {
   "footer.healthOs": "HEALTH OS",
 
   // ===== Login =====
-  "login.title": "Sign In",
+  "login.title": "Login",
   "login.subtitle": "Sign in with your phone number and password to access your account.",
   "login.phoneLabel": "Phone Number",
   "login.phoneHint": "Use the phone number you registered with (or your email or DEDAN ID).",
@@ -867,6 +867,13 @@ export const en = {
   "settings.country.SS": "South Sudan",
   "settings.country.UG": "Uganda",
   "settings.country.TZ": "Tanzania",
+  "mobile.nav.card": "Card",
+  "mobile.nav.booking": "Booking",
+  "mobile.nav.appointment": "Appointment",
+  "mobile.nav.notification": "Notification",
+  "mobile.nav.setting": "Setting",
+  "mobile.dashboard.greeting": "Selam, {name}",
+  "mobile.dashboard.emergency": "Emergency",
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -1726,6 +1733,13 @@ export const am: Dictionary = {
   "settings.country.SS": "ደቡብ ሱዳን",
   "settings.country.UG": "ዩጋንዳ",
   "settings.country.TZ": "ታንዛኒያ",
+  "mobile.nav.card": "ካርድ",
+  "mobile.nav.booking": "ቀጠሮ",
+  "mobile.nav.appointment": "የእኔ ቀጠሮዎች",
+  "mobile.nav.notification": "ማሳወቂያ",
+  "mobile.nav.setting": "ቅንብር",
+  "mobile.dashboard.greeting": "ሰላም, {name}",
+  "mobile.dashboard.emergency": "ድንገተኛ",
 };
 
 export const DICTIONARIES: Record<"en" | "am", Dictionary> = {
