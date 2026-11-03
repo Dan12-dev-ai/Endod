@@ -1,5 +1,5 @@
 import { test, expect } from './fixtures';
-import { chooseOption, createAppointment, futureSlot, openSection } from './helpers';
+import { chooseOption, createAppointment, futureSlot, openSection, VIDEO_VISITS } from './helpers';
 
 // Appointments against the real backend. Each test creates its own
 // appointments with a unique doctor name, since the test patient is shared.
@@ -102,6 +102,7 @@ test.describe('Interview — Appointment page', () => {
   });
 
   test('filters by visit type', async ({ page }) => {
+    test.skip(!VIDEO_VISITS, 'video visits are off: there is only one visit type');
     const doctor = unique('InPerson');
     await createAppointment(page.request, { scheduled_at: futureSlot(8).iso, provider_name: doctor, visit_mode: 'in_person' });
     await openSection(page, 'Appointment', 'appointment-view');

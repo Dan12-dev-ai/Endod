@@ -5,6 +5,10 @@ import { expect, type APIRequestContext, type Locator, type Page } from './fixtu
 /** The test partner hospital listed by tests/seed.py. */
 export const PARTNER_ID = 'e2e0'.repeat(8);
 
+/** Whether the test backend has video visits on (playwright.config.ts): off by
+ * default, as in production; `E2E_VIDEO_VISITS=true` turns them on. */
+export const VIDEO_VISITS = process.env.E2E_VIDEO_VISITS === 'true';
+
 /** Run tests/seed.py against the test backend's database (see that file). */
 export function seed(...args: string[]) {
   const python =
