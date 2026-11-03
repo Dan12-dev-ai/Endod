@@ -494,10 +494,16 @@ class FeeChange(BaseModel):
 
 @router.put("/fees")
 def change_fees(body: FeeChange) -> Dict[str, Any]:
+    from sqlalchemy.exc import IntegrityError
+
     try:
         return fee_settings.change(body.enabled, body.flat_santim, body.percent_bp, body.actor_email, body.reason)
     except fee_settings.FeeSettingsError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
+    except IntegrityError:
+        # Another admin saved the first settings at the same moment: nothing was changed by this call.
+        raise HTTPException(status_code=409, detail="The fee was changed at the same moment; reload and try "
+                                                    "again.") from None
 
 
 def _day_bounds(start: Optional[date], end: Optional[date]):
