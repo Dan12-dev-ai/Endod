@@ -330,9 +330,12 @@ def _validate_visit(
         raise AppointmentError(f"visit_mode must be one of {list(VISIT_MODES)}.")
     if mode == "in_person" and meeting_url:
         raise AppointmentError("meeting_url is only for telehealth visits.")
+    from dedan_platform import partner_config
+
+    if mode == "telehealth" and not partner_config.video_visits_enabled():
+        raise AppointmentError(partner_config.VIDEO_VISITS_OFF)
     location = _short_text(location, "location", 200)
     if facility_id:
-        from dedan_platform import partner_config
         from dedan_platform.care_navigation import get_facility
 
         facility = get_facility(facility_id)

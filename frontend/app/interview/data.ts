@@ -116,8 +116,9 @@ export type BookingPaymentCheck = {
   appointment: Appointment;
 };
 
-/** GET /users/me/payments/status: whether online payment is on, and where paying may happen. */
-export type PaymentsStatus = { online_payments: boolean; checkout_origins: string[] };
+/** GET /users/me/payments/status: whether online payment is on, and where paying may happen;
+ * also whether video visits are on (VIDEO_VISITS_ENABLED on the backend; off by default). */
+export type PaymentsStatus = { online_payments: boolean; checkout_origins: string[]; video_visits?: boolean };
 
 /** Chapa's hosted checkout: the only place a patient is sent to pay by default. */
 export const CHAPA_CHECKOUT_ORIGIN = "https://checkout.chapa.co";

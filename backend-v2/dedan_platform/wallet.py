@@ -16,7 +16,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from dedan_platform import partner_config
 from dedan_platform.db import ensure_aware, session_scope
 from dedan_platform.models import Wallet, WalletEntry, WalletEntryKind, utcnow
 
@@ -40,9 +39,10 @@ def birr(santim: int) -> str:
 
 
 def service_fee(price: int) -> int:
-    """Endod's fee on a payment of ``price`` santim (flat part plus a share)."""
-    share = price * partner_config.service_fee_percent_hundredths() // 10_000
-    return partner_config.service_fee_flat() + share
+    """Endod's fee on a payment of ``price`` santim (fee_settings: the super admin's settings)."""
+    from dedan_platform import fee_settings
+
+    return fee_settings.fee_for(price)
 
 
 def _wallet_for_update(session: Session, user_id: str) -> Wallet:
@@ -107,6 +107,13 @@ def entry_payload(entry: WalletEntry) -> Dict[str, Any]:
     }
 
 
+def _fee_terms() -> Dict[str, Any]:
+    from dedan_platform import fee_settings
+
+    settings = fee_settings.current()
+    return {"enabled": settings.enabled, "flat": settings.flat_santim, "percent_hundredths": settings.percent_bp}
+
+
 def summary(user_id: str, limit: int = 50) -> Dict[str, Any]:
     with session_scope() as session:
         entries: List[WalletEntry] = list(session.scalars(
@@ -117,8 +124,5 @@ def summary(user_id: str, limit: int = 50) -> Dict[str, Any]:
             "balance": balance_of(session, user_id),
             "currency": "ETB",
             "entries": [entry_payload(e) for e in entries],
-            "service_fee": {
-                "flat": partner_config.service_fee_flat(),
-                "percent_hundredths": partner_config.service_fee_percent_hundredths(),
-            },
+            "service_fee": _fee_terms(),
         }

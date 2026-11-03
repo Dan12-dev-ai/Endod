@@ -35,6 +35,8 @@ type Props = {
   onToast: (title: string, message: string) => void;
   /** "Schedule Visit": opens Booking, where a visit is booked with a hospital. */
   onBook: () => void;
+  /** In the mobile layout, whose header shows the title: keep the heading for screen readers only. */
+  hideTitle?: boolean;
 };
 
 type Tab = "upcoming" | "past" | "cancelled";
@@ -76,7 +78,7 @@ function localDateInput(date: Date): string {
  * The patient's appointments (GET /users/me/appointments, reschedule, cancel).
  * New visits are booked in Booking (onBook): only a booking there reaches a hospital.
  */
-export default function AppointmentsView({ highlightTarget, onToast, onBook }: Props) {
+export default function AppointmentsView({ highlightTarget, onToast, onBook, hideTitle }: Props) {
   const { t, locale } = useI18n();
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -101,10 +103,17 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
 
   // Where "Pay now" may lead (Chapa's checkout; see safeCheckoutUrl).
   const [checkoutOrigins, setCheckoutOrigins] = useState<string[]>([CHAPA_CHECKOUT_ORIGIN]);
+  // Video visits are off unless the backend says they are on (VIDEO_VISITS_ENABLED):
+  // nothing here then offers, counts or joins one. Earlier video visits still show.
+  const [videoVisits, setVideoVisits] = useState(false);
   useEffect(() => {
     let cancelled = false;
     api<PaymentsStatus>("users/me/payments/status")
-      .then((status) => !cancelled && setCheckoutOrigins(status.checkout_origins))
+      .then((status) => {
+        if (cancelled) return;
+        setCheckoutOrigins(status.checkout_origins);
+        setVideoVisits(status.video_visits === true);
+      })
       .catch(() => undefined);
     return () => {
       cancelled = true;
@@ -197,14 +206,14 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
   const visible = useMemo(() => {
     const list = (appointments ?? [])
       .filter((a) => tabOf(a, now) === tab)
-      .filter((a) => typeFilter === "all" || a.visit_mode === typeFilter);
+      .filter((a) => !videoVisits || typeFilter === "all" || a.visit_mode === typeFilter);
     const time = (a: Appointment) => new Date(a.scheduled_at).getTime();
     if (sortOrder === "name") list.sort((a, b) => appointmentTitle(a, t).localeCompare(appointmentTitle(b, t)));
     else if (sortOrder === "latest") list.sort((a, b) => time(b) - time(a));
     else list.sort((a, b) => time(a) - time(b));
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- t is stable per language
-  }, [appointments, tab, typeFilter, sortOrder, now]);
+  }, [appointments, tab, typeFilter, sortOrder, now, videoVisits]);
 
   const upcomingSorted = useMemo(
     () => (appointments ?? [])
@@ -366,7 +375,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
                 {t("appointments.payNow")}
               </a>
             )}
-            {hb?.video_ready && tabOf(a, now) === "upcoming" && (
+            {videoVisits && hb?.video_ready && tabOf(a, now) === "upcoming" && (
               <a
                 className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-black hover:bg-gray-800 text-white text-xs font-semibold"
                 data-purpose="join-video"
@@ -375,6 +384,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
                 {t("appointments.joinVideo")}
               </a>
             )}
+            {/* The patient's own saved meeting link (not Endod video): always reachable. */}
             {!hb && telehealth && a.meeting_url && tabOf(a, now) === "upcoming" && (
               <a href={a.meeting_url} target="_blank" rel="noopener noreferrer" className="inline-block mt-1 text-xs font-semibold text-black hover:underline">
                 {t("appointments.joinVideo")}
@@ -433,7 +443,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200">
             <div>
               <div className="flex items-center space-x-3">
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{t("appointments.title")}</h1>
+                <h1 className={hideTitle ? "sr-only" : "text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"}>{t("appointments.title")}</h1>
                 <span data-purpose="upcoming-count" className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-black border border-gray-200">
                   {t("appointments.scheduledCount", { count: counts.upcoming })}
                 </span>
@@ -450,7 +460,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
           <QueueCard />
 
           {/* Stat cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 gap-4 ${videoVisits ? "sm:grid-cols-2" : ""}`}>
             <div data-purpose="next-appointment" className="bg-white p-4 rounded-2xl border border-slate-200/90 card-shadow flex items-center space-x-3.5">
               <div className="w-12 h-12 rounded-xl bg-gray-50 text-black flex items-center justify-center flex-shrink-0">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -463,6 +473,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
                 {nextVisit && <span className="text-[11px] text-black font-medium">{appointmentTitle(nextVisit, t)}</span>}
               </div>
             </div>
+            {videoVisits && (
             <div data-purpose="next-video-visit" className="bg-white p-4 rounded-2xl border border-slate-200/90 card-shadow flex items-center space-x-3.5">
               <div className="w-12 h-12 rounded-xl bg-gray-50 text-black flex items-center justify-center flex-shrink-0">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -475,6 +486,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
                 {nextVideo && <span className="text-[11px] text-black font-medium">{appointmentTitle(nextVideo, t)}</span>}
               </div>
             </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -499,6 +511,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
                   ))}
                 </div>
                 <div className="flex items-center space-x-2">
+                  {videoVisits && (
                   <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
                     <SelectTrigger
                       aria-label={t("appointments.modal.type")}
@@ -513,6 +526,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
                       <SelectItem value="telehealth">{t("appointments.videoTelehealth")}</SelectItem>
                     </SelectContent>
                   </Select>
+                  )}
                   <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as typeof sortOrder)}>
                     <SelectTrigger aria-label={t("booking.sort")} className="text-xs w-auto">
                       <SelectValue />
@@ -571,14 +585,17 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
                     const mode = busyDays.get(key);
                     let cls = "p-2 text-slate-700 rounded-lg";
                     if (key === todayKey) cls = "p-2 rounded-lg ring-2 ring-gray-400 font-bold text-slate-900";
-                    if (mode === "in_person") cls = "p-2 rounded-lg bg-black text-white font-bold";
-                    if (mode === "telehealth") cls = "p-2 rounded-lg bg-gray-200 text-black font-bold";
+                    // With video visits off, every visit is shown as one kind.
+                    if (mode) cls = mode === "telehealth" && videoVisits
+                      ? "p-2 rounded-lg bg-gray-200 text-black font-bold" : "p-2 rounded-lg bg-black text-white font-bold";
                     return <span key={key} data-purpose={mode ? "calendar-busy-day" : undefined} className={cls}>{day}</span>;
                   })}
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-4 text-[11px] text-slate-500">
                   <div className="flex items-center space-x-1.5"><span className="w-2.5 h-2.5 rounded-full bg-black"></span><span>{t("appointments.legendInPerson")}</span></div>
-                  <div className="flex items-center space-x-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-200 border border-gray-400"></span><span>{t("appointments.legendTelehealth")}</span></div>
+                  {videoVisits && (
+                    <div data-purpose="legend-telehealth" className="flex items-center space-x-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-200 border border-gray-400"></span><span>{t("appointments.legendTelehealth")}</span></div>
+                  )}
                 </div>
               </div>
             </div>

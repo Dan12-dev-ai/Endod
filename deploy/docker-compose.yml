@@ -127,6 +127,37 @@ services:
       backend:
         condition: service_healthy
 
+  # Commands patients text to the short code (docs/sms.md): main_sms.py
+  # serves only /sms/v1/inbound/... (404 while SMS_INBOUND_ENABLED is off)
+  # and /health. Published by the shared nginx at
+  # https://api.endod-health.com/sms/v1/ (shared-nginx/), which joins it to
+  # its network; the patient API stays private. It reads lab results and
+  # reports to answer them, so it holds the master key.
+  sms-inbound:
+    build:
+      context: ..
+      dockerfile: backend-v2/Dockerfile
+    restart: unless-stopped
+    command: ["uvicorn", "main_sms:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: .env
+    environment:
+      DEDAN_DATABASE_URL: postgresql+psycopg://endod:${POSTGRES_PASSWORD}@postgres:5432/endod
+      # Only nginx reaches it (X-Endod-Edge-Key); required in production.
+      EDGE_SHARED_SECRET: ${EDGE_SHARED_SECRET:-}
+      PHARMACY_API_KEY: ""
+      RX_SIGNING_KEY: ""
+      SUPERADMIN_API_KEY: ""
+      PLATFORM_MASTER_KEY_FILE: /run/secrets/platform_master_key
+      DEDAN_DB_APPLICATION_NAME: endod-sms-inbound
+    volumes:
+      - *master-key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # The backend creates the tables.
+      backend:
+        condition: service_healthy
+
   frontend:
     build: ../frontend
     restart: unless-stopped

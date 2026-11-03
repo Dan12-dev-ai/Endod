@@ -348,7 +348,7 @@ function VerifyOtp() {
             </form>
 
             <aside
-              className="mt-8 pt-5 border-t border-slate-100 flex items-start space-x-3 text-[11px] text-brand-muted leading-snug"
+              className="mt-8 pt-5 border-t border-slate-100 hidden lg:flex items-start space-x-3 text-[11px] text-brand-muted leading-snug"
               data-purpose="security-compliance-badge"
             >
               <div className="shrink-0 text-brand-accent/80 mt-0.5">
@@ -356,7 +356,7 @@ function VerifyOtp() {
                   <path d="M12 2v19M8 6c2-1 6-1 8 0M7 11c2.5-1.5 7.5-1.5 10 0M8 16c2-1 6-1 8 0M12 2c-1.5 0-3 1.5-3 3s1.5 3 3 3 3-1.5 3-3-1.5-3-3-3z" />
                 </svg>
               </div>
-              <p className="hidden lg:block">{t("common.secureNotice")}</p>
+              <p>{t("common.secureNotice")}</p>
             </aside>
           </div>
         </section>

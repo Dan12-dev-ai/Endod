@@ -107,6 +107,74 @@ class SmsEthiopiaProvider(SmsProvider):
         return str(message_id) if message_id else None
 
 
+class AfricasTalkingProvider(SmsProvider):
+    """Africa's Talking's SMS API, sending from a short code (``sender``): the
+    replies to commands patients text to it (sms_inbound.py, docs/sms.md).
+
+    https://developers.africastalking.com/docs/sms/sending: a form POST with
+    ``username``, ``to``, ``message`` and ``from``, the key in the ``apiKey``
+    header; each recipient's ``status`` says whether it was accepted."""
+
+    name = "africastalking"
+
+    def __init__(self, username: str, api_key: str, sender: str, url: str) -> None:
+        self.username = username
+        self.api_key = api_key
+        self.sender = sender
+        self.url = url
+
+    def send(self, phone: str, text: str) -> Optional[str]:
+        import httpx
+
+        data = {"username": self.username, "to": phone, "message": text}
+        if self.sender:
+            data["from"] = self.sender
+        try:
+            response = httpx.post(self.url, data=data, timeout=SMS_TIMEOUT_SECONDS,
+                                  headers={"apiKey": self.api_key, "Accept": "application/json"})
+        except httpx.HTTPError as exc:
+            logger.error("sms_send_network_error to=%s provider=africastalking error=%s", mask(phone),
+                         type(exc).__name__)
+            raise SmsProviderError(f"SMS provider unreachable: {type(exc).__name__}") from exc
+        if response.status_code >= 400:
+            logger.error("sms_send_rejected to=%s provider=africastalking status=%s body=%r", mask(phone),
+                         response.status_code, response.text[:300])
+            raise SmsProviderError(f"SMS provider returned HTTP {response.status_code}")
+        try:
+            recipients = (response.json().get("SMSMessageData") or {}).get("Recipients") or []
+        except (ValueError, AttributeError):
+            recipients = []
+        accepted = [r for r in recipients if isinstance(r, dict) and str(r.get("status", "")).lower() == "success"]
+        if not accepted:
+            logger.error("sms_send_rejected to=%s provider=africastalking status=200 body=%r", mask(phone),
+                         response.text[:300])
+            raise SmsProviderError("SMS provider rejected the message")
+        logger.info("sms_sent to=%s provider=africastalking", mask(phone))
+        return str(accepted[0].get("messageId") or "") or None
+
+
+def build_reply_provider() -> SmsProvider:
+    """The provider that sends replies to inbound commands from the short code
+    (``SMS_REPLY_PROVIDER``: ``africastalking``, or ``default`` for the one
+    above). Outside production, without Africa's Talking credentials, the
+    console stands in."""
+    from dedan_platform import sms_settings
+
+    if sms_settings.get("SMS_REPLY_PROVIDER").lower() == "default":
+        return build_provider()
+    username = sms_settings.get("AFRICASTALKING_USERNAME")
+    api_key = sms_settings.get("AFRICASTALKING_API_KEY")
+    if username and api_key:
+        return AfricasTalkingProvider(username, api_key, sms_settings.short_code(),
+                                      sms_settings.get("AFRICASTALKING_API_URL"))
+    from app.core.config import get_settings
+
+    environment = os.getenv("ENVIRONMENT") or get_settings().ENVIRONMENT
+    if environment.strip().lower() == "production":
+        raise SmsNotConfiguredError("AFRICASTALKING_USERNAME and AFRICASTALKING_API_KEY are not set.")
+    return ConsoleSmsProvider()
+
+
 def render_sms_reminder(payload: dict) -> str:
     """An appointment reminder short enough for one or two SMS segments.
 

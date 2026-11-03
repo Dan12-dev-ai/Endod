@@ -210,6 +210,27 @@ so reminders go out. Only before the SMS Ethiopia key exists,
 `ENVIRONMENT=staging` writes codes to the API log instead
 (`docker compose logs backend | grep -i code`). Both need the master key file.
 
+## SMS-first: patients without smartphones (docs/sms.md)
+
+Hospitals enrol patients without a smartphone by SMS (a code, then an
+SMS-only account with a card number and a PIN); "a result is ready" notices
+go to every patient who allows SMS. These need nothing new.
+
+The commands patients text to a short code (`RESULT 1234`, ...) are **off**
+(`SMS_INBOUND_ENABLED=false`) until the short code exists. To switch them on:
+
+1. Get a two-way short code from Africa's Talking (or another gateway).
+2. Set `SMS_SHORT_CODE`, `SMS_INBOUND_SECRET` (`openssl rand -hex 32`),
+   `AFRICASTALKING_USERNAME`, `AFRICASTALKING_API_KEY` and
+   `EDGE_SHARED_SECRET` (the value of `shared-nginx/tls/edge.key`) in `.env`.
+3. Register the incoming-messages callback with Africa's Talking:
+   `https://api.endod-health.com/sms/v1/inbound/africastalking/<SMS_INBOUND_SECRET>`
+   (another gateway: `POST https://api.endod-health.com/sms/v1/inbound/generic`,
+   signed, see docs/sms.md).
+4. `SMS_INBOUND_ENABLED=true`, and redeploy (the `sms-inbound` service).
+
+Text `HELP` to the short code from a phone enrolled by a hospital to check.
+
 ## Backups
 
 ```sh

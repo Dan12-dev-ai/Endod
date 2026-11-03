@@ -29,6 +29,8 @@ type Props = {
   /** Go to another screen, highlighting a card there (data-purpose). */
   onOpen: (nav: string, target: string | null) => void;
   onToast: (title: string, message: string) => void;
+  /** In the mobile layout, whose header shows the title: keep the heading for screen readers only. */
+  hideTitle?: boolean;
 };
 
 const CATEGORIES: {
@@ -44,13 +46,11 @@ const CATEGORIES: {
     iconPath: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z",
     iconWrap: "bg-emerald-50 border border-emerald-100", iconColor: "text-emerald-600",
   },
-  /* Reserved for later: medical records notifications
   {
     id: "records", titleKey: "notifications.cat.records.title", labelKey: "notifications.cat.records.label",
     iconPath: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z",
     iconWrap: "bg-blue-50 border border-blue-100", iconColor: "text-blue-600",
   },
-  */
   {
     id: "messages", titleKey: "notifications.cat.messages.title", labelKey: "notifications.cat.messages.label",
     iconPath: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z",
@@ -71,6 +71,9 @@ function destination(item: InboxItem): { nav: string; target: string | null } | 
   if (item.link?.screen === "record" || item.link?.screen === "history") {
     return { nav: "followup", target: item.link.id ? `record-${item.link.id}` : null };
   }
+  if (item.link?.screen === "bills") {
+    return { nav: "bills", target: null };
+  }
   if (item.link?.screen === "follow_up") {
     return { nav: "followup", target: item.link.id ? `follow-up-${item.link.id}` : null };
   }
@@ -88,7 +91,7 @@ function timeAgo(iso: string, locale: string): string {
 }
 
 /** The patient's in-app inbox (GET/POST/DELETE /users/me/inbox). */
-export default function NotificationsView({ onOpen, onToast }: Props) {
+export default function NotificationsView({ onOpen, onToast, hideTitle }: Props) {
   const { t, locale } = useI18n();
   const [filter, setFilter] = useState<"all" | Category>("all");
   const [items, setItems] = useState<InboxItem[] | null>(null);
@@ -190,7 +193,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-200/80 gap-4">
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{t("notifications.title")}</h1>
+              <h1 className={hideTitle ? "sr-only" : "text-xl sm:text-2xl font-bold text-slate-900 tracking-tight"}>{t("notifications.title")}</h1>
               <span data-purpose="unread-count" className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${unread.total === 0 ? "bg-slate-100 text-slate-500 border-slate-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
                 {t("notifications.unreadCount", { count: unread.total })}
               </span>

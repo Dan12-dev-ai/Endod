@@ -89,6 +89,8 @@ _COLUMN_MIGRATIONS: Tuple[ColumnMigration, ...] = (
     ColumnMigration("users", "suspended_reason", "VARCHAR(500)"),
     ColumnMigration("users", "suspended_by", "VARCHAR(254)"),
     ColumnMigration("users", "sessions_revoked_at", "TIMESTAMP WITH TIME ZONE"),
+    # Created by a hospital for a patient without a smartphone (sms_enrol.py).
+    ColumnMigration("users", "sms_only", "BOOLEAN"),
     # Proof the patient holds the phone; only verified phones sign in.
     ColumnMigration("profiles", "phone_verified_at", "TIMESTAMP WITH TIME ZONE"),
     # Onboarding and settings fields used by the Next.js frontend.

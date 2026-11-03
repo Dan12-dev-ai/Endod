@@ -89,6 +89,11 @@ class User(Base):
     #: Tokens issued before this are rejected (an admin signed the account
     #: out); see credentials.tokens_valid_from.
     sessions_revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: Created by a hospital for a patient without a smartphone (sms_enrol.py):
+    #: a verified phone and no password. Cleared when the patient signs up in
+    #: the app with the same phone and takes the account over. Null (rows
+    #: from before the column) means false.
+    sms_only: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
 
     credential: Mapped[Optional["Credential"]] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
@@ -1273,6 +1278,74 @@ class ThrottleHit(Base):
 
 
 # ===========================================================================
+# SMS-first: SMS-only patients, PINs and inbound commands (docs/sms.md)
+# ===========================================================================
+
+class SmsPin(Base):
+    """The PIN a patient texts with each command to the short code (sms_inbound.py).
+
+    Stored only as an HMAC under the server's signing secret, bound to the
+    account (so a copy of the database alone does not give 10,000 guesses
+    offline). Five wrong PINs lock it for an hour."""
+
+    __tablename__ = "sms_pins"
+
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    pin_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class SmsEnrolment(Base):
+    """A hospital's request to enrol a patient by SMS (sms_enrol.py): the
+    6-digit code texted to the phone (an HMAC only), its expiry and guesses.
+    ``id`` is the hospital's request id. Only the newest request of a
+    hospital patient can be verified."""
+
+    __tablename__ = "sms_enrolments"
+    __table_args__ = (
+        Index("ix_sms_enrolments_phone_created", "phone", "created_at"),
+        Index("ix_sms_enrolments_patient", "hospital_id", "patient_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    patient_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    phone: Mapped[str] = mapped_column(String(32), nullable=False)
+    code_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    #: The account enrolled (new, or the phone's existing one).
+    user_id: Mapped[Optional[str]] = mapped_column(String(32))
+
+
+class SmsInboundMessage(Base):
+    """The audit of every text received on the short code (sms_inbound.py).
+
+    Never the text, a PIN or anything sent back: the command, the outcome
+    and the sender's phone, masked (the account, when known)."""
+
+    __tablename__ = "sms_inbound_messages"
+    __table_args__ = (UniqueConstraint("provider", "provider_message_id", name="uq_sms_inbound_provider_id"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    provider: Mapped[str] = mapped_column(String(24), nullable=False)
+    #: The provider's id for the message (a retried callback is answered once).
+    provider_message_id: Mapped[Optional[str]] = mapped_column(String(100))
+    phone_masked: Mapped[str] = mapped_column(String(32), nullable=False)
+    user_id: Mapped[Optional[str]] = mapped_column(String(32), index=True)
+    command: Mapped[Optional[str]] = mapped_column(String(16))
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True,
+                                                  nullable=False)
+
+
+# ===========================================================================
 # Encryption keys for health data (crypto.py, field_encryption.py)
 # ===========================================================================
 
@@ -1311,6 +1384,115 @@ class PlatformSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class FeeSettingChange(Base):
+    """One change of Endod's service fee settings by a super admin (fee_settings.py):
+    who, why, and the settings before and after (JSON). Append-only."""
+
+    __tablename__ = "fee_setting_changes"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    actor_email: Mapped[str] = mapped_column(String(254), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    before: Mapped[str] = mapped_column(Text, nullable=False)
+    after: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class FeeCollector:
+    """Who took the patient's money (and so holds Endod's fee)."""
+
+    ENDOD = "endod"  # paid online through Chapa
+    HOSPITAL = "hospital"  # paid at the hospital: the hospital owes Endod the fee
+    ALL = (ENDOD, HOSPITAL)
+
+
+class FeeSettlement:
+    """Where Endod's fee on one payment is."""
+
+    COLLECTED = "collected"  # Endod has it (online payment)
+    OWED = "owed"  # the hospital collected it and owes it to Endod
+    SETTLED = "settled"  # the hospital paid it to Endod (marked by a super admin)
+    REFUNDED = "refunded"  # the payment was refunded: no fee is due
+    ALL = (COLLECTED, OWED, SETTLED, REFUNDED)
+
+
+class FeeLedgerEntry(Base):
+    """Endod's books: one row per paid hospital service (fee_ledger.py).
+
+    A booking (``source_type`` booking, ``source_id`` the appointment id) or a
+    hospital charge (``charge``, the hospital service's charge id), paid online
+    (Endod collected) or at the hospital (the hospital owes Endod the fee
+    until it is settled). Money in santim. No health data: amounts, ids, times.
+    """
+
+    __tablename__ = "fee_ledger"
+    __table_args__ = (
+        UniqueConstraint("source_type", "source_id", name="uq_fee_ledger_source"),
+        Index("ix_fee_ledger_hospital_paid", "hospital_id", "paid_at"),
+        Index("ix_fee_ledger_settlement", "settlement_status", "hospital_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: The patient's account, when they have one (a charge for a patient not on Endod has none).
+    user_id: Mapped[Optional[str]] = mapped_column(String(32), index=True)
+    dedan_id: Mapped[Optional[str]] = mapped_column(String(16))
+    subtotal: Mapped[int] = mapped_column(Integer, nullable=False)
+    fee: Mapped[int] = mapped_column(Integer, nullable=False)
+    total: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="ETB")
+    #: chapa (online), cash, card, mobile_money, other, or unrecorded (a visit
+    #: paid at the hospital that was completed without saying how).
+    method: Mapped[str] = mapped_column(String(16), nullable=False)
+    reference: Mapped[Optional[str]] = mapped_column(String(100))
+    collected_by: Mapped[str] = mapped_column(String(8), nullable=False)
+    paid_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    settlement_status: Mapped[str] = mapped_column(String(10), nullable=False)
+    settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    settlement_reference: Mapped[Optional[str]] = mapped_column(String(100))
+    settled_by: Mapped[Optional[str]] = mapped_column(String(254))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class BillStatus:
+    OPEN = "open"
+    PAID = "paid"
+    VOIDED = "voided"
+    ALL = (OPEN, PAID, VOIDED)
+
+
+class PatientBill(Base):
+    """A hospital's charge to a patient, as the patient sees it in the app
+    (hospital_charges.py; from ``charge.created`` / ``charge.paid`` /
+    ``charge.voided``). The items (what was done) are encrypted at rest."""
+
+    __tablename__ = "patient_bills"
+    __table_args__ = (Index("ix_patient_bills_user", "user_id", "created_at"),)
+    __encrypted__ = ("items_json",)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    hospital_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: The charge's id in the hospital service.
+    charge_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    booking_id: Mapped[Optional[str]] = mapped_column(String(64))
+    items_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    subtotal: Mapped[int] = mapped_column(Integer, nullable=False)
+    service_fee: Mapped[int] = mapped_column(Integer, nullable=False)
+    total: Mapped[int] = mapped_column(Integer, nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="ETB")
+    status: Mapped[str] = mapped_column(String(8), nullable=False, default=BillStatus.OPEN)
+    method: Mapped[Optional[str]] = mapped_column(String(16))
+    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    voided_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 

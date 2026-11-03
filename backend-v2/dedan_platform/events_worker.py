@@ -23,8 +23,8 @@ import redis
 from sqlalchemy import or_, select
 
 from dedan_platform import (
-    booking_payments, chapa, deposits, eventbus, hospital_bookings, hospital_onboarding, patient_history,
-    record_files, shares,
+    booking_payments, chapa, deposits, eventbus, fee_settings, hospital_bookings, hospital_charges,
+    hospital_onboarding, patient_history, record_files, shares, sms_enrol,
 )
 from dedan_platform.db import session_scope
 from dedan_platform.models import Deposit, DepositStatus, utcnow
@@ -46,7 +46,8 @@ _last = {"trim_out": 0.0, "deposits": 0.0, "stale": 0.0, "shares": 0.0, "houseke
 
 #: Every event this worker handles: bookings and listings, patient history,
 #: and texts to facilities signing up.
-HANDLERS = {**hospital_bookings.HANDLERS, **patient_history.HANDLERS, **hospital_onboarding.HANDLERS}
+HANDLERS = {**hospital_bookings.HANDLERS, **patient_history.HANDLERS, **hospital_onboarding.HANDLERS,
+            **sms_enrol.HANDLERS, **hospital_charges.HANDLERS}
 
 
 def _stop(*_args) -> None:
@@ -127,6 +128,27 @@ def run_once(client: redis.Redis, now: float | None = None) -> int:
     return work
 
 
+_fees_sent_at = {"at": None}
+
+
+def broadcast_fees_if_due(now: float | None = None) -> bool:
+    """Endod's fee settings to the hospital service (``fees.updated``): at start,
+    then every fee_settings.BROADCAST_EVERY, so one that missed a change or
+    has a new database catches up (it keeps the newest version; a change is
+    sent at once anyway). Outside run_once: a round of events never waits on it."""
+    now = time.monotonic() if now is None else now
+    last = _fees_sent_at["at"]
+    if last is not None and now - last < fee_settings.BROADCAST_EVERY:
+        return False
+    try:
+        fee_settings.broadcast()
+    except Exception:  # noqa: BLE001 -- retried at the next round
+        logger.exception("fee_broadcast_failed")
+        return False
+    _fees_sent_at["at"] = now
+    return True
+
+
 def main() -> int:
     from dedan_platform import crypto
     from dedan_platform.db import create_all
@@ -162,6 +184,7 @@ def main() -> int:
                     logger.error("No Redis configured (REDIS_URL or REDIS_SENTINELS).")
                     time.sleep(30)
                     continue
+            broadcast_fees_if_due()
             run_once(client)
             backoff = 1.0
         except (redis.ConnectionError, redis.TimeoutError, redis.sentinel.MasterNotFoundError) as exc:

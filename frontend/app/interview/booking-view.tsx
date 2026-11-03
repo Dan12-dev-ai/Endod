@@ -39,7 +39,7 @@ type Props = {
   preset?: BookingPreset | null;
   /** The preset was applied (so it is not applied again). */
   onPresetUsed?: () => void;
-  /** Hide the page title (used by mobile shell). */
+  /** In the mobile layout, whose header shows the title: keep the heading for screen readers only. */
   hideTitle?: boolean;
 };
 
@@ -82,6 +82,10 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
   // partner visit is booked at once and paid at the hospital (no Endod fee).
   const [payments, setPayments] = useState<PaymentsStatus | null>(null);
   const paymentsOff = payments !== null && !payments.online_payments;
+  // Video visits are off unless the backend says they are on (VIDEO_VISITS_ENABLED):
+  // partner hospitals are then booked in person only.
+  const videoVisits = payments?.video_visits === true;
+  const chosenMode = videoVisits ? visitMode : "in_person";
   const payAtHospital = quote?.payment === "at_hospital";
 
   useEffect(() => {
@@ -165,6 +169,9 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
     setRedirecting(false);
     setVisitMode("in_person");
     setQuote(null);
+    // Whether video visits (and online payment) are on may have changed since
+    // the view opened: ask again, so the choices offered are current.
+    api<PaymentsStatus>("users/me/payments/status").then(setPayments).catch(() => undefined);
     // A partner hospital takes the service key; other listings the label.
     const first = facility.departments[0];
     setBookingDepartment(first ? (facility.partner ? first : departmentLabel(first, t)) : "");
@@ -195,7 +202,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the old quote must not show for the new choice
     setQuote(null);
-    api<Quote>("users/me/hospital-bookings/quote", { query: { hospital_id: selected.id, visit_mode: visitMode } })
+    api<Quote>("users/me/hospital-bookings/quote", { query: { hospital_id: selected.id, visit_mode: chosenMode } })
       .then((q) => {
         if (!cancelled) setQuote(q);
       })
@@ -205,7 +212,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
     return () => {
       cancelled = true;
     };
-  }, [selected, visitMode]);
+  }, [selected, chosenMode]);
 
   const closeBooking = () => {
     setSelected(null);
@@ -232,7 +239,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
         body: {
           scheduled_at: scheduledAt,
           timezone: browserTimezone(),
-          visit_mode: selected.partner ? visitMode : "in_person",
+          visit_mode: selected.partner ? chosenMode : "in_person",
           facility_id: selected.id,
           department: bookingDepartment || null,
           time_window: timeWindow,
@@ -281,13 +288,14 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
   return (
     <>
       <div data-purpose="booking-view" className="flex-1 min-h-0 overflow-y-auto">
-        {/* Breadcrumbs & Welcome Hero */}
-        {!hideTitle && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-          <div>
-            <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">{t("booking.title")}</h1>
+        {hideTitle ? (
+          <h1 className="sr-only">{t("booking.title")}</h1>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+            <div>
+              <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">{t("booking.title")}</h1>
+            </div>
           </div>
-        </div>
         )}
 
         <section data-purpose="manual-booking-section" className="space-y-4 pb-6">
@@ -432,7 +440,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
                         <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-slate-100 text-slate-600">
                           {facility.ownership === "private" ? t("booking.private") : t("booking.public")}
                         </span>
-                        {facility.video_enabled && (
+                        {videoVisits && facility.video_enabled && (
                           <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-sky-50 text-sky-700">{t("booking.videoAvailable")}</span>
                         )}
                       </div>
@@ -486,7 +494,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
                 </div>
               </div>
 
-              {selected.partner && (
+              {selected.partner && videoVisits && (
                 <fieldset data-purpose="visit-mode">
                   <legend className="block text-xs font-semibold text-slate-700 mb-1">{t("booking.visitMode")}</legend>
                   <div className="grid grid-cols-2 gap-2">
@@ -585,9 +593,13 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
               {selected.partner && quote && payAtHospital && (
                 <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-xs space-y-1" data-purpose="booking-quote" role="status">
                   <p className="font-bold text-slate-900" data-purpose="pay-at-hospital">
-                    {t("booking.payAtHospital", { amount: formatBirr(quote.price, locale) })}
+                    {t("booking.payAtHospital", { amount: formatBirr(quote.total, locale) })}
                   </p>
-                  <p className="text-[11px] text-slate-500" data-purpose="pay-hint">{t("booking.payAtHospitalHint")}</p>
+                  <p className="text-[11px] text-slate-500" data-purpose="pay-hint">
+                    {quote.service_fee > 0
+                      ? t("booking.payAtHospitalHintFee", { price: formatBirr(quote.price, locale), fee: formatBirr(quote.service_fee, locale) })
+                      : t("booking.payAtHospitalHint")}
+                  </p>
                 </div>
               )}
 
@@ -661,7 +673,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
             </div>
             {booked.hospital_booking?.payment.status === "at_hospital" && (
               <p className="text-xs font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4" data-purpose="booked-pay-at-hospital">
-                {t("booking.payAtHospital", { amount: formatBirr(booked.hospital_booking.price, locale) })}
+                {t("booking.payAtHospital", { amount: formatBirr(booked.hospital_booking.total, locale) })}
               </p>
             )}
             {booked.hospital_booking?.state === "awaiting_doctor" && (

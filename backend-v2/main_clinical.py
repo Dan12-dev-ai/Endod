@@ -377,6 +377,7 @@ def create_app(settings = None) -> FastAPI:
     from dedan_platform.api_history import router as platform_history_router
     from dedan_platform.api_inbox import router as platform_inbox_router
     from dedan_platform.api_profile import router as platform_profile_router
+    from dedan_platform.api_sms import patient_router as platform_sms_pin_router
     from dedan_platform.db import create_all
 
     app.include_router(platform_auth_router)
@@ -389,6 +390,8 @@ def create_app(settings = None) -> FastAPI:
     app.include_router(platform_cards_router)
     app.include_router(platform_payments_router)
     app.include_router(platform_history_router)
+    # The patient's SMS PIN; the inbound webhook itself is main_sms's only.
+    app.include_router(platform_sms_pin_router)
     # Not /internal: that is main_internal, a separate service on the private
     # network; this app is never reachable from there.
 
