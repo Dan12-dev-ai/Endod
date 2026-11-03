@@ -141,6 +141,20 @@ DEPOSIT_MAX = 10_000_000  # 100,000 birr
 
 # --- video visits ---
 
+def video_visits_enabled() -> bool:
+    """Whether patients can book and join video visits. Off unless
+    ``VIDEO_VISITS_ENABLED`` is set to true (so off in production until it is
+    turned on): partner hospitals are then booked in person only, the care
+    directory shows no video, and the video join endpoint is closed. The code
+    stays, ready to be switched back on; existing appointments stay readable."""
+    value = _get("VIDEO_VISITS_ENABLED")
+    return value is not None and value.lower() in ("1", "true", "yes", "on")
+
+
+#: Said when a video visit is asked for while they are off.
+VIDEO_VISITS_OFF = "Video visits are not available right now. Please book an in-person visit."
+
+
 def jitsi_domain() -> str:
     return _get("JITSI_DOMAIN", "meet.endod-health.com") or "meet.endod-health.com"
 

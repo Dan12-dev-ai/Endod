@@ -112,13 +112,17 @@ PARTNER_SOURCE = "endod-partner"
 
 
 def _from_partner(row) -> "Facility":
+    from dedan_platform import partner_config
+
+    # Video visits switched off: no partner offers them, whatever it listed.
+    video = bool(row.video_enabled) and partner_config.video_visits_enabled()
     return Facility(
         id=row.id, name=row.name, kind="hospital", address=row.address or "", city=row.city or "",
         country="ET", latitude=row.latitude, longitude=row.longitude,
         departments=tuple(s for s in (row.services or "").split(",") if s),
         phone=row.phone, emergency=row.emergency, open_hours=row.open_hours, verified=True,
         source=PARTNER_SOURCE, partner=True, ownership=row.ownership, ambulance_phone=row.ambulance_phone,
-        video_enabled=row.video_enabled, price_in_person=row.price_in_person, price_video=row.price_video,
+        video_enabled=video, price_in_person=row.price_in_person, price_video=row.price_video if video else None,
         timezone=row.timezone,
     )
 

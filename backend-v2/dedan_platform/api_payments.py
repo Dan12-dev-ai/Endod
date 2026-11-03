@@ -5,7 +5,7 @@
   checked with Chapa (the app asks this when the patient comes back from Chapa).
 * ``/users/me/appointments/{id}/video``: join details for an approved video visit.
 * ``/users/me/care/emergency``: numbers to call, and the nearest partner hospitals' ambulances.
-* ``/payments/status``: whether online payment is available (public).
+* ``/payments/status``: whether online payment, and video visits, are available (public).
 * ``/payments/chapa/...``: Chapa's webhook and callback (public; they only
   trigger a verification with Chapa, see booking_payments.settle).
 * ``/users/me/wallet``: the old Endod balance, readable; top-ups are gone (410).
@@ -73,6 +73,9 @@ def read_booking_payment(tx_ref: str, user_id: str = Depends(current_user_id)) -
 def join_video(appointment_id: str, user_id: str = Depends(current_user_id)) -> Dict[str, Any]:
     try:
         return hospital_bookings.video_join(user_id, appointment_id)
+    except hospital_bookings.VideoVisitsOff as exc:
+        # Switched off: as if there were no video endpoint.
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AppointmentNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except AppointmentError as exc:
@@ -128,7 +131,8 @@ def payments_status() -> Dict[str, Any]:
     so before anyone presses "Pay and book", and the pages it may send a
     patient to for paying: Chapa's checkout, plus the configured Chapa
     server's own origin when it is not Chapa's (a test stand-in). Public; no
-    secrets."""
+    secrets. Also whether video visits are on (``video_visits``), so the app
+    shows them only then: the backend is the one source of truth."""
     from urllib.parse import urlsplit
 
     from dedan_platform import partner_config
@@ -137,7 +141,8 @@ def payments_status() -> Dict[str, Any]:
     base = urlsplit(partner_config.chapa_base_url())
     if base.scheme and base.netloc and not base.netloc.endswith("chapa.co"):
         origins.append(f"{base.scheme}://{base.netloc}")
-    return {"online_payments": bool(partner_config.chapa_secret_key()), "checkout_origins": origins}
+    return {"online_payments": bool(partner_config.chapa_secret_key()), "checkout_origins": origins,
+            "video_visits": partner_config.video_visits_enabled()}
 
 
 def _settle(tx_ref: Optional[str], recheck_settled: bool = False) -> Dict[str, Any]:

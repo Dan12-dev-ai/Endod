@@ -1,10 +1,11 @@
 import { test, expect, BLANK_PNG, type Locator, type Page } from './fixtures';
-import { chooseOption, createAppointment, futureSlot, openSection, PARTNER_ID, payBooking, seed } from './helpers';
+import { chooseOption, createAppointment, futureSlot, openSection, PARTNER_ID, payBooking, seed, VIDEO_VISITS } from './helpers';
 import { safeCheckoutUrl } from '../app/interview/data';
 
 // Paying for each partner-hospital booking through Chapa (tests/fake-chapa.mjs,
 // which behaves like Chapa's checkout and refund API), with partner hospitals
-// listed by tests/seed.py, video visits (Jitsi's script stubbed) and the
+// listed by tests/seed.py, video visits (Jitsi's script stubbed; only with
+// E2E_VIDEO_VISITS=true, otherwise that they are hidden and refused) and the
 // emergency panel (map tiles stubbed). The tests build on each other, so they
 // run in order.
 
@@ -21,7 +22,8 @@ async function openPartnerBooking(page: Page) {
   const card = page.locator(PARTNER);
   await expect(card.locator('[data-purpose="partner-details"]')).toContainText('From ETB 200.00');
   await expect(card.locator('[data-purpose="partner-details"]')).toContainText('Private');
-  await expect(card.locator('[data-purpose="partner-details"]')).toContainText('Video visits');
+  if (VIDEO_VISITS) await expect(card.locator('[data-purpose="partner-details"]')).toContainText('Video visits');
+  else await expect(card.locator('[data-purpose="partner-details"]')).not.toContainText('Video');
   await card.getByRole('button', { name: 'Book Now' }).click();
   await expect(page.locator('[data-purpose="booking-modal"]')).toBeVisible();
 }
@@ -59,10 +61,16 @@ test.describe('Paying for each booking through Chapa', () => {
     await expect(page.getByRole('button', { name: 'Pay and book' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add money' })).toHaveCount(0);
 
-    // The visit type changes the price: a video visit here is 120 birr.
-    await page.locator('[data-purpose="visit-mode"]').getByText('Video').click();
-    await expect(quote.locator('[data-purpose="quote-total"]')).toHaveText('ETB 125.00');
-    await expect(page.locator('[data-purpose="visit-mode"]')).toContainText('A doctor at the hospital approves');
+    if (VIDEO_VISITS) {
+      // The visit type changes the price: a video visit here is 120 birr.
+      await page.locator('[data-purpose="visit-mode"]').getByText('Video').click();
+      await expect(quote.locator('[data-purpose="quote-total"]')).toHaveText('ETB 125.00');
+      await expect(page.locator('[data-purpose="visit-mode"]')).toContainText('A doctor at the hospital approves');
+    } else {
+      // Video visits are off: in person only, no choice offered.
+      await expect(page.locator('[data-purpose="visit-mode"]')).toHaveCount(0);
+      await expect(page.locator('[data-purpose="booking-modal"]')).not.toContainText('Video');
+    }
 
     // No balance section any more.
     await expect(page.locator('aside').getByRole('link', { name: 'Balance' })).toHaveCount(0);
@@ -150,6 +158,7 @@ test.describe('Paying for each booking through Chapa', () => {
   });
 
   test('a video visit waits for the doctor, then opens in Endod with a signed token', async ({ page }) => {
+    test.skip(!VIDEO_VISITS, 'video visits are off (E2E_VIDEO_VISITS=true turns them on)');
     const at = new Date(Date.now() + 20 * 60_000);
     const appointment = await createAppointment(page.request, {
       scheduled_at: at.toISOString(), timezone: 'Africa/Addis_Ababa', facility_id: PARTNER_ID,
@@ -199,8 +208,92 @@ test.describe('Paying for each booking through Chapa', () => {
   });
 
   test('someone else cannot open the video page for a visit that is not theirs', async ({ page }) => {
+    test.skip(!VIDEO_VISITS, 'video visits are off (E2E_VIDEO_VISITS=true turns them on)');
     await page.goto('/visit/not-a-real-appointment');
     await expect(page.locator('[data-purpose="visit-error"]')).toBeVisible();
+  });
+});
+
+test.describe('Video visits switched off (as in production)', () => {
+  test.skip(VIDEO_VISITS, 'video visits are on (E2E_VIDEO_VISITS=true)');
+
+  test('the backend tells the app video is off, and refuses video bookings and joins', async ({ page }) => {
+    const status = await (await page.request.get('/api/backend/users/me/payments/status')).json();
+    expect(status.video_visits).toBe(false);
+    const booking = await page.request.post('/api/backend/users/me/appointments', { data: {
+      scheduled_at: futureSlot(15, 9, 30).iso, timezone: 'Africa/Addis_Ababa', facility_id: PARTNER_ID,
+      visit_mode: 'telehealth', department: 'general_medicine',
+    } });
+    expect(booking.status()).toBe(400);
+    expect((await booking.json()).error).toContain('Video visits are not available right now');
+    const quote = await page.request.get('/api/backend/users/me/hospital-bookings/quote',
+      { params: { hospital_id: PARTNER_ID, visit_mode: 'telehealth' } });
+    expect(quote.status()).toBe(400);
+    const join = await page.request.post('/api/backend/users/me/appointments/not-a-real-appointment/video');
+    expect(join.status()).toBe(404);
+  });
+
+  test('Appointments shows no video counter, filter, legend or join button', async ({ page }) => {
+    // A video visit booked while they were on, approved and about to start.
+    const id = 'a7a7a7a7-0000-4000-8000-00000000000a';
+    // And a personal appointment with a meeting link the patient saved themselves.
+    const ownId = 'a7a7a7a7-0000-4000-8000-00000000000c';
+    await page.route('**/api/backend/users/me/appointments?**', async (route) => {
+      if (route.request().method() !== 'GET') return route.fallback();
+      const real = await (await route.fetch()).json();
+      return route.fulfill({ json: [{
+        appointment_id: ownId, user_id: 'u', scheduled_at: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+        appointment_type: 'consultation', status: 'SCHEDULED', duration_minutes: 30, location: null,
+        meeting_url: 'https://meet.example.com/own-link', visit_mode: 'telehealth', department: null,
+        time_window: 'exact', facility: null, provider_name: 'Dr. Own Link', notes: null, timezone: 'Africa/Addis_Ababa',
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(), hospital_booking: null,
+      }, {
+        appointment_id: id, user_id: 'u', scheduled_at: new Date(Date.now() + 20 * 60_000).toISOString(),
+        appointment_type: 'consultation', status: 'CONFIRMED', duration_minutes: 30, location: null,
+        meeting_url: 'https://meet.endod-health.com/endod-old', visit_mode: 'telehealth', department: 'general_medicine',
+        time_window: 'exact', facility: { id: PARTNER_ID, name: 'Endod Test General Hospital' }, provider_name: null,
+        notes: null, timezone: 'Africa/Addis_Ababa', created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        hospital_booking: {
+          hospital_id: PARTNER_ID, state: 'confirmed', price: 12000, service_fee: 700, total: 12700, reason: null,
+          video_ready: true, payment: { status: 'paid', due_at: null, checkout_url: null },
+        },
+      }, ...real] });
+    });
+    await openSection(page, 'Appointment', 'appointment-view');
+    const card = page.locator(`[data-purpose="appointment-card-${id}"]`);
+    // Still readable...
+    await expect(card).toContainText('Endod Test General Hospital');
+    // ...but nothing to join, count or filter by.
+    await expect(card.locator('[data-purpose="join-video"]')).toHaveCount(0);
+    await expect(card.getByText('Join video visit')).toHaveCount(0);
+    await expect(page.locator('[data-purpose="next-appointment"]')).toBeVisible();
+    await expect(page.locator('[data-purpose="next-video-visit"]')).toHaveCount(0);
+    await expect(page.locator('[data-purpose="appointment-type-filter"]')).toHaveCount(0);
+    await expect(page.locator('[data-purpose="legend-telehealth"]')).toHaveCount(0);
+    // The patient's own saved link is theirs, not Endod video: it stays.
+    await expect(page.locator(`[data-purpose="appointment-card-${ownId}"]`).getByRole('link'))
+      .toHaveAttribute('href', 'https://meet.example.com/own-link');
+  });
+
+  test('if the status cannot be read, the video page still asks the backend, which refuses', async ({ page }) => {
+    await page.route('**/api/backend/users/me/payments/status', (route) => route.fulfill({ status: 503, json: {} }));
+    await page.goto('/visit/a7a7a7a7-0000-4000-8000-00000000000d');
+    await expect(page.locator('[data-purpose="visit-error"]')).toContainText('Video visits are not available right now');
+  });
+
+  test('the video page says video visits are not available and leads to Appointments', async ({ page }) => {
+    let joined = false;
+    await page.route('**/api/backend/users/me/appointments/*/video', (route) => {
+      joined = true;
+      return route.fallback();
+    });
+    await page.goto('/visit/a7a7a7a7-0000-4000-8000-00000000000b');
+    const unavailable = page.locator('[data-purpose="visit-unavailable"]');
+    await expect(unavailable).toContainText('Video visits are not available right now.');
+    await expect(page.locator('[data-purpose="visit-frame"]')).toHaveCount(0);
+    expect(joined).toBe(false);
+    await unavailable.getByRole('link', { name: 'Go to Appointments' }).click();
+    await expect(page.locator('[data-purpose="appointment-view"]')).toBeVisible();
   });
 });
 
@@ -212,7 +305,9 @@ test.describe('Online payment not set up yet: pay at the hospital', () => {
   // without one.
   async function paymentsOff(page: Page) {
     await page.route('**/api/backend/users/me/payments/status', (route) =>
-      route.fulfill({ json: { online_payments: false, checkout_origins: ['https://checkout.chapa.co'] } }),
+      route.fulfill({ json: {
+        online_payments: false, checkout_origins: ['https://checkout.chapa.co'], video_visits: VIDEO_VISITS,
+      } }),
     );
     await page.route('**/api/backend/users/me/hospital-bookings/quote?**', (route) => {
       const mode = new URL(route.request().url()).searchParams.get('visit_mode') ?? 'in_person';
@@ -262,11 +357,15 @@ test.describe('Online payment not set up yet: pay at the hospital', () => {
     await expect(modal.locator('[data-purpose="pay-hint"]')).toContainText('no Endod fee');
     await expect(modal).not.toContainText("Online payment isn't available yet. Please try again later.");
     await expect(modal.locator('[data-purpose="quote-total"]')).toHaveCount(0);
-    // A video visit has its own price.
-    await modal.locator('[data-purpose="visit-mode"]').getByText('Video').click();
-    await expect(modal.locator('[data-purpose="pay-at-hospital"]')).toHaveText('Pay ETB 120.00 at the hospital');
-    await modal.locator('[data-purpose="visit-mode"]').getByText('In person', { exact: true }).click();
-    await expect(modal.locator('[data-purpose="pay-at-hospital"]')).toHaveText('Pay ETB 200.00 at the hospital');
+    if (VIDEO_VISITS) {
+      // A video visit has its own price.
+      await modal.locator('[data-purpose="visit-mode"]').getByText('Video').click();
+      await expect(modal.locator('[data-purpose="pay-at-hospital"]')).toHaveText('Pay ETB 120.00 at the hospital');
+      await modal.locator('[data-purpose="visit-mode"]').getByText('In person', { exact: true }).click();
+      await expect(modal.locator('[data-purpose="pay-at-hospital"]')).toHaveText('Pay ETB 200.00 at the hospital');
+    } else {
+      await expect(modal.locator('[data-purpose="visit-mode"]')).toHaveCount(0);
+    }
 
     await fillVisit(page, 8, 'Pay at the hospital test');
     const book = modal.getByRole('button', { name: 'Book, pay at the hospital' });

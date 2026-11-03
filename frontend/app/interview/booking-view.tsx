@@ -80,6 +80,10 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
   // partner visit is booked at once and paid at the hospital (no Endod fee).
   const [payments, setPayments] = useState<PaymentsStatus | null>(null);
   const paymentsOff = payments !== null && !payments.online_payments;
+  // Video visits are off unless the backend says they are on (VIDEO_VISITS_ENABLED):
+  // partner hospitals are then booked in person only.
+  const videoVisits = payments?.video_visits === true;
+  const chosenMode = videoVisits ? visitMode : "in_person";
   const payAtHospital = quote?.payment === "at_hospital";
 
   useEffect(() => {
@@ -163,6 +167,9 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
     setRedirecting(false);
     setVisitMode("in_person");
     setQuote(null);
+    // Whether video visits (and online payment) are on may have changed since
+    // the view opened: ask again, so the choices offered are current.
+    api<PaymentsStatus>("users/me/payments/status").then(setPayments).catch(() => undefined);
     // A partner hospital takes the service key; other listings the label.
     const first = facility.departments[0];
     setBookingDepartment(first ? (facility.partner ? first : departmentLabel(first, t)) : "");
@@ -193,7 +200,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
     let cancelled = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the old quote must not show for the new choice
     setQuote(null);
-    api<Quote>("users/me/hospital-bookings/quote", { query: { hospital_id: selected.id, visit_mode: visitMode } })
+    api<Quote>("users/me/hospital-bookings/quote", { query: { hospital_id: selected.id, visit_mode: chosenMode } })
       .then((q) => {
         if (!cancelled) setQuote(q);
       })
@@ -203,7 +210,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
     return () => {
       cancelled = true;
     };
-  }, [selected, visitMode]);
+  }, [selected, chosenMode]);
 
   const closeBooking = () => {
     setSelected(null);
@@ -230,7 +237,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
         body: {
           scheduled_at: scheduledAt,
           timezone: browserTimezone(),
-          visit_mode: selected.partner ? visitMode : "in_person",
+          visit_mode: selected.partner ? chosenMode : "in_person",
           facility_id: selected.id,
           department: bookingDepartment || null,
           time_window: timeWindow,
@@ -428,7 +435,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                         <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-slate-100 text-slate-600">
                           {facility.ownership === "private" ? t("booking.private") : t("booking.public")}
                         </span>
-                        {facility.video_enabled && (
+                        {videoVisits && facility.video_enabled && (
                           <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-sky-50 text-sky-700">{t("booking.videoAvailable")}</span>
                         )}
                       </div>
@@ -482,7 +489,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
                 </div>
               </div>
 
-              {selected.partner && (
+              {selected.partner && videoVisits && (
                 <fieldset data-purpose="visit-mode">
                   <legend className="block text-xs font-semibold text-slate-700 mb-1">{t("booking.visitMode")}</legend>
                   <div className="grid grid-cols-2 gap-2">

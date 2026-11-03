@@ -64,7 +64,8 @@ class TestAppointmentDetails:
         listed = client.get("/users/me/appointments", headers=auth).json()[0]
         assert listed["facility"]["id"] == "et-addis-black-lion"
 
-    def test_telehealth_from_a_meeting_link(self, client, auth):
+    def test_telehealth_from_a_meeting_link(self, client, auth, monkeypatch):
+        monkeypatch.setenv("VIDEO_VISITS_ENABLED", "true")  # off by default
         appt = book(client, auth, meeting_url="https://meet.example.com/x").json()["appointment"]
         assert appt["visit_mode"] == "telehealth" and appt["facility"] is None
 
@@ -96,7 +97,8 @@ class TestAppointmentDetails:
         bad = client.post(url, headers=auth, json={"scheduled_at": local(15, days=6), "time_window": "morning"})
         assert bad.status_code == 400
 
-    def test_rows_from_before_the_columns_still_read(self, client, auth):
+    def test_rows_from_before_the_columns_still_read(self, client, auth, monkeypatch):
+        monkeypatch.setenv("VIDEO_VISITS_ENABLED", "true")  # off by default
         from sqlalchemy import update
 
         from dedan_platform.db import session_scope

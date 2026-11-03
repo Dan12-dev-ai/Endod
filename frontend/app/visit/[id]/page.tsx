@@ -4,10 +4,15 @@
 // is embedded here, so the patient never leaves the app. The backend hands
 // out a short-lived token for this patient's own approved visit, around its
 // time; the Jitsi server admits only token holders.
+//
+// Video visits are off unless the backend says they are on (VIDEO_VISITS_ENABLED,
+// GET /users/me/payments/status): this page then only says so and points to
+// Appointments; the code stays for when they return.
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/app/lib/api";
 import { useI18n } from "@/app/lib/i18n";
+import type { PaymentsStatus } from "@/app/interview/data";
 
 type Join = { domain: string; room: string; jwt: string; url: string };
 
@@ -34,13 +39,20 @@ export default function VisitPage() {
   const box = useRef<HTMLDivElement>(null);
   const call = useRef<any>(null);
   const [error, setError] = useState("");
-  const [state, setState] = useState<"connecting" | "in-call" | "ended">("connecting");
+  const [state, setState] = useState<"connecting" | "in-call" | "ended" | "unavailable">("connecting");
 
   useEffect(() => {
     let cancelled = false;
     const id = decodeURIComponent(window.location.pathname.split("/")[2] ?? "");
     (async () => {
       try {
+        // Only an answer that says video is off counts as off; if the status
+        // cannot be read, the join below asks (and the backend refuses when off).
+        const status = await api<PaymentsStatus>("users/me/payments/status").catch(() => null);
+        if (status && status.video_visits !== true) {
+          if (!cancelled) setState("unavailable");
+          return;
+        }
         const join = await api<Join>(`users/me/appointments/${encodeURIComponent(id)}/video`, { method: "POST" });
         if (!DOMAIN.test(join.domain)) throw new Error("Bad video address.");
         await loadJitsi(join.domain);
@@ -82,7 +94,12 @@ export default function VisitPage() {
           {state === "ended" ? t("visit.back") : t("visit.leave")}
         </a>
       </header>
-      {error ? (
+      {state === "unavailable" ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4" data-purpose="visit-unavailable" role="status">
+          <p className="text-base font-semibold">{t("visit.unavailable")}</p>
+          <a className="px-4 py-2 rounded-xl bg-white text-slate-900 text-sm font-semibold" href="/interview?section=appointment">{t("visit.toAppointments")}</a>
+        </div>
+      ) : error ? (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4" data-purpose="visit-error" role="alert">
           <p className="text-base font-semibold">{error}</p>
           <a className="px-4 py-2 rounded-xl bg-white text-slate-900 text-sm font-semibold" href="/interview">{t("visit.back")}</a>

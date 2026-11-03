@@ -84,6 +84,9 @@ export default defineConfig({
         RECORD_FILES_DIR: process.env.E2E_RECORDS ?? '',
         // Signs the prescription QR codes History shows.
         RX_SIGNING_KEY: 'e2e-rx-signing-key',
+        // Video visits are off, as in production. E2E_VIDEO_VISITS=true runs
+        // the suite with them on (tests/helpers.ts VIDEO_VISITS).
+        VIDEO_VISITS_ENABLED: process.env.E2E_VIDEO_VISITS === 'true' ? 'true' : 'false',
       },
     },
     {

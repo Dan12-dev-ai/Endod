@@ -12,7 +12,8 @@ never hears of one that is not paid. An unpaid hold ends after 30 minutes
 The hospital then decides (events from the hospital service):
 
 * in-person visits are confirmed at once (``appointment.confirmed``);
-* video visits wait for a doctor; approval opens a video room;
+* video visits wait for a doctor; approval opens a video room (video visits
+  are off unless ``VIDEO_VISITS_ENABLED`` is set: partner_config.video_visits_enabled);
 * ``appointment.rejected`` / ``appointment.cancelled`` refund the patient in
   full (price and fee, through Chapa to how they paid) and void the
   hospital's share;
@@ -89,6 +90,10 @@ class TooManyHolds(BookingError):
     online payment off, the most upcoming visits to pay at the hospital)."""
 
 
+class VideoVisitsOff(AppointmentError):
+    """Video visits are switched off (partner_config.video_visits_enabled)."""
+
+
 class PaymentUnavailable(BookingError):
     """Chapa cannot take the payment now (not set up, or not answering)."""
 
@@ -103,6 +108,8 @@ def _mode(visit_mode: Optional[str]) -> str:
         mode = VIDEO
     if mode not in (IN_PERSON, VIDEO):
         raise BookingError("visit_mode must be in_person or telehealth (video).")
+    if mode == VIDEO and not partner_config.video_visits_enabled():
+        raise BookingError(partner_config.VIDEO_VISITS_OFF)
     return mode
 
 
@@ -627,6 +634,8 @@ HANDLERS = {
 
 def video_join(user_id: str, appointment_id: str) -> Dict[str, Any]:
     """Join details for the patient's own approved video visit, around its time."""
+    if not partner_config.video_visits_enabled():
+        raise VideoVisitsOff(partner_config.VIDEO_VISITS_OFF)
     with session_scope() as session:
         appointment = session.scalar(select(Appointment).where(
             Appointment.id == appointment_id, Appointment.user_id == user_id))

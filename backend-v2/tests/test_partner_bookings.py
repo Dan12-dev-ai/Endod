@@ -42,6 +42,10 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("SERVICE_FEE_FLAT_SANTIM", "500")
     monkeypatch.setenv("SERVICE_FEE_PERCENT_BP", "200")  # 2%
     monkeypatch.setenv("PUBLIC_APP_URL", "https://endod.example")
+    # Video visits are off by default (partner_config.video_visits_enabled);
+    # these tests keep the switched-off feature working for when it returns.
+    # TestVideoVisitsOff covers it switched off.
+    monkeypatch.setenv("VIDEO_VISITS_ENABLED", "true")
     dbmod.reset_engine()
     dbmod.create_all()
     app = FastAPI()
@@ -1223,8 +1227,10 @@ class TestLateAndLockedPayments:
 class TestPaymentsStatus:
     def test_the_app_can_tell_whether_online_payment_is_on(self, client, monkeypatch):
         monkeypatch.delenv("CHAPA_SECRET_KEY", raising=False)
+        monkeypatch.delenv("VIDEO_VISITS_ENABLED", raising=False)
         off = client.get("/payments/status").json()
-        assert off == {"online_payments": False, "checkout_origins": ["https://checkout.chapa.co"]}
+        assert off == {"online_payments": False, "checkout_origins": ["https://checkout.chapa.co"],
+                       "video_visits": False}
         assert client.get("/users/me/payments/status").json() == off
         monkeypatch.setenv("CHAPA_SECRET_KEY", "CHASECK_TEST-key")
         assert client.get("/payments/status").json()["online_payments"] is True
@@ -1234,6 +1240,90 @@ class TestPaymentsStatus:
             "https://checkout.chapa.co", "http://127.0.0.1:8012"]
         monkeypatch.setenv("CHAPA_BASE_URL", "https://api.chapa.co/v1")
         assert client.get("/payments/status").json()["checkout_origins"] == ["https://checkout.chapa.co"]
+
+
+class TestVideoVisitsOff:
+    """VIDEO_VISITS_ENABLED unset (as in production): partner hospitals are
+    booked in person only, and nothing offers or opens a video visit."""
+
+    @pytest.fixture(autouse=True)
+    def video_off(self, client, monkeypatch):
+        monkeypatch.delenv("VIDEO_VISITS_ENABLED", raising=False)
+
+    @pytest.mark.parametrize("value", ["", "false", "0", "no", "off", "maybe"])
+    def test_off_unless_set_to_true(self, monkeypatch, value):
+        from dedan_platform import partner_config
+
+        monkeypatch.setenv("VIDEO_VISITS_ENABLED", value)
+        assert partner_config.video_visits_enabled() is False
+        for on in ("true", "TRUE", "1", "yes", "on"):
+            monkeypatch.setenv("VIDEO_VISITS_ENABLED", on)
+            assert partner_config.video_visits_enabled() is True
+
+    def test_the_app_is_told_video_is_off(self, client):
+        assert client.get("/payments/status").json()["video_visits"] is False
+        assert client.get("/users/me/payments/status").json()["video_visits"] is False
+
+    @pytest.mark.parametrize("mode", ["telehealth", "video"])
+    def test_a_video_booking_is_refused(self, client, auth, bus, listed, chapa_api, mode):
+        from sqlalchemy import func, select
+
+        from dedan_platform.db import session_scope
+        from dedan_platform.models import Appointment
+
+        resp = book(client, auth, mode=mode)
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Video visits are not available right now. Please book an in-person visit."
+        with session_scope() as session:
+            assert session.scalar(select(func.count()).select_from(Appointment)) == 0
+        assert chapa_api.initialized == []
+        run_worker(bus)
+        assert requested(bus) == []
+        # In person still books.
+        assert book(client, auth).status_code == 201
+
+    def test_the_quote_offers_in_person_only(self, client, auth, listed):
+        video = client.get("/users/me/hospital-bookings/quote", headers=auth,
+                           params={"hospital_id": HOSPITAL, "visit_mode": "telehealth"})
+        assert video.status_code == 400 and "not available" in video.json()["detail"]
+        in_person = client.get("/users/me/hospital-bookings/quote", headers=auth,
+                               params={"hospital_id": HOSPITAL, "visit_mode": "in_person"})
+        assert in_person.status_code == 200 and in_person.json()["price"] == 15000
+
+    def test_the_directory_shows_no_video(self, client, auth, listed):
+        found = client.get("/users/me/care/facilities", headers=auth,
+                           params={"q": "Tikur Anbessa Specialized"}).json()["facilities"]
+        partner = next(f for f in found if f["id"] == HOSPITAL)
+        assert partner["video_enabled"] is False and partner["price_video"] is None
+        assert partner["price_in_person"] == 15000
+
+    def test_joining_is_closed_but_an_earlier_video_visit_stays_readable(self, client, auth, bus, listed,
+                                                                         chapa_api, monkeypatch):
+        # Booked and approved while video visits were on.
+        monkeypatch.setenv("VIDEO_VISITS_ENABLED", "true")
+        at = datetime.now(timezone.utc) + timedelta(minutes=20)
+        aid = paid(client, auth, chapa_api, mode="telehealth", at=at)
+        from_hospital(bus, "appointment.confirmed", {"appointment_id": aid, "hospital_id": HOSPITAL,
+                                                     "status": "confirmed", "meeting_room": "endod-abc123",
+                                                     "doctor_name": "Dr. Hiwot", "reason": None})
+        run_worker(bus)
+        assert client.post(f"/users/me/appointments/{aid}/video", headers=auth).status_code == 200
+
+        monkeypatch.delenv("VIDEO_VISITS_ENABLED")
+        join = client.post(f"/users/me/appointments/{aid}/video", headers=auth)
+        assert join.status_code == 404 and "not available" in join.json()["detail"]
+        appointment = appointment_of(client, auth, aid)
+        assert appointment["visit_mode"] == "telehealth" and appointment["status"] == "CONFIRMED"
+
+    def test_a_personal_telehealth_appointment_is_refused(self, client, auth):
+        at = when().isoformat()
+        for body in ({"visit_mode": "telehealth"}, {"meeting_url": "https://meet.example.com/x"}):
+            resp = client.post("/users/me/appointments", headers=auth,
+                               json={"scheduled_at": at, "timezone": "Africa/Addis_Ababa", **body})
+            assert resp.status_code == 400 and "not available" in resp.json()["detail"]
+        resp = client.post("/users/me/appointments", headers=auth,
+                           json={"scheduled_at": at, "timezone": "Africa/Addis_Ababa", "visit_mode": "in_person"})
+        assert resp.status_code == 201, resp.text
 
 
 class TestBookingSafety:
