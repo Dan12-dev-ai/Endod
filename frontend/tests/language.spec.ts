@@ -95,17 +95,24 @@ test.describe('Phone tab bar', () => {
 
   test('every tab opens its section, and there is no Live tab', async ({ page }) => {
     await page.request.patch('/api/backend/users/me/preferences', { data: { language: 'en' } });
+    // A phone gets the tile dashboard (tiles for every section) and a bottom bar.
     await page.goto('/interview', { waitUntil: 'networkidle' });
-    const bar = page.locator('[data-purpose="mobile-nav"]');
-    await expect(bar.getByText('Live', { exact: true })).toHaveCount(0);
-    // No Balance tab: each booking is paid through Chapa. Bills from hospitals have their own tab.
-    await expect(bar.locator('button')).toHaveCount(7);
-    await bar.locator('[data-purpose="mobile-nav-setting"]').click();
+    const tiles = page.getByRole('navigation', { name: 'Services' });
+    const bar = page.locator('[data-purpose="mobile-bottom-nav"]');
+    for (const nav of [tiles, bar]) {
+      await expect(nav.getByText('Live', { exact: true })).toHaveCount(0);
+      // No Balance: each booking is paid through Chapa or at the hospital.
+      await expect(nav.getByText('Balance', { exact: true })).toHaveCount(0);
+    }
+    // Bills from hospitals have their own tile.
+    await expect(tiles.getByRole('link')).toHaveCount(7);
+    await expect(tiles.getByRole('link', { name: 'Bills' })).toBeVisible();
+    await expect(bar.getByRole('link')).toHaveCount(5);
+    await bar.locator('[data-purpose="mobile-tab-setting"]').click();
     await expect(page.locator('[data-purpose="digital-card-section"]')).toBeVisible();
-    await expect(bar.locator('[data-purpose="mobile-nav-setting"]')).toHaveAttribute('aria-current', 'page');
-    // The dev-only Next.js badge covers this corner in tests; real phones have no badge.
-    await bar.locator('[data-purpose="mobile-nav-home"]').dispatchEvent('click');
-    await expect(page.getByText('Welcome, Test')).toBeVisible();
+    await expect(page.locator('[data-purpose="mobile-tab-setting"]:visible')).toHaveAttribute('aria-current', 'page');
+    await page.locator('[data-purpose="mobile-back"]').click();
+    await expect(page.locator('[data-purpose="mobile-greeting"]')).toHaveText('Selam, Test');
   });
 });
 

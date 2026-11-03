@@ -55,7 +55,7 @@ export const MOBILE_SECTIONS: MobileSection[] = [
     section: "booking",
     href: "/interview/mobile-booking",
     labelKey: "mobile.nav.booking",
-    titleKey: "booking.title",
+    titleKey: "mobile.title.booking",
     bottomNav: true,
     icon: (
       <svg {...iconProps}>
@@ -68,7 +68,7 @@ export const MOBILE_SECTIONS: MobileSection[] = [
     section: "appointment",
     href: "/interview/mobile-appointment",
     labelKey: "mobile.nav.appointment",
-    titleKey: "appointments.title",
+    titleKey: "mobile.title.appointment",
     bottomNav: true,
     icon: (
       <svg {...iconProps}>
@@ -120,7 +120,7 @@ export const MOBILE_SECTIONS: MobileSection[] = [
     section: "setting",
     href: "/interview/mobile-setting",
     labelKey: "mobile.nav.setting",
-    titleKey: "settings.title",
+    titleKey: "mobile.title.settings",
     bottomNav: true,
     icon: (
       <svg {...iconProps}>

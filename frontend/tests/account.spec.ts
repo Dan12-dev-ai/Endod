@@ -110,8 +110,12 @@ test.describe('The card on the Overview', () => {
 
   test('on a phone, the card and its QR fit the screen', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 740 });
+    // A phone gets the tile dashboard; the card is its own screen.
     await page.goto('/interview', { waitUntil: 'networkidle' });
-    const card = page.locator('[data-purpose="home-card"] [data-purpose="health-card-preview"]');
+    await page.locator('[data-purpose="mobile-tile-card"]').click();
+    await expect(page).toHaveURL('/interview/mobile-card');
+    const card = page.locator('[data-purpose="health-card-wrapper"] [data-purpose="health-card-preview"]');
+    await expect(card).toBeVisible();
     const box = await card.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(360);
