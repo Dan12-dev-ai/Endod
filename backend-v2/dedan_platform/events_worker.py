@@ -24,7 +24,7 @@ from sqlalchemy import or_, select
 
 from dedan_platform import (
     booking_payments, chapa, deposits, eventbus, hospital_bookings, hospital_onboarding, patient_history,
-    record_files, shares,
+    record_files, shares, sms_enrol,
 )
 from dedan_platform.db import session_scope
 from dedan_platform.models import Deposit, DepositStatus, utcnow
@@ -46,7 +46,8 @@ _last = {"trim_out": 0.0, "deposits": 0.0, "stale": 0.0, "shares": 0.0, "houseke
 
 #: Every event this worker handles: bookings and listings, patient history,
 #: and texts to facilities signing up.
-HANDLERS = {**hospital_bookings.HANDLERS, **patient_history.HANDLERS, **hospital_onboarding.HANDLERS}
+HANDLERS = {**hospital_bookings.HANDLERS, **patient_history.HANDLERS, **hospital_onboarding.HANDLERS,
+            **sms_enrol.HANDLERS}
 
 
 def _stop(*_args) -> None:

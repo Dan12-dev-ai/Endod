@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Literal, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -290,6 +291,19 @@ def _items(value: Any, fields: Dict[str, int], limit: int, extra=None,
     return out
 
 
+_LOINC = re.compile(r"^[0-9]{1,7}-[0-9]$")
+
+
+def _lab_extra(item: Dict[str, Any]) -> Dict[str, Any]:
+    """A lab item's flag, and its LOINC ``code`` when the hospital sent one
+    (it decides which results are never texted: sms_inbound)."""
+    extra: Dict[str, Any] = {"flag": _choice(item.get("flag"), ("low", "normal", "high", "critical"))}
+    code = _text(item.get("code"), 20)
+    if code and _LOINC.match(code):
+        extra["code"] = code
+    return extra
+
+
 def clean_details(category: str, details: Dict[str, Any]) -> Dict[str, Any]:
     """Only the documented keys of ``details`` (unknown ones are ignored),
     as bounded strings: the app renders these, so nothing else gets through."""
@@ -306,8 +320,7 @@ def clean_details(category: str, details: Dict[str, Any]) -> Dict[str, Any]:
                 "notes": _text(d.get("notes"), long)}
     if category == "lab_result":
         return {"items": _items(d.get("items"), {"test": short, "value": 80, "unit": 40, "reference_range": 80},
-                                200, extra=lambda item: {"flag": _choice(item.get("flag"),
-                                                                         ("low", "normal", "high", "critical"))}),
+                                200, extra=_lab_extra),
                 "specimen": _text(d.get("specimen"), short), "notes": _text(d.get("notes"), long)}
     if category == "imaging":
         return {"modality": _text(d.get("modality"), 80), "body_part": _text(d.get("body_part"), short),
@@ -414,6 +427,23 @@ def on_record_published(session: Session, payload: Dict[str, Any]) -> None:
         else:
             _inbox_later(session, user.id, f"hospital_{published.category}",
                          f"New {noun} from {published.hospital_name}", published.title, "history", published.record_id)
+            _ready_text(session, user.id, published, row)
+
+
+def _ready_text(session: Session, user_id: str, published: "Published", row: HospitalRecord) -> None:
+    """Text "a new lab result / report is ready" (patient_sms.RECORD_READY) to
+    a patient who allows SMS: at most one of each kind per hospital and day
+    (a visit's records arrive together). Not for a prescription (its code is
+    texted: prescriptions.py), nor for imported history."""
+    if published.category == "prescription":
+        return
+    from dedan_platform import sms_pin
+
+    kind = "lab" if published.category == "lab_result" else "report"
+    received = datetime.now(_zone(session, published.hospital_id)).date().isoformat()
+    key = f"sms:ready:{user_id}:{published.hospital_id}:{received}:{kind}"
+    patient_sms.to_account(session, user_id, patient_sms.RECORD_READY, key,
+                           {"kind": kind, "record_id": row.id, "has_pin": sms_pin.has_pin(session, user_id)})
 
 
 def _imported_notice_later(session: Session, user_id: str, hospital_id: str, hospital_name: str) -> None:

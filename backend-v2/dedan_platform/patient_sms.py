@@ -21,6 +21,16 @@ code (``RX_CODE``) names the hospital that wrote it. It and a dispense
 the pharmacy (typed by whoever is at the counter, so it could carry a phone
 number or a link). Neither names a medicine.
 
+Notices that a lab result or a report is ready (``RECORD_READY``,
+docs/sms.md) say only that: never the test, the record or the hospital.
+They name the short code's command (``RESULT``/``REPORT`` and the PIN) only
+while patients can text it (``SMS_INBOUND_ENABLED`` and ``SMS_SHORT_CODE``,
+checked when the text is written, just before sending), and only to a
+patient who has a PIN; otherwise they say to open the app, or, for an
+SMS-only patient (no app account), to ask at the hospital. Other texts that
+point to the app say something else to an SMS-only patient
+(``_SMS_ONLY_TEXTS``).
+
 One exception, not to a patient: a clinic's contact who booked an Endod demo
 (``DEMO_BOOKED``/``DEMO_MOVED``, see hospital_onboarding) is texted the
 facility's own name, like a walk-in (no account; Amharic, then English).
@@ -43,7 +53,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from dedan_platform.models import (
-    Notification, NotificationChannel, NotificationStatus, Preferences, Profile, utcnow,
+    Notification, NotificationChannel, NotificationStatus, Preferences, Profile, User, utcnow,
 )
 from dedan_platform.sms_provider import BRAND_NAME as BRAND
 
@@ -65,6 +75,7 @@ DEMO_BOOKED = "sms_demo_booked"
 DEMO_MOVED = "sms_demo_moved"
 RX_CODE = "sms_rx_code"
 RX_DISPENSED = "sms_rx_dispensed"
+RECORD_READY = "sms_record_ready"
 
 #: Always Amharic, then English (whatever the account's language).
 _BILINGUAL = frozenset({RX_CODE, RX_DISPENSED})
@@ -124,7 +135,54 @@ _TEXTS: Dict[str, Dict[str, str]] = {
     },
 }
 
-TEMPLATES = frozenset(_TEXTS)
+#: For an SMS-only patient (sms_enrol.py: no app account), instead of the
+#: texts above that point to the app.
+_SMS_ONLY_TEXTS: Dict[str, Dict[str, str]] = {
+    BOOKING_CONFIRMED: {
+        "en": "{brand}: your visit on {when} is confirmed.",
+        "am": "{brand}፦ በ{when} ያለዎት ቀጠሮ ተረጋግጧል።",
+    },
+    FOLLOW_UP_SET: {
+        "en": "{brand}: your doctor set a follow-up visit for {date}. Please contact the hospital to book it.",
+        "am": "{brand}፦ ሐኪምዎ ለ{date} የክትትል ጉብኝት ወስነዋል። ለማስያዝ ሆስፒታሉን ያነጋግሩ።",
+    },
+    FOLLOW_UP_REMINDER: {
+        "en": "{brand} reminder: your follow-up visit is tomorrow, {date}.",
+        "am": "{brand} ማስታወሻ፦ የክትትል ጉብኝትዎ ነገ {date} ነው።",
+    },
+    RX_DISPENSED: {
+        "en": "{brand}: medicine from your prescription was given at a pharmacy.",
+        "am": "{brand}፦ ከማዘዣዎ መድኃኒት በፋርማሲ ተሰጥቷል።",
+    },
+}
+
+#: RECORD_READY: what is ready, and the command that reads it.
+_READY_WHAT = {"lab": {"en": "lab result", "am": "የላብራቶሪ ውጤት", "command": "RESULT"},
+               "report": {"en": "medical report", "am": "የሕክምና ሪፖርት", "command": "REPORT"}}
+_READY_TEXTS = {
+    # Patients can text the short code, and this one has a PIN.
+    "pull_app": {
+        "en": "{brand}: a new {what} from your hospital is ready. Text {command} and your PIN to {short} "
+              "or open the {brand} app.",
+        "am": "{brand}፦ ከሆስፒታልዎ አዲስ {what} ደርሷል። {command} እና ፒንዎን ወደ {short} ይላኩ ወይም የ{brand} "
+              "መተግበሪያን ይክፈቱ።",
+    },
+    "pull_sms_only": {
+        "en": "{brand}: a new {what} from your hospital is ready. Text {command} and your PIN to {short} to read it.",
+        "am": "{brand}፦ ከሆስፒታልዎ አዲስ {what} ደርሷል። ለማየት {command} እና ፒንዎን ወደ {short} ይላኩ።",
+    },
+    # No short code yet (or no PIN): never a command that would not work.
+    "app": {
+        "en": "{brand}: a new {what} from your hospital is ready. Open the {brand} app to see it.",
+        "am": "{brand}፦ ከሆስፒታልዎ አዲስ {what} ደርሷል። ለማየት የ{brand} መተግበሪያን ይክፈቱ።",
+    },
+    "sms_only": {
+        "en": "{brand}: a new {what} from your hospital is ready. Please ask at the hospital to see it.",
+        "am": "{brand}፦ ከሆስፒታልዎ አዲስ {what} ደርሷል። ለማየት ሆስፒታሉን ይጠይቁ።",
+    },
+}
+
+TEMPLATES = frozenset(_TEXTS) | {RECORD_READY}
 
 
 def handles(job: Dict[str, Any]) -> bool:
@@ -155,7 +213,19 @@ def _ahead_text(ahead: Any, language: str) -> str:
     return f"{count} {'person' if count == 1 else 'people'} ahead of you"
 
 
-def _render_one(template: str, params: Dict[str, Any], language: str) -> str:
+def _render_ready(params: Dict[str, Any], language: str, sms_only: bool) -> str:
+    from dedan_platform import sms_settings
+
+    what = _READY_WHAT.get(params.get("kind"), _READY_WHAT["report"])
+    pull = sms_settings.inbound_live() and bool(params.get("has_pin"))
+    variant = ("pull_sms_only" if sms_only else "pull_app") if pull else ("sms_only" if sms_only else "app")
+    return _READY_TEXTS[variant][language].format(brand=BRAND, what=what[language], command=what["command"],
+                                                  short=sms_settings.short_code())
+
+
+def _render_one(template: str, params: Dict[str, Any], language: str, sms_only: bool = False) -> str:
+    if template == RECORD_READY:
+        return _render_ready(params, language, sms_only)
     when = params.get("when", "")
     if isinstance(when, dict):  # per language (a demo's time)
         when = when.get(language) or when.get("en", "")
@@ -164,7 +234,8 @@ def _render_one(template: str, params: Dict[str, Any], language: str) -> str:
               "ticket": params.get("ticket", ""), "code": params.get("code", ""),
               "refund": _refund_text(params.get("amount"), language),
               "ahead_text": _ahead_text(params.get("ahead"), language)}
-    return _TEXTS[template][language].format(**values)
+    texts = _SMS_ONLY_TEXTS.get(template, _TEXTS[template]) if sms_only else _TEXTS[template]
+    return texts[language].format(**values)
 
 
 def render(job: Dict[str, Any]) -> str:
@@ -172,11 +243,13 @@ def render(job: Dict[str, Any]) -> str:
     payload = job.get("payload") or {}
     params = payload.get("params") or {}
     template = job["template"]
+    sms_only = bool(payload.get("sms_only"))
     if payload.get("walk_in") or template in _BILINGUAL:
         # No account (so no known language), or a text the contract wants in
         # both: Amharic first, then English.
-        return f"{_render_one(template, params, 'am')}\n{_render_one(template, params, 'en')}"
-    return _render_one(template, params, _language(payload.get("language")))
+        return (f"{_render_one(template, params, 'am', sms_only)}\n"
+                f"{_render_one(template, params, 'en', sms_only)}")
+    return _render_one(template, params, _language(payload.get("language")), sms_only)
 
 
 # --- recipients ---------------------------------------------------------------------------
@@ -216,6 +289,7 @@ def enqueue(
     language: Optional[str] = None,
     walk_in: bool = False,
     fire_at: Optional[datetime] = None,
+    sms_only: bool = False,
 ) -> bool:
     """Queue one text in the caller's transaction. False when this key was
     already queued (a redelivered event, a retry): nothing is added then.
@@ -226,6 +300,8 @@ def enqueue(
     if template not in TEMPLATES:
         raise ValueError(f"unknown SMS template {template!r}")
     payload = {"params": params, "language": _language(language), "walk_in": walk_in}
+    if sms_only:
+        payload["sms_only"] = True
     when = fire_at or utcnow()
     existing = session.scalar(select(Notification).where(Notification.idempotency_key == key))
     if existing is not None:
@@ -256,8 +332,9 @@ def to_account(session: Session, user_id: str, template: str, key: str, params: 
     if recipient is None:
         return False
     phone, language = recipient
+    sms_only = bool(session.scalar(select(User.sms_only).where(User.id == user_id)))
     return enqueue(session, user_id=user_id, destination=phone, template=template, key=key,
-                   params=params, language=language, fire_at=fire_at)
+                   params=params, language=language, fire_at=fire_at, sms_only=sms_only)
 
 
 def cancel_prefix(session: Session, prefix: str, keep_key: Optional[str] = None) -> int:
@@ -297,6 +374,13 @@ def stale_reason(job: Dict[str, Any]) -> Optional[str]:
             wanted = "waiting" if template == QUEUE_NEAR else "called"
             if entry is not None and entry.status != wanted:
                 return "queue_moved_on"
+    if template == RECORD_READY:
+        from dedan_platform.models import HospitalRecord
+
+        with session_scope() as session:
+            record = session.get(HospitalRecord, params.get("record_id") or "")
+            if record is None or record.retracted_at is not None or record.user_id != job.get("user_id"):
+                return "record_retracted_or_moved"
     if template == RX_CODE:
         from dedan_platform import prescriptions
 
