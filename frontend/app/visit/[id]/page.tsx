@@ -46,8 +46,10 @@ export default function VisitPage() {
     const id = decodeURIComponent(window.location.pathname.split("/")[2] ?? "");
     (async () => {
       try {
+        // Only an answer that says video is off counts as off; if the status
+        // cannot be read, the join below asks (and the backend refuses when off).
         const status = await api<PaymentsStatus>("users/me/payments/status").catch(() => null);
-        if (status?.video_visits !== true) {
+        if (status && status.video_visits !== true) {
           if (!cancelled) setState("unavailable");
           return;
         }

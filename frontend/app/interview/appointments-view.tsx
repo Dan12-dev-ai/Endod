@@ -382,7 +382,8 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
                 {t("appointments.joinVideo")}
               </a>
             )}
-            {videoVisits && !hb && telehealth && a.meeting_url && tabOf(a, now) === "upcoming" && (
+            {/* The patient's own saved meeting link (not Endod video): always reachable. */}
+            {!hb && telehealth && a.meeting_url && tabOf(a, now) === "upcoming" && (
               <a href={a.meeting_url} target="_blank" rel="noopener noreferrer" className="inline-block mt-1 text-xs font-semibold text-black hover:underline">
                 {t("appointments.joinVideo")}
               </a>

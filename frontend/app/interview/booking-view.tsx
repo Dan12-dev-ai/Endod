@@ -167,6 +167,9 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
     setRedirecting(false);
     setVisitMode("in_person");
     setQuote(null);
+    // Whether video visits (and online payment) are on may have changed since
+    // the view opened: ask again, so the choices offered are current.
+    api<PaymentsStatus>("users/me/payments/status").then(setPayments).catch(() => undefined);
     // A partner hospital takes the service key; other listings the label.
     const first = facility.departments[0];
     setBookingDepartment(first ? (facility.partner ? first : departmentLabel(first, t)) : "");

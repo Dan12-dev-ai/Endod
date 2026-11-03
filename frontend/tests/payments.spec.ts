@@ -236,10 +236,18 @@ test.describe('Video visits switched off (as in production)', () => {
   test('Appointments shows no video counter, filter, legend or join button', async ({ page }) => {
     // A video visit booked while they were on, approved and about to start.
     const id = 'a7a7a7a7-0000-4000-8000-00000000000a';
+    // And a personal appointment with a meeting link the patient saved themselves.
+    const ownId = 'a7a7a7a7-0000-4000-8000-00000000000c';
     await page.route('**/api/backend/users/me/appointments?**', async (route) => {
       if (route.request().method() !== 'GET') return route.fallback();
       const real = await (await route.fetch()).json();
       return route.fulfill({ json: [{
+        appointment_id: ownId, user_id: 'u', scheduled_at: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+        appointment_type: 'consultation', status: 'SCHEDULED', duration_minutes: 30, location: null,
+        meeting_url: 'https://meet.example.com/own-link', visit_mode: 'telehealth', department: null,
+        time_window: 'exact', facility: null, provider_name: 'Dr. Own Link', notes: null, timezone: 'Africa/Addis_Ababa',
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(), hospital_booking: null,
+      }, {
         appointment_id: id, user_id: 'u', scheduled_at: new Date(Date.now() + 20 * 60_000).toISOString(),
         appointment_type: 'consultation', status: 'CONFIRMED', duration_minutes: 30, location: null,
         meeting_url: 'https://meet.endod-health.com/endod-old', visit_mode: 'telehealth', department: 'general_medicine',
@@ -262,6 +270,15 @@ test.describe('Video visits switched off (as in production)', () => {
     await expect(page.locator('[data-purpose="next-video-visit"]')).toHaveCount(0);
     await expect(page.locator('[data-purpose="appointment-type-filter"]')).toHaveCount(0);
     await expect(page.locator('[data-purpose="legend-telehealth"]')).toHaveCount(0);
+    // The patient's own saved link is theirs, not Endod video: it stays.
+    await expect(page.locator(`[data-purpose="appointment-card-${ownId}"]`).getByRole('link'))
+      .toHaveAttribute('href', 'https://meet.example.com/own-link');
+  });
+
+  test('if the status cannot be read, the video page still asks the backend, which refuses', async ({ page }) => {
+    await page.route('**/api/backend/users/me/payments/status', (route) => route.fulfill({ status: 503, json: {} }));
+    await page.goto('/visit/a7a7a7a7-0000-4000-8000-00000000000d');
+    await expect(page.locator('[data-purpose="visit-error"]')).toContainText('Video visits are not available right now');
   });
 
   test('the video page says video visits are not available and leads to Appointments', async ({ page }) => {
