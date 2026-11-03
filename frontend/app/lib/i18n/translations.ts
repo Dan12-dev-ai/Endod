@@ -156,7 +156,7 @@ export const en = {
   "footer.healthOs": "HEALTH OS",
 
   // ===== Login =====
-  "login.title": "Sign In",
+  "login.title": "Login",
   "login.subtitle": "Sign in with your phone number and password to access your account.",
   "login.phoneLabel": "Phone Number",
   "login.phoneHint": "Use the phone number you registered with (or your email or DEDAN ID).",
@@ -294,7 +294,7 @@ export const en = {
   "healthCard.footer":
     "Your Digital Health ID is unique to your account and secure. Store it safely — you can download it again at any time.",
   "healthCard.loadError": "Unable to load your health card.",
-  "healthCard.printError": "Unable to open print dialog. Please check your browser settings.",
+  "healthCard.printError": "Unable to create the PDF. Please try the image option.",
   "healthCard.imageError": "Unable to generate image. Please try the PDF option.",
 
   // ===== Interview shell =====
@@ -883,6 +883,26 @@ export const en = {
   "settings.country.SS": "South Sudan",
   "settings.country.UG": "Uganda",
   "settings.country.TZ": "Tanzania",
+  "mobile.nav.card": "Card",
+  "mobile.nav.booking": "Booking",
+  "mobile.nav.appointment": "Appointment",
+  "mobile.nav.notification": "Notification",
+  "mobile.nav.setting": "Setting",
+  "mobile.dashboard.greeting": "Selam, {name}",
+  "mobile.dashboard.greetingNoName": "Selam",
+  "mobile.dashboard.servicesLabel": "Services",
+  "mobile.title.card": "Health card",
+  "mobile.title.booking": "Book a visit",
+  "mobile.title.appointment": "My appointments",
+  "mobile.title.settings": "Settings",
+  "howItWorks.eyebrow": "How it works",
+  "howItWorks.title": "Three simple steps to better care",
+  "howItWorks.step1.title": "Book a visit",
+  "howItWorks.step1.body": "Find a partner hospital or clinic and reserve a time that works for you.",
+  "howItWorks.step2.title": "Get confirmed",
+  "howItWorks.step2.body": "Receive confirmation and reminders so you never miss your appointment.",
+  "howItWorks.step3.title": "Meet your doctor",
+  "howItWorks.step3.body": "Arrive with your health card and get the care you need, faster.",
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -1173,7 +1193,7 @@ export const am: Dictionary = {
   "healthCard.footer":
     "ዲጂታል የጤና መታወቂያዎ ለመዝገብዎ ብቻ የተለየና ደህንነቱ የተጠበቀ ነው። በጥንቃቄ ያስቀምጡት — በማንኛውም ጊዜ እንደገና ማውረድ ይችላሉ።",
   "healthCard.loadError": "የጤና ካርድዎን መጫን አልተቻለም።",
-  "healthCard.printError": "የህትመት መስኮት መክፈት አልተቻለም። እባክዎ የአሳሽ ቅንብሮችዎን ያረጋግጡ።",
+  "healthCard.printError": "PDF መፍጠር አልተቻለም። እባክዎ የምስል አማራጩን ይሞክሩ።",
   "healthCard.imageError": "ምስል ማመንጨት አልተቻለም። እባክዎ የPDF አማራጩን ይሞክሩ።",
 
   // ===== Interview shell =====
@@ -1758,6 +1778,26 @@ export const am: Dictionary = {
   "settings.country.SS": "ደቡብ ሱዳን",
   "settings.country.UG": "ዩጋንዳ",
   "settings.country.TZ": "ታንዛኒያ",
+  "mobile.nav.card": "ካርድ",
+  "mobile.nav.booking": "ቀጠሮ",
+  "mobile.nav.appointment": "የእኔ ቀጠሮዎች",
+  "mobile.nav.notification": "ማሳወቂያ",
+  "mobile.nav.setting": "ቅንብር",
+  "mobile.dashboard.greeting": "ሰላም፣ {name}",
+  "mobile.dashboard.greetingNoName": "ሰላም",
+  "mobile.dashboard.servicesLabel": "አገልግሎቶች",
+  "mobile.title.card": "የጤና ካርድ",
+  "mobile.title.booking": "ቀጠሮ ይያዙ",
+  "mobile.title.appointment": "የእኔ ቀጠሮዎች",
+  "mobile.title.settings": "ቅንብሮች",
+  "howItWorks.eyebrow": "እንዴት እንደሚሠራ",
+  "howItWorks.title": "ወደ የተሻለ ሕክምና ሦስት ቀላል ደረጃዎች",
+  "howItWorks.step1.title": "ቀጠሮ ይያዙ",
+  "howItWorks.step1.body": "አጋር ሆስፒታል ወይም ክሊኒክ ያግኙ እና የሚመችዎትን ሰዓት ይያዙ።",
+  "howItWorks.step2.title": "ማረጋገጫ ያግኙ",
+  "howItWorks.step2.body": "ቀጠሮዎ እንዳያመልጥዎ ማረጋገጫ እና ማስታወሻ ይደርስዎታል።",
+  "howItWorks.step3.title": "ሐኪምዎን ያግኙ",
+  "howItWorks.step3.body": "በጤና ካርድዎ ይምጡ እና የሚፈልጉትን ሕክምና በፍጥነት ያግኙ።",
 };
 
 export const DICTIONARIES: Record<"en" | "am", Dictionary> = {

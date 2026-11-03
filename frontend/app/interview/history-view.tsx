@@ -29,6 +29,8 @@ type Props = {
   recordId?: string;
   onBack?: () => void;
   onSelectRecord?: (id: string) => void;
+  /** In the mobile layout, whose header shows the title: keep the heading for screen readers only. */
+  hideTitle?: boolean;
 };
 
 /**
@@ -37,7 +39,7 @@ type Props = {
  * by date, with files to preview or download; follow-ups to book; sharing
  * with a hospital; and a printable copy.
  */
-export default function HistoryView({ highlightTarget, onToast, onOpenSettings, onBook, recordId, onBack, onSelectRecord }: Props) {
+export default function HistoryView({ highlightTarget, onToast, onOpenSettings, onBook, recordId, onBack, onSelectRecord, hideTitle }: Props) {
   const { t, locale } = useI18n();
   const [data, setData] = useState<HistoryResponse | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -127,7 +129,7 @@ export default function HistoryView({ highlightTarget, onToast, onOpenSettings, 
       <div className="w-full space-y-5 pb-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{t("history.title")}</h1>
+            <h1 className={hideTitle ? "sr-only" : "text-2xl sm:text-3xl font-bold tracking-tight text-slate-900"}>{t("history.title")}</h1>
             </div>
           <div className="flex flex-nowrap gap-2 overflow-x-auto sm:flex-wrap sm:items-center self-start pb-1 -mb-1">
             <button type="button" data-purpose="add-record" onClick={() => setAdding(true)} className="shrink-0 px-3.5 py-2 rounded-full text-xs font-semibold bg-black hover:bg-gray-800 text-white shadow-sm">

@@ -46,6 +46,8 @@ type Props = {
   onToast: (title: string, message: string) => void;
   /** The profile changed (names, phone): refresh the header and card. */
   onProfileChange: (profile: ProfileForCard) => void;
+  /** In the mobile layout, whose header shows the title: keep the heading for screen readers only. */
+  hideTitle?: boolean;
 };
 
 const COUNTRIES: { value: string; labelKey: TranslationKey }[] = [
@@ -93,7 +95,7 @@ const STRENGTH_COLORS = ["text-slate-400", "text-rose-500", "text-amber-500", "t
 const STRENGTH_BARS = ["bg-slate-200", "bg-rose-500", "bg-amber-500", "bg-black", "bg-gray-500"];
 
 /** Account settings (GET/PATCH /users/me, preferences, consent, health profile; password change). */
-export default function SettingsView({ onToast, onProfileChange }: Props) {
+export default function SettingsView({ onToast, onProfileChange, hideTitle }: Props) {
   const { t } = useI18n();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -438,7 +440,7 @@ export default function SettingsView({ onToast, onProfileChange }: Props) {
       <div className="max-w-5xl mx-auto space-y-6 py-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{t("settings.title")}</h1>
+            <h1 className={hideTitle ? "sr-only" : "text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"}>{t("settings.title")}</h1>
             </div>
         </div>
 

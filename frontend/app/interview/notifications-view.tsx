@@ -29,6 +29,8 @@ type Props = {
   /** Go to another screen, highlighting a card there (data-purpose). */
   onOpen: (nav: string, target: string | null) => void;
   onToast: (title: string, message: string) => void;
+  /** In the mobile layout, whose header shows the title: keep the heading for screen readers only. */
+  hideTitle?: boolean;
 };
 
 const CATEGORIES: {
@@ -89,7 +91,7 @@ function timeAgo(iso: string, locale: string): string {
 }
 
 /** The patient's in-app inbox (GET/POST/DELETE /users/me/inbox). */
-export default function NotificationsView({ onOpen, onToast }: Props) {
+export default function NotificationsView({ onOpen, onToast, hideTitle }: Props) {
   const { t, locale } = useI18n();
   const [filter, setFilter] = useState<"all" | Category>("all");
   const [items, setItems] = useState<InboxItem[] | null>(null);
@@ -191,7 +193,7 @@ export default function NotificationsView({ onOpen, onToast }: Props) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-200/80 gap-4">
           <div>
             <div className="flex items-center space-x-2">
-              <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{t("notifications.title")}</h1>
+              <h1 className={hideTitle ? "sr-only" : "text-xl sm:text-2xl font-bold text-slate-900 tracking-tight"}>{t("notifications.title")}</h1>
               <span data-purpose="unread-count" className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${unread.total === 0 ? "bg-slate-100 text-slate-500 border-slate-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
                 {t("notifications.unreadCount", { count: unread.total })}
               </span>

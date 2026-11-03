@@ -176,9 +176,12 @@ test.describe('History', () => {
     try {
       await page.context().clearCookies({ name: 'endod_language' });
       await page.goto('/interview', { waitUntil: 'networkidle' });
-      // The dev-only Next.js badge can cover this tab at phone width in tests; real phones have no badge.
-      await page.locator('[data-purpose="mobile-nav-followup"]').dispatchEvent('click');
-      await expect(page.getByRole('heading', { name: 'የጤና ታሪክዎ' })).toBeVisible();
+      // A phone gets the tile dashboard; Medical records is a tile.
+      await page.locator('[data-purpose="mobile-tile-records"]').click();
+      await expect(page).toHaveURL('/interview/mobile-records');
+      // The mobile header shows the title; the view's heading stays for screen readers.
+      await expect(page.locator('[data-purpose="mobile-title"]')).toHaveText('የሕክምና መዝገብ');
+      await expect(page.getByRole('heading', { name: 'የጤና ታሪክዎ' })).toHaveCount(1);
       await expect(page.locator('[data-purpose="history-tab-labs"]')).toHaveText('የላብራቶሪ ውጤቶች');
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(0);

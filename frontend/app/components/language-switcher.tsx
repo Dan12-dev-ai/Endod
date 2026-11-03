@@ -23,6 +23,10 @@ const TONES = {
     button: "border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900",
     chevron: "text-slate-400",
   },
+  mobile: {
+    button: "border-transparent text-white hover:bg-white/10",
+    chevron: "text-white",
+  },
 } as const;
 
 export default function LanguageSwitcher({ tone = "dark" }: { tone?: keyof typeof TONES }) {
@@ -92,7 +96,7 @@ export default function LanguageSwitcher({ tone = "dark" }: { tone?: keyof typeo
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-label={`${t("nav.selectLanguage")}: ${current.label}`}
-        className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md border transition-all text-[13px] font-medium tracking-wide focus:outline-none focus-visible:ring-2 focus-visible:ring-current cursor-pointer ${styles.button}`}
+        className={`inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-md border transition-all text-[13px] font-medium tracking-wide focus:outline-none focus-visible:ring-2 focus-visible:ring-current cursor-pointer min-w-[72px] justify-center ${styles.button}`}
         data-purpose="language-select"
         onClick={() => setOpen((value) => !value)}
         onKeyDown={(event) => {

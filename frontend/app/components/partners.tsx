@@ -2,42 +2,12 @@
 
 import { useI18n } from "../lib/i18n";
 
-const PARTNERS = [
-  { name: "Adinas", src: "/adinas_logo.jpeg" },
-  { name: "Afilas", src: "/afilas_logo.png" },
-  { name: "Felege Hiwot", src: "/felegehiwot_logo.jpeg" },
-  { name: "Tibebegion", src: "/tibebegion_logo.jpeg" },
-];
-
-// Double the set so one "half" is wide enough to fill large screens.
-const HALF = [...PARTNERS, ...PARTNERS];
-
-function Logo({ name, src }: { name: string; src: string }) {
-  const isAfilas = name === "Afilas";
-  return (
-    <div
-      className={`flex-shrink-0 w-24 md:w-80 lg:w-96 flex items-center justify-center drop-shadow-md ${
-        isAfilas ? "bg-slate-900 rounded-xl p-4" : ""
-      }`}
-    >
-      <img
-        src={src}
-        alt={name}
-        width={320}
-        height={320}
-        className="h-16 w-16 md:h-64 md:w-64 lg:h-72 lg:w-72 object-contain"
-        loading="lazy"
-      />
-    </div>
-  );
-}
-
 export default function Partners() {
   const { t } = useI18n();
 
   return (
     <section
-      className="py-16 sm:py-20 bg-white overflow-hidden"
+      className="py-16 sm:py-20 bg-white"
       data-purpose="partners-section"
       id="partners"
     >
@@ -50,30 +20,14 @@ export default function Partners() {
         </p>
       </div>
 
-      <div
-        className="relative overflow-hidden"
-        style={{
-          maskImage:
-            "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
-          WebkitMaskImage:
-            "linear-gradient(to right, transparent, black 10%, black 90%, transparent)",
-        }}
-      >
-        <div className="marquee-track flex flex-shrink-0 w-max whitespace-nowrap hover:[animation-play-state:paused]">
-          <div className="flex flex-shrink-0 items-center gap-8 md:gap-16 lg:gap-16 pr-8 md:pr-16 lg:pr-16">
-            {HALF.map((p, i) => (
-              <Logo key={`a-${i}`} name={p.name} src={p.src} />
-            ))}
-          </div>
-          <div
-            className="flex flex-shrink-0 items-center gap-8 md:gap-16 lg:gap-16 pr-8 md:pr-16 lg:pr-16"
-            aria-hidden="true"
-          >
-            {HALF.map((p, i) => (
-              <Logo key={`b-${i}`} name={p.name} src={p.src} />
-            ))}
-          </div>
-        </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <img
+          src="/partners.jpg"
+          alt={t("partners.title")}
+          className="w-full h-auto rounded-lg shadow-sm"
+          loading="lazy"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1280px"
+        />
       </div>
     </section>
   );

@@ -232,7 +232,7 @@ function VerifyOtp() {
             </div>
           </div>
 
-          <footer className="mt-8 pt-6" data-purpose="partner-logos-section">
+          <footer className="mt-8 pt-6 hidden lg:block" data-purpose="partner-logos-section">
             <div className="flex items-center space-x-4 mb-5">
               <span className="text-xs italic text-brand-heading/75 font-serif tracking-normal whitespace-nowrap">
                 {t("common.trustedBy")}
@@ -348,7 +348,7 @@ function VerifyOtp() {
             </form>
 
             <aside
-              className="mt-8 pt-5 border-t border-slate-100 flex items-start space-x-3 text-[11px] text-brand-muted leading-snug"
+              className="mt-8 pt-5 border-t border-slate-100 hidden lg:flex items-start space-x-3 text-[11px] text-brand-muted leading-snug"
               data-purpose="security-compliance-badge"
             >
               <div className="shrink-0 text-brand-accent/80 mt-0.5">

@@ -130,7 +130,7 @@ export default function SignUp() {
 
   return (
     <main
-      className="w-full min-h-screen flex items-center justify-center py-6 px-4 sm:px-8 lg:px-16 bg-[#DDE9E6] text-brand-primary font-sans antialiased"
+      className="w-full min-h-screen flex items-center justify-center py-6 px-4 sm:px-8 lg:px-16 bg-gray-100 lg:bg-[#DDE9E6] text-brand-primary font-sans antialiased"
       data-purpose="page-wrapper"
     >
       <div className="max-w-[1360px] w-full grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center my-auto">
@@ -141,12 +141,12 @@ export default function SignUp() {
         >
           <div>
             {/* Logo */}
-            <div className="mb-10 lg:mb-12" data-purpose="brand-logo">
+            <div className="sr-only lg:not-sr-only lg:mb-12" data-purpose="brand-logo">
               <h1 className="text-2xl font-extrabold tracking-tight text-brand-heading">{t("common.endod")}</h1>
             </div>
 
             {/* Testimonial Section */}
-            <div className="mb-10" data-purpose="quote-carousel" id="testimonial-container">
+            <div className="mb-10 hidden md:block" data-purpose="quote-carousel" id="testimonial-container">
               {/* Horizontal slide track (infinite): the current slide moves
                   left out of view while the next slides in from the right.
                   Boundary clones make the loop seamless. */}
@@ -172,7 +172,7 @@ export default function SignUp() {
         <section className="order-1 lg:order-2 lg:col-span-6 xl:col-span-6 flex justify-end mt-6 lg:mt-0" data-purpose="registration-form-card">
           <div className="w-full max-w-[540px] bg-white rounded-[32px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8 sm:p-10 lg:p-11">
             {/* Card Heading */}
-            <h2 className="font-serif text-4xl sm:text-[42px] font-medium text-brand-heading tracking-tight mb-7">
+            <h2 className="font-serif text-4xl sm:text-[42px] font-medium text-brand-heading tracking-tight mb-7 text-center lg:text-left">
               {isReset ? t("signup.resetTitle") : t("signup.title")}
             </h2>
             {isReset && (
@@ -198,7 +198,7 @@ export default function SignUp() {
                   type="tel"
                   value={phone}
                 />
-                <p className="mt-1.5 text-[11px] text-brand-muted">
+                <p className="mt-1.5 text-[11px] text-brand-muted hidden lg:block">
                   {t("signup.phoneHint")}
                 </p>
               </div>
@@ -240,7 +240,7 @@ export default function SignUp() {
               {/* Submit Button */}
               <div className="pt-2">
                 <button
-                  className="w-full bg-[#E5ECEB] hover:bg-[#D5E3E0] active:scale-[0.99] text-brand-heading/80 font-medium py-3 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
+                  className="w-full bg-app-green lg:bg-[#E5ECEB] hover:bg-app-green-light lg:hover:bg-[#D5E3E0] active:scale-[0.99] text-white lg:text-brand-heading/80 font-medium py-3 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                   disabled={isSubmitting}
                   type="submit"
                 >
@@ -261,7 +261,7 @@ export default function SignUp() {
 
             {/* HIPAA Compliance Badge & Notice */}
             <aside
-              className="mt-8 pt-5 border-t border-slate-100 flex items-start space-x-3 text-[11px] text-brand-muted leading-snug"
+              className="mt-8 pt-5 border-t border-slate-100 hidden lg:flex items-start space-x-3 text-[11px] text-brand-muted leading-snug"
               data-purpose="security-compliance-badge"
             >
               <div className="shrink-0 text-brand-accent/80 mt-0.5">

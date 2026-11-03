@@ -35,6 +35,8 @@ type Props = {
   onToast: (title: string, message: string) => void;
   /** "Schedule Visit": opens Booking, where a visit is booked with a hospital. */
   onBook: () => void;
+  /** In the mobile layout, whose header shows the title: keep the heading for screen readers only. */
+  hideTitle?: boolean;
 };
 
 type Tab = "upcoming" | "past" | "cancelled";
@@ -76,7 +78,7 @@ function localDateInput(date: Date): string {
  * The patient's appointments (GET /users/me/appointments, reschedule, cancel).
  * New visits are booked in Booking (onBook): only a booking there reaches a hospital.
  */
-export default function AppointmentsView({ highlightTarget, onToast, onBook }: Props) {
+export default function AppointmentsView({ highlightTarget, onToast, onBook, hideTitle }: Props) {
   const { t, locale } = useI18n();
   const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -441,7 +443,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook }: P
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200">
             <div>
               <div className="flex items-center space-x-3">
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">{t("appointments.title")}</h1>
+                <h1 className={hideTitle ? "sr-only" : "text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"}>{t("appointments.title")}</h1>
                 <span data-purpose="upcoming-count" className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-black border border-gray-200">
                   {t("appointments.scheduledCount", { count: counts.upcoming })}
                 </span>

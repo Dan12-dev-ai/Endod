@@ -39,6 +39,8 @@ type Props = {
   preset?: BookingPreset | null;
   /** The preset was applied (so it is not applied again). */
   onPresetUsed?: () => void;
+  /** In the mobile layout, whose header shows the title: keep the heading for screen readers only. */
+  hideTitle?: boolean;
 };
 
 type Coords = { latitude: number; longitude: number };
@@ -51,7 +53,7 @@ function todayLocal(offsetDays = 0): string {
 }
 
 /** Hospital directory and in-person booking (GET /users/me/care/facilities, POST /users/me/appointments). */
-export default function BookingView({ patientId, onToast, preset, onPresetUsed }: Props) {
+export default function BookingView({ patientId, onToast, preset, onPresetUsed, hideTitle }: Props) {
   const { t, locale } = useI18n();
   const [searchQuery, setSearchQuery] = useState("");
   const [department, setDepartment] = useState("");
@@ -286,12 +288,15 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed }
   return (
     <>
       <div data-purpose="booking-view" className="flex-1 min-h-0 overflow-y-auto">
-        {/* Breadcrumbs & Welcome Hero */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-          <div>
-            <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">{t("booking.title")}</h1>
+        {hideTitle ? (
+          <h1 className="sr-only">{t("booking.title")}</h1>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+            <div>
+              <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">{t("booking.title")}</h1>
+            </div>
           </div>
-        </div>
+        )}
 
         <section data-purpose="manual-booking-section" className="space-y-4 pb-6">
           {/* Search and Filters Bar */}

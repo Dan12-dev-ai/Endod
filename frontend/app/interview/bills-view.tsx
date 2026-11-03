@@ -34,7 +34,10 @@ const STATUS: Record<Bill["status"], { key: TranslationKey; className: string }>
 };
 
 /** The patient's bills from partner hospitals (GET /users/me/bills): paid at the hospital, Endod's fee included. */
-export default function BillsView() {
+export default function BillsView({ hideTitle = false }: {
+  /** In the mobile layout, whose header shows the title: keep the heading for screen readers only. */
+  hideTitle?: boolean;
+} = {}) {
   const { t, locale } = useI18n();
   const [bills, setBills] = useState<Bills | null>(null);
   const [error, setError] = useState("");
@@ -58,7 +61,7 @@ export default function BillsView() {
     <div data-purpose="bills-view" className="flex-1 min-h-0 overflow-y-auto">
       <div className="w-full space-y-6 pb-6">
         <div className="pb-6 border-b border-slate-200/80">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">{t("bills.title")}</h1>
+          <h1 className={hideTitle ? "sr-only" : "text-xl sm:text-2xl font-bold text-slate-900 tracking-tight"}>{t("bills.title")}</h1>
           <p className="text-sm text-slate-500 mt-1">{t("bills.subtitle")}</p>
           {bills && bills.open_total > 0 && (
             <p data-purpose="bills-open-total" className="mt-3 inline-flex px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-sm font-semibold text-amber-800">
