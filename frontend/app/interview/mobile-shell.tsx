@@ -183,9 +183,9 @@ export function MobileToastProvider({ children, closeLabel }: { children: ReactN
           <div data-purpose="toast-notification" role="status" className="pointer-events-auto flex items-start gap-3 bg-black text-white px-4 py-3 rounded-xl shadow-xl max-w-md w-full">
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold tracking-wide uppercase">{toast.title}</p>
-              <p className="text-xs text-slate-300">{toast.message}</p>
+              <p className="text-xs text-[#DCE4E6]">{toast.message}</p>
             </div>
-            <button type="button" aria-label={closeLabel} onClick={() => setToast(null)} className="text-slate-300 hover:text-white text-base leading-none px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded">
+            <button type="button" aria-label={closeLabel} onClick={() => setToast(null)} className="text-[#DCE4E6] hover:text-white text-base leading-none px-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-white rounded">
               ×
             </button>
           </div>

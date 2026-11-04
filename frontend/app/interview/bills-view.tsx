@@ -28,9 +28,9 @@ function birr(santim: number): string {
 }
 
 const STATUS: Record<Bill["status"], { key: TranslationKey; className: string }> = {
-  open: { key: "bills.status.open", className: "bg-amber-50 text-amber-700 border-amber-200" },
-  paid: { key: "bills.status.paid", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  voided: { key: "bills.status.voided", className: "bg-slate-100 text-slate-500 border-slate-200" },
+  open: { key: "bills.status.open", className: "bg-[#B7791F]/10 text-[#B7791F] border-[#B7791F]/20" },
+  paid: { key: "bills.status.paid", className: "bg-[#F4F7F7] text-[#25343D] border-[#DCE4E6]" },
+  voided: { key: "bills.status.voided", className: "bg-[#F4F7F7] text-[#25343D] border-[#DCE4E6]" },
 };
 
 /** The patient's bills from partner hospitals (GET /users/me/bills): paid at the hospital, Endod's fee included. */
@@ -60,50 +60,50 @@ export default function BillsView({ hideTitle = false }: {
   return (
     <div data-purpose="bills-view" className="flex-1 min-h-0 overflow-y-auto">
       <div className="w-full space-y-6 pb-6">
-        <div className="pb-6 border-b border-slate-200/80">
-          <h1 className={hideTitle ? "sr-only" : "text-xl sm:text-2xl font-bold text-slate-900 tracking-tight"}>{t("bills.title")}</h1>
-          <p className="text-sm text-slate-500 mt-1">{t("bills.subtitle")}</p>
+        <div className="pb-6 border-b border-[#DCE4E6]/80">
+          <h1 className={hideTitle ? "sr-only" : "text-xl sm:text-2xl font-bold text-[#18242B] tracking-tight"}>{t("bills.title")}</h1>
+          <p className="text-sm text-[#25343D] mt-1">{t("bills.subtitle")}</p>
           {bills && bills.open_total > 0 && (
-            <p data-purpose="bills-open-total" className="mt-3 inline-flex px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-sm font-semibold text-amber-800">
+            <p data-purpose="bills-open-total" className="mt-3 inline-flex px-3 py-1.5 rounded-lg bg-[#B7791F]/10 border border-[#B7791F]/20 text-sm font-semibold text-[#B7791F]">
               {t("bills.openTotal", { amount: birr(bills.open_total) })}
             </p>
           )}
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-[#B42318]">{error}</p>}
         {!bills && !error && <RowBones />}
         {bills && bills.items.length === 0 && (
-          <p data-purpose="bills-empty" className="text-sm text-slate-500">{t("bills.empty")}</p>
+          <p data-purpose="bills-empty" className="text-sm text-[#25343D]">{t("bills.empty")}</p>
         )}
 
         {bills?.items.map((bill) => {
           const status = STATUS[bill.status] ?? STATUS.open;
           return (
-            <section key={bill.id} data-purpose={`bill-${bill.id}`} className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5">
+            <section key={bill.id} data-purpose={`bill-${bill.id}`} className="bg-white rounded-2xl border border-[#DCE4E6] p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h2 className="text-sm font-bold text-slate-900">{bill.hospital_name ?? t("bills.title")}</h2>
-                  <p className="text-xs text-slate-400 mt-0.5">{new Date(bill.created_at).toLocaleDateString(locale)}</p>
+                  <h2 className="text-sm font-bold text-[#18242B]">{bill.hospital_name ?? t("bills.title")}</h2>
+                  <p className="text-xs text-[#46545B] mt-0.5">{new Date(bill.created_at).toLocaleDateString(locale)}</p>
                 </div>
                 <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${status.className}`}>
                   {t(status.key)}
                 </span>
               </div>
-              <ul className="mt-3 divide-y divide-slate-100 text-sm">
+              <ul className="mt-3 divide-y divide-[##F4F7F7] text-sm">
                 {bill.items.map((item, index) => (
-                  <li key={index} className="flex justify-between py-1.5 text-slate-700">
+                  <li key={index} className="flex justify-between py-1.5 text-[#25343D]">
                     <span>{item.name}{item.quantity > 1 ? ` × ${item.quantity}` : ""}</span>
                     <span className="tabular-nums">ETB {birr(item.amount * item.quantity)}</span>
                   </li>
                 ))}
               </ul>
-              <dl className="mt-3 pt-3 border-t border-slate-200 text-sm space-y-1">
-                <div className="flex justify-between text-slate-600"><dt>{t("bills.subtotal")}</dt><dd className="tabular-nums">ETB {birr(bill.subtotal)}</dd></div>
-                <div className="flex justify-between text-slate-600"><dt>{t("bills.fee")}</dt><dd className="tabular-nums" data-purpose="bill-fee">ETB {birr(bill.service_fee)}</dd></div>
-                <div className="flex justify-between font-bold text-slate-900"><dt>{t("bills.total")}</dt><dd className="tabular-nums" data-purpose="bill-total">ETB {birr(bill.total)}</dd></div>
+              <dl className="mt-3 pt-3 border-t border-[#DCE4E6] text-sm space-y-1">
+                <div className="flex justify-between text-[#25343D]"><dt>{t("bills.subtotal")}</dt><dd className="tabular-nums">ETB {birr(bill.subtotal)}</dd></div>
+                <div className="flex justify-between text-[#25343D]"><dt>{t("bills.fee")}</dt><dd className="tabular-nums" data-purpose="bill-fee">ETB {birr(bill.service_fee)}</dd></div>
+                <div className="flex justify-between font-bold text-[#18242B]"><dt>{t("bills.total")}</dt><dd className="tabular-nums" data-purpose="bill-total">ETB {birr(bill.total)}</dd></div>
               </dl>
               {bill.status === "open" && (
-                <p className="mt-3 text-xs text-slate-500">{t("bills.payAtHospital", { amount: birr(bill.total) })}</p>
+                <p className="mt-3 text-xs text-[#25343D]">{t("bills.payAtHospital", { amount: birr(bill.total) })}</p>
               )}
             </section>
           );

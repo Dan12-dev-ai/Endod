@@ -62,13 +62,13 @@ export function QueueCard() {
       {entries.map((entry) => (
         <div
           aria-live="polite"
-          className={`rounded-2xl border p-4 sm:p-5 card-shadow ${entry.status === "called" ? "bg-emerald-600 border-emerald-700 text-white" : "bg-white border-emerald-200"}`}
+          className={`rounded-2xl border p-4 sm:p-5 card-shadow ${entry.status === "called" ? "bg-[#25343D] border-[#25343D] text-white" : "bg-white border-[#DCE4E6]"}`}
           data-purpose="queue-card"
           key={entry.entry_id}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className={`text-[11px] font-semibold uppercase tracking-wider ${entry.status === "called" ? "text-emerald-100" : "text-emerald-700"}`}>
+              <p className={`text-[11px] font-semibold uppercase tracking-wider ${entry.status === "called" ? "text-[#F4F7F7]" : "text-[#25343D]"}`}>
                 <span className="inline-block w-2 h-2 rounded-full bg-current mr-1.5 motion-safe:animate-pulse" aria-hidden />
                 {t("queue.title")} · {t("queue.live")}
               </p>
@@ -76,21 +76,21 @@ export function QueueCard() {
                 <p className="text-lg sm:text-xl font-bold mt-1" data-purpose="queue-called">{t("queue.called")}</p>
               ) : (
                 <>
-                  <p className="text-lg sm:text-xl font-bold text-slate-900 mt-1" data-purpose="queue-position">
+                  <p className="text-lg sm:text-xl font-bold text-[#18242B] mt-1" data-purpose="queue-position">
                     {t("queue.position", { position: entry.position })}
                   </p>
-                  <p className="text-sm text-slate-600" data-purpose="queue-ahead">
+                  <p className="text-sm text-[#25343D]" data-purpose="queue-ahead">
                     {entry.ahead === 0 ? t("queue.aheadNone") : entry.ahead === 1 ? t("queue.aheadOne") : t("queue.aheadOther", { count: entry.ahead })}
                   </p>
                 </>
               )}
-              <p className={`text-xs mt-1 truncate ${entry.status === "called" ? "text-emerald-50" : "text-slate-500"}`}>
+              <p className={`text-xs mt-1 truncate ${entry.status === "called" ? "text-[#F4F7F7]" : "text-[#25343D]"}`}>
                 {[entry.doctor_name, entry.hospital_name].filter(Boolean).join(" · ")}
               </p>
             </div>
-            <div className={`text-center rounded-xl px-3 py-2 flex-shrink-0 ${entry.status === "called" ? "bg-white/15" : "bg-emerald-50 border border-emerald-100"}`}>
-              <p className={`text-[10px] font-semibold uppercase ${entry.status === "called" ? "text-emerald-50" : "text-emerald-700"}`}>{t("queue.ticketLabel")}</p>
-              <p className={`text-2xl font-extrabold tabular-nums ${entry.status === "called" ? "text-white" : "text-slate-900"}`}>{entry.ticket}</p>
+            <div className={`text-center rounded-xl px-3 py-2 flex-shrink-0 ${entry.status === "called" ? "bg-white/15" : "bg-[#F4F7F7] border border-[#F4F7F7]"}`}>
+              <p className={`text-[10px] font-semibold uppercase ${entry.status === "called" ? "text-[#F4F7F7]" : "text-[#25343D]"}`}>{t("queue.ticketLabel")}</p>
+              <p className={`text-2xl font-extrabold tabular-nums ${entry.status === "called" ? "text-white" : "text-[#18242B]"}`}>{entry.ticket}</p>
             </div>
           </div>
         </div>
@@ -116,26 +116,26 @@ export function FollowUpCards({ onBook, highlight }: { onBook: (preset: BookingP
 
   if (!followUps.length) return null;
   return (
-    <section aria-labelledby="follow-ups-title" className="bg-white rounded-2xl border border-amber-200 card-shadow p-4 sm:p-5" data-purpose="follow-ups">
-      <h2 id="follow-ups-title" className="text-sm font-bold text-slate-900">{t("followUp.title")}</h2>
-      <p className="text-xs text-slate-500 mt-0.5">{t("followUp.hint")}</p>
-      <ul className="mt-3 divide-y divide-slate-100">
+    <section aria-labelledby="follow-ups-title" className="bg-white rounded-2xl border border-[#B7791F]/20 card-shadow p-4 sm:p-5" data-purpose="follow-ups">
+      <h2 id="follow-ups-title" className="text-sm font-bold text-[#18242B]">{t("followUp.title")}</h2>
+      <p className="text-xs text-[#25343D] mt-0.5">{t("followUp.hint")}</p>
+      <ul className="mt-3 divide-y divide-[##F4F7F7]">
         {followUps.map((f) => (
           <li
-            className={`py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between ${highlight === `follow-up-${f.follow_up_id}` ? "bg-amber-50 rounded-xl px-2" : ""}`}
+            className={`py-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between ${highlight === `follow-up-${f.follow_up_id}` ? "bg-[#B7791F]/10 rounded-xl px-2" : ""}`}
             data-purpose="follow-up"
             key={f.follow_up_id}
           >
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-900">{formatDay(f.follow_up_on, locale)}</p>
-              <p className="text-xs text-slate-600 truncate">
+              <p className="text-sm font-semibold text-[#18242B]">{formatDay(f.follow_up_on, locale)}</p>
+              <p className="text-xs text-[#25343D] truncate">
                 {f.hospital_name}
                 {f.doctor_name ? ` · ${t("followUp.with", { doctor: f.doctor_name })}` : ""}
               </p>
-              {f.note && <p className="text-xs text-slate-500 mt-0.5">{f.note}</p>}
+              {f.note && <p className="text-xs text-[#25343D] mt-0.5">{f.note}</p>}
             </div>
             <button
-              className="self-start sm:self-auto px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex-shrink-0"
+              className="self-start sm:self-auto px-4 py-2 rounded-xl bg-[#25343D] hover:bg-[#25343D] text-white text-xs font-semibold flex-shrink-0"
               data-purpose="follow-up-book"
               onClick={() => onBook({ hospitalId: f.hospital_id, date: f.follow_up_on })}
               type="button"

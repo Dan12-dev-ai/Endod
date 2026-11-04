@@ -74,7 +74,7 @@ export const en = {
   // ===== Landing page =====
   "hero.title": "Your Health, Empowered at Your Fingertips",
   "hero.body":
-    "Endod Health OS connects patients and hospitals through one trusted system. Talk to Endod AI about how you feel, discover nearby hospitals with live crowd levels, book in seconds, and arrive with a clear, consent-based record of your health.",
+    "Endod Health OS connects patients and hospitals through one trusted system. Describe how you feel, discover nearby hospitals with live crowd levels, book in seconds, and arrive with a clear, consent-based record of your health.",
   "hero.cta": "Get Started",
   "hero.ctaSignedIn": "Go to your dashboard",
   "hero.facilityPrompt": "Run a clinic or hospital? Register your facility on Endod.",
@@ -92,15 +92,15 @@ export const en = {
   "bottleneck.cta": "See how it works",
   "bottleneck.imageAlt": "Patients and hospitals connected in one trusted system",
 
-  "buildLab.badge": "ENDOD AI",
-  "buildLab.title": "Understand your symptoms in minutes",
+  "buildLab.badge": "DIGITAL HEALTH CARD",
+  "buildLab.title": "Your digital health card, always with you",
   "buildLab.subtitle":
-    "Talk or type in Amharic or English — Endod AI listens and asks the right follow-up questions",
+    "Carry your identity, blood group, allergies and emergency contact wherever you go",
   "buildLab.body":
-    "Endod AI guides a calm conversation, asks clarifying questions, and turns what you share into a clear, structured summary your doctor can read before you even arrive.",
-  "buildLab.cta": "Start a check-up",
+    "Your health card holds your key details in one place, ready to scan and share with any hospital, with your consent.",
+  "buildLab.cta": "View your health card",
   "buildLab.findHospital": "Find a hospital",
-  "buildLab.imageAlt": "Endod AI symptom conversation",
+  "buildLab.imageAlt": "Digital health card",
 
   "partners.title": "Trusted by healthcare partners",
   "partners.subtitle": "Hospitals, clinics and health organizations we work with",
@@ -126,7 +126,7 @@ export const en = {
   "pipette.title": "Your plan, and your history, in one place",
   "pipette.body":
     "Follow-up care with clear timelines, remaining drug and injection counts, and overdue alerts for you and your hospital. A single lifetime medical history travels with you across every facility — shared only with your consent.",
-  "pipette.cta": "Talk to Endod AI",
+  "pipette.cta": "Get started",
   "pipette.imageAlt": "Patient following a treatment plan",
 
   "socialLinks.followUs": "FOLLOW US",
@@ -972,7 +972,7 @@ export const am: Dictionary = {
   // ===== Landing page =====
   "hero.title": "ጤናዎ በእጅዎ ጫፍ ላይ ኃይል ተሰጥቶታል",
   "hero.body":
-    "እንዶድ ሄልዝ ኦኤስ ታካሚዎችንና ሆስፒታሎችን በአንድ የታመነ ሥርዓት ያገናኛል። ስለሚሰማዎት ስሜት ከእንዶድ AI ጋር ይነጋገሩ፣ በቀጥታ የሰው መጠን ሁኔታ ያላቸውን በአቅራቢያዎ ያሉ ሆስፒታሎች ያግኙ፣ በሰከንዶች ውስጥ ቀጠሮ ያስይዙ፣ እና በፍቃድዎ ላይ የተመሠረተ ግልጽ የጤና መዝገብ ይዘው ይድረሱ።",
+    "እንዶድ ሄልዝ ኦኤስ ታካሚዎችንና ሆስፒታሎችን በአንድ የታመነ ሥርዓት ያገናኛል። ስለሚሰማዎት ስሜት ይግለጹ፣ በቀጥታ የሰው መጠን ሁኔታ ያላቸውን በአቅራቢያዎ ያሉ ሆስፒታሎች ያግኙ፣ በሰከንዶች ውስጥ ቀጠሮ ያስይዙ፣ እና በፍቃድዎ ላይ የተመሠረተ ግልጽ የጤና መዝገብ ይዘው ይድረሱ።",
   "hero.cta": "ይጀምሩ",
   "hero.ctaSignedIn": "ወደ ዳሽቦርድዎ ይሂዱ",
   "hero.facilityPrompt": "ክሊኒክ ወይም ሆስፒታል ያስተዳድራሉ? ተቋምዎን በEndod ላይ ያስመዝግቡ።",
@@ -990,15 +990,15 @@ export const am: Dictionary = {
   "bottleneck.cta": "እንዴት እንደሚሠራ ይመልከቱ",
   "bottleneck.imageAlt": "ታካሚዎችና ሆስፒታሎች በአንድ የታመነ ሥርዓት ተገናኝተዋል",
 
-  "buildLab.badge": "ENDOD AI",
-  "buildLab.title": "ምልክቶችዎን በደቂቃዎች ውስጥ ይረዱ",
+  "buildLab.badge": "ዲጂታል የጤና ካርድ",
+  "buildLab.title": "ዲጂታል የጤና ካርድዎ፣ ሁልጊዜ ከእርስዎ ጋር",
   "buildLab.subtitle":
-    "በአማርኛ ወይም በእንግሊዝኛ ይናገሩ ወይም ይጻፉ — እንዶድ AI ያዳምጣል፤ ትክክለኛዎቹን ተከታይ ጥያቄዎችም ይጠይቃል",
+    "መታወቂያዎን፣ የደም ዓይነትዎን፣ አለርጂዎችንና የአደጋ ጊዜ ግንኙነትዎን ይዘው ይሂዱ",
   "buildLab.body":
-    "እንዶድ AI የተረጋጋ ውይይት ይመራል፣ ግልጽ የሚያደርጉ ጥያቄዎችን ይጠይቃል፣ የተካፈሉትንም ሐኪምዎ ከመድረስዎ በፊት ማንበብ የሚችለው ግልጽና የተዋቀረ ማጠቃለያ ያደርገዋል።",
-  "buildLab.cta": "ምርመራ ጀምር",
+    "የጤና ካርድዎ ዋና ዋና መረጃዎችዎን በአንድ ቦታ ያስቀምጣል፣ ለማንኛውም ሆስፒታል ለማጋራት ዝግጁ ነው።",
+  "buildLab.cta": "የጤና ካርድዎን ይመልከቱ",
   "buildLab.findHospital": "ሆስፒታል ፈልግ",
-  "buildLab.imageAlt": "የእንዶድ AI የምልክት ውይይት",
+  "buildLab.imageAlt": "ዲጂታል የጤና ካርድ",
 
   "partners.title": "በጤና አጋሮቻችን የታመነ",
   "partners.subtitle": "የምንሠራባቸው ሆስፒታሎች፣ ክሊኒኮችና የጤና ድርጅቶች",
@@ -1025,7 +1025,7 @@ export const am: Dictionary = {
   "pipette.title": "ዕቅድዎና ታሪክዎ በአንድ ቦታ",
   "pipette.body":
     "ግልጽ የጊዜ ሰሌዳዎች፣ የቀሩ የመድኃኒትና የመርፌ ቁጥሮች፣ እንዲሁም ለእርስዎና ለሆስፒታልዎ የመዘግየት ማሳሰቢያዎች ያሉት ክትትል ሕክምና። አንድ የዕድሜ ልክ የሕክምና ታሪክ በየተቋሙ ይዘውዎ ይጓዛል — የሚካፈለውም በፍቃድዎ ብቻ ነው።",
-  "pipette.cta": "ከእንዶድ AI ጋር ይነጋገሩ",
+  "pipette.cta": "ይጀምሩ",
   "pipette.imageAlt": "የሕክምና ዕቅድን የሚከተል ታካሚ",
 
   "socialLinks.followUs": "ይከተሉን",

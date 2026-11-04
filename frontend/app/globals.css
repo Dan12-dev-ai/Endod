@@ -18,20 +18,20 @@
   --color-ginkgo-accent: #2e6b54;
 
   /* ===== Sign Up page (Stitch design) brand tokens ===== */
-  --color-brand-bg: #dde9e6;
-  --color-brand-primary: #000000;
-  --color-brand-heading: #000000;
-  --color-brand-muted: #536e6b;
-  --color-brand-border: #e2e8f0;
-  --color-brand-inputbg: #f8fafb;
-  --color-app-green: #70C13B;
-  --color-app-green-light: #85CE53;
-  --color-app-action-blue: #0082CA;
-  --color-app-amber: #F39C12;
-  --color-app-charcoal: #2C3E50;
-  --color-app-muted: #95A5A6;
-  --color-app-bg: #F8FAF7;
-  --color-brand-accent: #000000;
+  --color-brand-bg: #F4F7F7;
+  --color-brand-primary: #176B65;
+  --color-brand-heading: #25343D;
+  --color-brand-muted: #46545B;
+  --color-brand-border: #DCE4E6;
+  --color-brand-inputbg: #FFFFFF;
+  --color-app-green: #176B65;
+  --color-app-green-light: #E8F1EF;
+  --color-app-action-blue: #2463A6;
+  --color-app-amber: #B7791F;
+  --color-app-charcoal: #25343D;
+  --color-app-muted: #46545B;
+  --color-app-bg: #F4F7F7;
+  --color-brand-accent: #176B65;
 }
 @media (prefers-color-scheme: dark) {
   :root {

@@ -184,7 +184,7 @@ function VerifyOtp() {
       <div className="max-w-[1360px] w-full grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center my-auto">
         {/* BEGIN: LeftColumn */}
         <section
-          className="lg:col-span-6 xl:col-span-6 flex flex-col justify-between pt-2 pb-6 lg:py-4 lg:pr-8 xl:pr-12"
+          className="hidden md:flex lg:col-span-6 xl:col-span-6 flex-col justify-between pt-2 pb-6 lg:py-4 lg:pr-8 xl:pr-12"
           data-purpose="social-proof-and-branding"
         >
           <div>
@@ -314,7 +314,7 @@ function VerifyOtp() {
 
               <div className="pt-1">
                 <button
-                  className="w-full bg-[#E5ECEB] hover:bg-[#D5E3E0] active:scale-[0.99] text-brand-heading/80 font-medium py-3 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
+                  className="w-full bg-app-green lg:bg-[#E5ECEB] hover:bg-[#135a55] lg:hover:bg-[#D5E3E0] active:scale-[0.99] text-white lg:text-brand-heading/80 font-medium py-3 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                   disabled={isSubmitting}
                   type="submit"
                 >

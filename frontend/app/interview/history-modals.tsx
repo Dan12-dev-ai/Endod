@@ -64,48 +64,48 @@ export function AddVisitModal({ onClose, onSaved, onOpenSettings }: {
     }
   };
 
-  const input = "w-full text-sm rounded-xl border border-slate-200 px-3 py-2";
+  const input = "w-full text-sm rounded-xl border border-[#DCE4E6] px-3 py-2";
   return (
-    <div data-purpose="record-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div aria-labelledby="record-modal-title" aria-modal="true" role="dialog" className="relative bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
-        <button type="button" onClick={onClose} aria-label="Close" className="absolute top-3 right-3 p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition">
+    <div data-purpose="record-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#18242B]/60 backdrop-blur-xs">
+      <div aria-labelledby="record-modal-title" aria-modal="true" role="dialog" className="relative bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-[#DCE4E6] max-h-[95vh] overflow-y-auto">
+        <button type="button" onClick={onClose} aria-label="Close" className="absolute top-3 right-3 p-1.5 rounded-full text-[#46545B] hover:text-[#25343D] hover:bg-[#F4F7F7] transition">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
-        <h3 id="record-modal-title" className="text-lg font-bold text-slate-900 pr-8">{t("records.modal.title")}</h3>
-        <p className="text-xs text-slate-500 mt-0.5">{t("records.modal.subtitle")}</p>
+        <h3 id="record-modal-title" className="text-lg font-bold text-[#18242B] pr-8">{t("records.modal.title")}</h3>
+        <p className="text-xs text-[#25343D] mt-0.5">{t("records.modal.subtitle")}</p>
         <form onSubmit={submit} className="space-y-3 mt-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="record-date" className="block text-xs font-semibold text-slate-700 mb-1">{t("records.modal.date")}</label>
+              <label htmlFor="record-date" className="block text-xs font-semibold text-[#25343D] mb-1">{t("records.modal.date")}</label>
               <input id="record-date" type="date" required max={todayInput()} value={form.date} onChange={set("date")} className={input} />
             </div>
             <div>
-              <label htmlFor="record-follow-up" className="block text-xs font-semibold text-slate-700 mb-1">{t("records.modal.followUpIn")}</label>
+              <label htmlFor="record-follow-up" className="block text-xs font-semibold text-[#25343D] mb-1">{t("records.modal.followUpIn")}</label>
               <input id="record-follow-up" type="number" min={1} max={730} value={form.followUpDays} onChange={set("followUpDays")} className={input} />
             </div>
           </div>
           <div>
-            <label htmlFor="record-facility" className="block text-xs font-semibold text-slate-700 mb-1">{t("records.modal.facility")}</label>
+            <label htmlFor="record-facility" className="block text-xs font-semibold text-[#25343D] mb-1">{t("records.modal.facility")}</label>
             <input id="record-facility" required maxLength={160} value={form.facility} onChange={set("facility")} className={input} />
           </div>
           <div>
-            <label htmlFor="record-department" className="block text-xs font-semibold text-slate-700 mb-1">{t("records.modal.department")}</label>
+            <label htmlFor="record-department" className="block text-xs font-semibold text-[#25343D] mb-1">{t("records.modal.department")}</label>
             <input id="record-department" maxLength={120} value={form.department} onChange={set("department")} className={input} />
           </div>
           <div>
-            <label htmlFor="record-diagnosis" className="block text-xs font-semibold text-slate-700 mb-1">{t("records.modal.diagnosis")}</label>
+            <label htmlFor="record-diagnosis" className="block text-xs font-semibold text-[#25343D] mb-1">{t("records.modal.diagnosis")}</label>
             <input id="record-diagnosis" maxLength={300} value={form.diagnosis} onChange={set("diagnosis")} className={input} />
           </div>
           <div>
-            <label htmlFor="record-medications" className="block text-xs font-semibold text-slate-700 mb-1">{t("records.modal.medications")}</label>
+            <label htmlFor="record-medications" className="block text-xs font-semibold text-[#25343D] mb-1">{t("records.modal.medications")}</label>
             <input id="record-medications" value={form.medications} onChange={set("medications")} placeholder={t("records.modal.medicationsPlaceholder")} className={input} />
           </div>
           <div>
-            <label htmlFor="record-note" className="block text-xs font-semibold text-slate-700 mb-1">{t("records.modal.note")}</label>
+            <label htmlFor="record-note" className="block text-xs font-semibold text-[#25343D] mb-1">{t("records.modal.note")}</label>
             <textarea id="record-note" rows={2} maxLength={500} value={form.followUpNote} onChange={set("followUpNote")} className={input} />
           </div>
           {error && (
-            <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" data-purpose="record-error" role="alert">
+            <div className="text-xs text-[#B42318] bg-[#B42318]/10 border border-[#B42318]/20 rounded-lg px-3 py-2" data-purpose="record-error" role="alert">
               {error}
               {needsConsent && (
                 <button type="button" onClick={onOpenSettings} className="ml-1 font-semibold underline">{t("records.modal.openSettings")}</button>
@@ -113,8 +113,8 @@ export function AddVisitModal({ onClose, onSaved, onOpenSettings }: {
             </div>
           )}
           <div className="pt-2 flex items-center justify-end gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">{t("common.cancel")}</button>
-            <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-[#DCE4E6] text-xs font-semibold text-[#25343D] hover:bg-[#F4F7F7]">{t("common.cancel")}</button>
+            <button type="submit" disabled={saving} className="px-5 py-2 rounded-xl bg-[#25343D] hover:bg-[#25343D] disabled:opacity-60 text-white text-xs font-semibold">
               {saving ? t("common.saving") : t("records.modal.save")}
             </button>
           </div>
@@ -189,29 +189,29 @@ export function ShareModal({ items, onClose, onShared }: {
   };
 
   return (
-    <div data-purpose="share-modal" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div aria-labelledby="share-modal-title" aria-modal="true" role="dialog" className="bg-white rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
-        <h3 id="share-modal-title" className="text-lg font-bold text-slate-900">{t("share.title")}</h3>
-        <p className="text-xs text-slate-500 mt-0.5">{t("share.subtitle")}</p>
+    <div data-purpose="share-modal" className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#18242B]/60 backdrop-blur-xs">
+      <div aria-labelledby="share-modal-title" aria-modal="true" role="dialog" className="bg-white rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-[#DCE4E6] max-h-[95vh] overflow-y-auto">
+        <h3 id="share-modal-title" className="text-lg font-bold text-[#18242B]">{t("share.title")}</h3>
+        <p className="text-xs text-[#25343D] mt-0.5">{t("share.subtitle")}</p>
         <form onSubmit={submit} className="space-y-4 mt-4">
           <fieldset>
             <div className="flex items-center justify-between gap-2 mb-1.5">
-              <legend className="text-xs font-semibold text-slate-700">{t("share.chooseRecords")}</legend>
-              <span className="text-[11px] text-slate-500" data-purpose="share-selected">{t("share.selected", { count: chosen.size })}</span>
+              <legend className="text-xs font-semibold text-[#25343D]">{t("share.chooseRecords")}</legend>
+              <span className="text-[11px] text-[#25343D]" data-purpose="share-selected">{t("share.selected", { count: chosen.size })}</span>
             </div>
             <div className="flex gap-2 mb-2">
-              <input aria-label={t("history.search")} type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t("history.search")} className="flex-1 min-w-0 text-sm rounded-xl border border-slate-200 px-3 py-1.5" />
-              <button type="button" onClick={() => setChosen(new Set(visible.map((i) => i.id)))} className="px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 hover:bg-slate-50">{t("share.selectAll")}</button>
-              <button type="button" onClick={() => setChosen(new Set())} className="px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 hover:bg-slate-50">{t("share.clear")}</button>
+              <input aria-label={t("history.search")} type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t("history.search")} className="flex-1 min-w-0 text-sm rounded-xl border border-[#DCE4E6] px-3 py-1.5" />
+              <button type="button" onClick={() => setChosen(new Set(visible.map((i) => i.id)))} className="px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-[#DCE4E6] hover:bg-[#F4F7F7]">{t("share.selectAll")}</button>
+              <button type="button" onClick={() => setChosen(new Set())} className="px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-[#DCE4E6] hover:bg-[#F4F7F7]">{t("share.clear")}</button>
             </div>
-            <ul className="max-h-60 overflow-y-auto rounded-xl border border-slate-200 divide-y divide-slate-100">
+            <ul className="max-h-60 overflow-y-auto rounded-xl border border-[#DCE4E6] divide-y divide-[##F4F7F7]">
               {visible.map((item) => (
                 <li key={item.id}>
-                  <label className="flex items-start gap-3 px-3 py-2 cursor-pointer hover:bg-slate-50" data-purpose="share-record">
+                  <label className="flex items-start gap-3 px-3 py-2 cursor-pointer hover:bg-[#F4F7F7]" data-purpose="share-record">
                     <input checked={chosen.has(item.id)} className="mt-1" onChange={() => toggle(item.id)} type="checkbox" />
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium text-slate-800 break-words">{item.title}</span>
-                      <span className="block text-[11px] text-slate-500">
+                      <span className="block text-sm font-medium text-[#18242B] break-words">{item.title}</span>
+                      <span className="block text-[11px] text-[#25343D]">
                         {[t(CATEGORY_LABEL[item.category]), new Date(item.occurred_at).toLocaleDateString(locale, { dateStyle: "medium" }),
                           item.kind === "self" ? t("records.selfReported") : item.hospital_name].filter(Boolean).join(" · ")}
                       </span>
@@ -223,8 +223,8 @@ export function ShareModal({ items, onClose, onShared }: {
           </fieldset>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="share-hospital" className="block text-xs font-semibold text-slate-700 mb-1">{t("share.hospital")}</label>
-              <select id="share-hospital" value={hospitalId} onChange={(e) => setHospitalId(e.target.value)} disabled={!hospitals} className="w-full text-sm rounded-xl border border-slate-200 px-3 py-2 bg-white">
+              <label htmlFor="share-hospital" className="block text-xs font-semibold text-[#25343D] mb-1">{t("share.hospital")}</label>
+              <select id="share-hospital" value={hospitalId} onChange={(e) => setHospitalId(e.target.value)} disabled={!hospitals} className="w-full text-sm rounded-xl border border-[#DCE4E6] px-3 py-2 bg-white">
                 <option value="">{t("share.chooseHospital")}</option>
                 {(hospitals ?? []).map((h) => (
                   <option key={h.hospital_id} value={h.hospital_id}>
@@ -234,15 +234,15 @@ export function ShareModal({ items, onClose, onShared }: {
               </select>
             </div>
             <div>
-              <label htmlFor="share-until" className="block text-xs font-semibold text-slate-700 mb-1">{t("share.until")}</label>
-              <input id="share-until" type="date" min={todayInput(1)} max={todayInput(365)} value={until} onChange={(e) => setUntil(e.target.value)} className="w-full text-sm rounded-xl border border-slate-200 px-3 py-2" />
-              <p className="text-[11px] text-slate-400 mt-1">{t("share.untilHint")}</p>
+              <label htmlFor="share-until" className="block text-xs font-semibold text-[#25343D] mb-1">{t("share.until")}</label>
+              <input id="share-until" type="date" min={todayInput(1)} max={todayInput(365)} value={until} onChange={(e) => setUntil(e.target.value)} className="w-full text-sm rounded-xl border border-[#DCE4E6] px-3 py-2" />
+              <p className="text-[11px] text-[#46545B] mt-1">{t("share.untilHint")}</p>
             </div>
           </div>
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" data-purpose="share-error" role="alert">{error}</p>}
+          {error && <p className="text-xs text-[#B42318] bg-[#B42318]/10 border border-[#B42318]/20 rounded-lg px-3 py-2" data-purpose="share-error" role="alert">{error}</p>}
           <div className="flex items-center justify-end gap-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50">{t("common.cancel")}</button>
-            <button type="submit" disabled={saving} data-purpose="share-submit" className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-xs font-semibold">
+            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-[#DCE4E6] text-xs font-semibold text-[#25343D] hover:bg-[#F4F7F7]">{t("common.cancel")}</button>
+            <button type="submit" disabled={saving} data-purpose="share-submit" className="px-5 py-2 rounded-xl bg-[#25343D] hover:bg-[#25343D] disabled:opacity-60 text-white text-xs font-semibold">
               {saving ? t("share.sharing") : t("share.submit")}
             </button>
           </div>
@@ -275,33 +275,33 @@ export function SharesList({ shares, onChanged, onToast }: {
   };
 
   return (
-    <section aria-labelledby="shares-title" className="bg-white rounded-2xl border border-slate-200 card-shadow p-4 sm:p-5" data-purpose="shares">
-      <h2 id="shares-title" className="text-sm font-bold text-slate-900">{t("share.listTitle")}</h2>
+    <section aria-labelledby="shares-title" className="bg-white rounded-2xl border border-[#DCE4E6] card-shadow p-4 sm:p-5" data-purpose="shares">
+      <h2 id="shares-title" className="text-sm font-bold text-[#18242B]">{t("share.listTitle")}</h2>
       {shares === null ? (
         <Skeleton className="mt-3" label={t("common.loading")}>
           <RowBones />
         </Skeleton>
       ) : !shares.length ? (
-        <p className="text-xs text-slate-500 mt-2" data-purpose="shares-empty">{t("share.listEmpty")}</p>
+        <p className="text-xs text-[#25343D] mt-2" data-purpose="shares-empty">{t("share.listEmpty")}</p>
       ) : (
-        <ul className="mt-3 divide-y divide-slate-100">
+        <ul className="mt-3 divide-y divide-[##F4F7F7]">
           {shares.map((share) => (
             <li className="py-3 flex flex-col sm:flex-row sm:items-center gap-2 justify-between" data-purpose="share" data-status={share.status} key={share.share_id}>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">{share.hospital_name}</p>
-                <p className="text-xs text-slate-500">
+                <p className="text-sm font-semibold text-[#18242B]">{share.hospital_name}</p>
+                <p className="text-xs text-[#25343D]">
                   {[t(share.record_count === 1 ? "share.recordsOne" : "share.recordsOther", { count: share.record_count }),
                     share.expires_at ? t("share.untilDate", { date: new Date(share.expires_at).toLocaleDateString(locale, { dateStyle: "medium" }) }) : t("share.noEnd"),
                   ].join(" · ")}
                 </p>
-                <p className="text-[11px] text-slate-400 truncate">{share.records.map((r) => r.title).filter(Boolean).join(", ")}</p>
+                <p className="text-[11px] text-[#46545B] truncate">{share.records.map((r) => r.title).filter(Boolean).join(", ")}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span data-purpose="share-status" className={`text-[10px] font-semibold uppercase rounded px-1.5 py-0.5 border ${share.status === "active" ? "text-emerald-700 bg-emerald-50 border-emerald-200" : "text-slate-500 bg-slate-50 border-slate-200"}`}>
+                <span data-purpose="share-status" className={`text-[10px] font-semibold uppercase rounded px-1.5 py-0.5 border ${share.status === "active" ? "text-[#25343D] bg-[#F4F7F7] border-[#DCE4E6]" : "text-[#25343D] bg-[#F4F7F7] border-[#DCE4E6]"}`}>
                   {t(`share.status.${share.status}`)}
                 </span>
                 {share.status === "active" && (
-                  <button className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50" data-purpose="share-revoke" disabled={busy === share.share_id} onClick={() => void revoke(share)} type="button">
+                  <button className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-[#B42318]/20 text-[#B42318] hover:bg-[#B42318]/10 disabled:opacity-50" data-purpose="share-revoke" disabled={busy === share.share_id} onClick={() => void revoke(share)} type="button">
                     {t("share.revoke")}
                   </button>
                 )}
