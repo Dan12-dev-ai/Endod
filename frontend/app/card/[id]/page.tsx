@@ -38,7 +38,7 @@ export default function CardCheckPage() {
 
   return (
     <main className="w-full min-h-screen flex items-center justify-center py-8 px-4 bg-[#DDE9E6] text-brand-primary font-sans antialiased">
-      <div className="w-full max-w-[440px] bg-white rounded-[28px] shadow-xl shadow-teal-950/5 border border-slate-100 p-8">
+      <div className="w-full max-w-[440px] bg-white rounded-[28px] shadow-xl shadow-[#18242B]/5 border border-[#F4F7F7] p-8">
         <p className="text-2xl font-extrabold tracking-tight text-brand-heading mb-1">{t("common.endod")}</p>
         <h1 className="text-sm font-medium text-brand-muted mb-6">{t("cardVerify.title")}</h1>
 
@@ -49,12 +49,12 @@ export default function CardCheckPage() {
         {result.state === "valid" && (
           <div data-purpose="card-valid">
             <div className="flex items-center gap-3 mb-5">
-              <span className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+              <span className="w-10 h-10 rounded-full bg-[#F4F7F7] text-[#25343D] flex items-center justify-center">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                   <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </span>
-              <p className="text-lg font-bold text-emerald-800">{t("cardVerify.valid")}</p>
+              <p className="text-lg font-bold text-[#18242B]">{t("cardVerify.valid")}</p>
             </div>
             <dl className="space-y-3 text-sm">
               {[
@@ -64,7 +64,7 @@ export default function CardCheckPage() {
                   ? new Date(result.holder.issued_at).toLocaleDateString("en-ET", { year: "numeric", month: "short", day: "numeric" })
                   : "—"],
               ].map(([label, value]) => (
-                <div className="flex justify-between gap-4 border-b border-slate-100 pb-2" key={label}>
+                <div className="flex justify-between gap-4 border-b border-[#F4F7F7] pb-2" key={label}>
                   <dt className="text-brand-muted">{label}</dt>
                   <dd className="font-semibold text-brand-heading text-right">{value}</dd>
                 </div>
@@ -76,13 +76,13 @@ export default function CardCheckPage() {
 
         {result.state === "invalid" && (
           <div data-purpose="card-invalid" role="alert">
-            <p className="text-lg font-bold text-red-700 mb-2">{t("cardVerify.invalid")}</p>
+            <p className="text-lg font-bold text-[#B42318] mb-2">{t("cardVerify.invalid")}</p>
             <p className="text-sm text-brand-muted leading-relaxed">{t("cardVerify.invalidHint")}</p>
           </div>
         )}
 
         {result.state === "error" && (
-          <p className="text-sm text-red-600" role="alert">{t("cardVerify.error")}</p>
+          <p className="text-sm text-[#B42318]" role="alert">{t("cardVerify.error")}</p>
         )}
       </div>
     </main>

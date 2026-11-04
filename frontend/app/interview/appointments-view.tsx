@@ -315,16 +315,16 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
       <div
         key={a.appointment_id}
         data-purpose={id}
-        className={`bg-white rounded-2xl border p-4 card-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${cancelled ? "opacity-60" : ""} ${highlighted ? "border-black ring-2 ring-gray-300" : "border-slate-200"}`}
+        className={`bg-white rounded-2xl border p-4 card-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${cancelled ? "opacity-60" : ""} ${highlighted ? "border-[#18242B] ring-2 ring-[#DCE4E6]" : "border-[#DCE4E6]"}`}
       >
         <div className="flex items-center space-x-4 min-w-0">
-          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold text-sm flex-shrink-0 ${telehealth ? "bg-gray-50 border-gray-200 text-black" : "bg-gray-50 border-gray-200 text-black"}`}>
+          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold text-sm flex-shrink-0 ${telehealth ? "bg-[#F4F7F7] border-[#DCE4E6] text-[#18242B]" : "bg-[#F4F7F7] border-[#DCE4E6] text-[#18242B]"}`}>
             {initials(appointmentTitle(a, t))}
           </div>
           <div className="min-w-0">
-            <h4 className="text-sm font-bold text-slate-900">{appointmentTitle(a, t)}</h4>
-            <p className="text-xs text-slate-500 mt-0.5">{appointmentPlace(a, t)}</p>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-xs text-slate-500">
+            <h4 className="text-sm font-bold text-[#18242B]">{appointmentTitle(a, t)}</h4>
+            <p className="text-xs text-[#25343D] mt-0.5">{appointmentPlace(a, t)}</p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1 text-xs text-[#25343D]">
               <span>{formatWhen(a.scheduled_at, locale)}</span>
               <span>{telehealth ? t("appointments.virtual") : t("appointments.inPersonTag")}</span>
               {a.department && <span>{departmentLabel(a.department, t)}</span>}
@@ -336,15 +336,15 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
               <div className="flex flex-wrap items-center gap-2 mt-1.5" data-purpose="hospital-booking">
                 <span
                   className={`text-[11px] font-semibold rounded px-1.5 py-0.5 ${
-                    hb.state === "confirmed" || hb.state === "completed" ? "bg-gray-50 text-gray-900"
+                    hb.state === "confirmed" || hb.state === "completed" ? "bg-[#F4F7F7] text-[#18242B]"
                       : closed ? "bg-rose-50 text-rose-700"
-                      : unpaid ? "bg-amber-50 text-amber-800" : "bg-sky-50 text-sky-700"
+                      : unpaid ? "bg-[#B7791F]/10 text-[#B7791F]" : "bg-[#F4F7F7] text-[#25343D]"
                   }`}
                   data-purpose="hospital-state"
                 >
                   {t(`appointments.hospital.${hb.state}` as TranslationKey)}
                 </span>
-                <span className="text-[11px] text-slate-500" data-purpose="payment-status" data-status={payment ?? undefined}>
+                <span className="text-[11px] text-[#25343D]" data-purpose="payment-status" data-status={payment ?? undefined}>
                   {payment === "awaiting_payment"
                     ? t("appointments.payment.awaiting", {
                         amount,
@@ -362,13 +362,13 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
                     : t("appointments.paid", { amount })}
                 </span>
                 {hb.reason && closed && hb.state !== "payment_expired" && (
-                  <span className="text-[11px] text-slate-500">· {hb.reason}</span>
+                  <span className="text-[11px] text-[#25343D]">· {hb.reason}</span>
                 )}
               </div>
             )}
             {payNow && tabOf(a, now) === "upcoming" && (
               <a
-                className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-black hover:bg-gray-800 text-white text-xs font-semibold"
+                className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-black hover:bg-[#18242B] text-white text-xs font-semibold"
                 data-purpose="pay-now"
                 href={payNow}
               >
@@ -377,7 +377,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
             )}
             {videoVisits && hb?.video_ready && tabOf(a, now) === "upcoming" && (
               <a
-                className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-black hover:bg-gray-800 text-white text-xs font-semibold"
+                className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 rounded-lg bg-black hover:bg-[#18242B] text-white text-xs font-semibold"
                 data-purpose="join-video"
                 href={`/visit/${a.appointment_id}`}
               >
@@ -386,7 +386,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
             )}
             {/* The patient's own saved meeting link (not Endod video): always reachable. */}
             {!hb && telehealth && a.meeting_url && tabOf(a, now) === "upcoming" && (
-              <a href={a.meeting_url} target="_blank" rel="noopener noreferrer" className="inline-block mt-1 text-xs font-semibold text-black hover:underline">
+              <a href={a.meeting_url} target="_blank" rel="noopener noreferrer" className="inline-block mt-1 text-xs font-semibold text-[#18242B] hover:underline">
                 {t("appointments.joinVideo")}
               </a>
             )}
@@ -395,14 +395,14 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
         {tabOf(a, now) === "upcoming" ? (
           confirmCancelId === a.appointment_id ? (
             <div className="flex items-center gap-2 flex-shrink-0" data-purpose="cancel-confirm">
-              <span className="text-xs text-slate-600">
+              <span className="text-xs text-[#25343D]">
                 {unpaid ? t("appointments.cancelUnpaid")
                   : hb && !atHospital ? t("appointments.cancelRefund", { amount }) : t("appointments.cancelThis")}
               </span>
               <button type="button" disabled={busyId === a.appointment_id} onClick={() => cancelAppointment(a)} className="px-3 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition">
                 {t("appointments.yesCancel")}
               </button>
-              <button type="button" onClick={() => setConfirmCancelId(null)} className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition">
+              <button type="button" onClick={() => setConfirmCancelId(null)} className="px-3 py-1.5 text-xs font-semibold text-[#25343D] bg-white border border-[#DCE4E6] hover:bg-[#F4F7F7] rounded-lg transition">
                 {t("appointments.keep")}
               </button>
             </div>
@@ -410,7 +410,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
             <div className="flex items-center gap-2 flex-shrink-0">
               {/* A paid hospital visit is changed by cancelling (refunded) and booking again. */}
               {!hb && (
-                <button type="button" onClick={() => openReschedule(a)} className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg transition">
+                <button type="button" onClick={() => openReschedule(a)} className="px-3.5 py-1.5 text-xs font-semibold text-[#25343D] bg-white border border-[#DCE4E6] hover:bg-[#F4F7F7] rounded-lg transition">
                   {t("appointments.reschedule")}
                 </button>
               )}
@@ -422,8 +422,8 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
         ) : (
           <span className={`px-3 py-1 text-xs font-semibold rounded-lg flex-shrink-0 border ${
             cancelled ? "text-rose-700 bg-rose-50 border-rose-200"
-              : a.status === "COMPLETED" ? "text-gray-900 bg-gray-50 border-gray-200"
-              : "text-slate-600 bg-slate-50 border-slate-200"
+              : a.status === "COMPLETED" ? "text-[#18242B] bg-[#F4F7F7] border-[#DCE4E6]"
+              : "text-[#25343D] bg-[#F4F7F7] border-[#DCE4E6]"
           }`}>
             {cancelled ? t("appointments.status.cancelled")
               : a.status === "COMPLETED" ? t("appointments.status.completed")
@@ -440,16 +440,16 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
       <div data-purpose="appointment-view" className="flex-1 min-h-0 overflow-y-auto">
         <div className="space-y-6 pb-6">
           {/* Title */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-200">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-[#DCE4E6]">
             <div>
               <div className="flex items-center space-x-3">
-                <h1 className={hideTitle ? "sr-only" : "text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"}>{t("appointments.title")}</h1>
-                <span data-purpose="upcoming-count" className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-black border border-gray-200">
+                <h1 className={hideTitle ? "sr-only" : "text-2xl sm:text-3xl font-extrabold text-[#18242B] tracking-tight"}>{t("appointments.title")}</h1>
+                <span data-purpose="upcoming-count" className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#F4F7F7] text-[#18242B] border border-[#DCE4E6]">
                   {t("appointments.scheduledCount", { count: counts.upcoming })}
                 </span>
               </div>
             </div>
-            <button type="button" data-purpose="appointment-book" onClick={onBook} className="hidden lg:inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-black hover:bg-gray-800 text-white text-xs font-semibold shadow-sm transition self-start md:self-auto">
+            <button type="button" data-purpose="appointment-book" onClick={onBook} className="hidden lg:inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-black hover:bg-[#18242B] text-white text-xs font-semibold shadow-sm transition self-start md:self-auto">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
                 <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -461,29 +461,29 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
 
           {/* Stat cards */}
           <div className={`grid grid-cols-1 gap-4 ${videoVisits ? "sm:grid-cols-2" : ""}`}>
-            <div data-purpose="next-appointment" className="bg-white p-4 rounded-2xl border border-slate-200/90 card-shadow flex items-center space-x-3.5">
-              <div className="w-12 h-12 rounded-xl bg-gray-50 text-black flex items-center justify-center flex-shrink-0">
+            <div data-purpose="next-appointment" className="bg-white p-4 rounded-2xl border border-[#DCE4E6]/90 card-shadow flex items-center space-x-3.5">
+              <div className="w-12 h-12 rounded-xl bg-[#F4F7F7] text-[#18242B] flex items-center justify-center flex-shrink-0">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
               <div>
-                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("appointments.nextAppointment")}</p>
-                <h4 className="text-base font-bold text-slate-900 mt-0.5">{nextVisit ? formatWhen(nextVisit.scheduled_at, locale) : t("appointments.noneScheduled")}</h4>
-                {nextVisit && <span className="text-[11px] text-black font-medium">{appointmentTitle(nextVisit, t)}</span>}
+                <p className="text-[11px] font-medium text-[#46545B] uppercase tracking-wider">{t("appointments.nextAppointment")}</p>
+                <h4 className="text-base font-bold text-[#18242B] mt-0.5">{nextVisit ? formatWhen(nextVisit.scheduled_at, locale) : t("appointments.noneScheduled")}</h4>
+                {nextVisit && <span className="text-[11px] text-[#18242B] font-medium">{appointmentTitle(nextVisit, t)}</span>}
               </div>
             </div>
             {videoVisits && (
-            <div data-purpose="next-video-visit" className="bg-white p-4 rounded-2xl border border-slate-200/90 card-shadow flex items-center space-x-3.5">
-              <div className="w-12 h-12 rounded-xl bg-gray-50 text-black flex items-center justify-center flex-shrink-0">
+            <div data-purpose="next-video-visit" className="bg-white p-4 rounded-2xl border border-[#DCE4E6]/90 card-shadow flex items-center space-x-3.5">
+              <div className="w-12 h-12 rounded-xl bg-[#F4F7F7] text-[#18242B] flex items-center justify-center flex-shrink-0">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </div>
               <div>
-                <p className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">{t("appointments.nextVideoVisit")}</p>
-                <h4 className="text-base font-bold text-slate-900 mt-0.5">{nextVideo ? formatWhen(nextVideo.scheduled_at, locale) : t("appointments.noneScheduled")}</h4>
-                {nextVideo && <span className="text-[11px] text-black font-medium">{appointmentTitle(nextVideo, t)}</span>}
+                <p className="text-[11px] font-medium text-[#46545B] uppercase tracking-wider">{t("appointments.nextVideoVisit")}</p>
+                <h4 className="text-base font-bold text-[#18242B] mt-0.5">{nextVideo ? formatWhen(nextVideo.scheduled_at, locale) : t("appointments.noneScheduled")}</h4>
+                {nextVideo && <span className="text-[11px] text-[#18242B] font-medium">{appointmentTitle(nextVideo, t)}</span>}
               </div>
             </div>
             )}
@@ -492,8 +492,8 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <div className="xl:col-span-2 space-y-5">
               {/* Tabs & Filters */}
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-200/90 card-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center space-x-1 p-1 bg-slate-100 rounded-xl overflow-x-auto">
+              <div className="bg-white p-3.5 rounded-2xl border border-[#DCE4E6]/90 card-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center space-x-1 p-1 bg-[#F4F7F7] rounded-xl overflow-x-auto">
                   {([
                     { id: "upcoming" as const, label: t("appointments.tabUpcoming", { count: counts.upcoming }) },
                     { id: "past" as const, label: t("appointments.tabPast", { count: counts.past }) },
@@ -504,7 +504,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
                       type="button"
                       data-purpose={`appointment-tab-${t2.id}`}
                       onClick={() => setTab(t2.id)}
-                      className={`px-3.5 py-1.5 rounded-lg text-xs whitespace-nowrap transition ${tab === t2.id ? "font-semibold bg-white text-slate-800 shadow-xs" : "font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"}`}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs whitespace-nowrap transition ${tab === t2.id ? "font-semibold bg-white text-[#18242B] shadow-xs" : "font-medium text-[#25343D] hover:text-[#18242B] hover:bg-[#DCE4E6]/60"}`}
                     >
                       {t2.label}
                     </button>
@@ -541,7 +541,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
               </div>
 
               {loadError && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" role="alert">{loadError}</p>
+                <p className="text-xs text-[#B42318] bg-[#B42318]/10 border border-[#B42318]/20 rounded-lg px-3 py-2" role="alert">{loadError}</p>
               )}
               <div data-purpose={`appointment-${tab}-list`} className="space-y-3">
                 {!appointments && !loadError && (
@@ -552,7 +552,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
                   </Skeleton>
                 )}
                 {appointments && visible.length === 0 && (
-                  <p data-purpose="appointment-empty" className="text-xs text-slate-500 bg-white border border-slate-200 rounded-2xl p-4">
+                  <p data-purpose="appointment-empty" className="text-xs text-[#25343D] bg-white border border-[#DCE4E6] rounded-2xl p-4">
                     {tab === "upcoming" ? t("appointments.emptyUpcoming")
                       : tab === "past" ? t("appointments.emptyPast") : t("appointments.emptyCancelled")}
                   </p>
@@ -563,19 +563,19 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
 
             {/* Calendar */}
             <div className="space-y-5">
-              <div data-purpose="appointment-calendar" className="bg-white rounded-2xl border border-slate-200/90 p-5 card-shadow">
+              <div data-purpose="appointment-calendar" className="bg-white rounded-2xl border border-[#DCE4E6]/90 p-5 card-shadow">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-slate-900">{monthLabel}</h3>
+                  <h3 className="text-sm font-bold text-[#18242B]">{monthLabel}</h3>
                   <div className="flex items-center space-x-1">
-                    <button type="button" aria-label={t("appointments.previousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
+                    <button type="button" aria-label={t("appointments.previousMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="p-1 rounded-lg text-[#46545B] hover:text-[#25343D] hover:bg-[#F4F7F7] transition">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </button>
-                    <button type="button" aria-label={t("appointments.nextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
+                    <button type="button" aria-label={t("appointments.nextMonth")} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="p-1 rounded-lg text-[#46545B] hover:text-[#25343D] hover:bg-[#F4F7F7] transition">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </button>
                   </div>
                 </div>
-                <div className="grid grid-cols-7 text-center text-[11px] font-semibold text-slate-400 mb-2">
+                <div className="grid grid-cols-7 text-center text-[11px] font-semibold text-[#46545B] mb-2">
                   {weekdays.map((d) => <div key={d}>{d}</div>)}
                 </div>
                 <div className="grid grid-cols-7 gap-1 text-center text-xs">
@@ -583,18 +583,18 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
                   {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
                     const key = dateKey(new Date(month.getFullYear(), month.getMonth(), day));
                     const mode = busyDays.get(key);
-                    let cls = "p-2 text-slate-700 rounded-lg";
-                    if (key === todayKey) cls = "p-2 rounded-lg ring-2 ring-gray-400 font-bold text-slate-900";
+                    let cls = "p-2 text-[#25343D] rounded-lg";
+                    if (key === todayKey) cls = "p-2 rounded-lg ring-2 ring-[#46545B] font-bold text-[#18242B]";
                     // With video visits off, every visit is shown as one kind.
                     if (mode) cls = mode === "telehealth" && videoVisits
-                      ? "p-2 rounded-lg bg-gray-200 text-black font-bold" : "p-2 rounded-lg bg-black text-white font-bold";
+                      ? "p-2 rounded-lg bg-[#DCE4E6] text-[#18242B] font-bold" : "p-2 rounded-lg bg-black text-white font-bold";
                     return <span key={key} data-purpose={mode ? "calendar-busy-day" : undefined} className={cls}>{day}</span>;
                   })}
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center gap-4 text-[11px] text-slate-500">
+                <div className="mt-4 pt-3 border-t border-[#F4F7F7] flex items-center gap-4 text-[11px] text-[#25343D]">
                   <div className="flex items-center space-x-1.5"><span className="w-2.5 h-2.5 rounded-full bg-black"></span><span>{t("appointments.legendInPerson")}</span></div>
                   {videoVisits && (
-                    <div data-purpose="legend-telehealth" className="flex items-center space-x-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-200 border border-gray-400"></span><span>{t("appointments.legendTelehealth")}</span></div>
+                    <div data-purpose="legend-telehealth" className="flex items-center space-x-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#DCE4E6] border border-[#46545B]"></span><span>{t("appointments.legendTelehealth")}</span></div>
                   )}
                 </div>
               </div>
@@ -605,16 +605,16 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
 
       {/* ===== Reschedule Modal ===== */}
       {modal && (
-        <div data-purpose="appointment-modal" className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div data-purpose="appointment-modal" className="fixed inset-0 z-50 bg-[#18242B]/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#DCE4E6] max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-[#F4F7F7]">
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 className="text-base font-bold text-[#18242B]">
                   {t("appointments.modal.rescheduleTitle", { name: appointmentTitle(modal.appointment, t) })}
                 </h3>
-                <p className="text-xs text-slate-500">{t("appointments.modal.chooseNew")}</p>
+                <p className="text-xs text-[#25343D]">{t("appointments.modal.chooseNew")}</p>
               </div>
-              <button type="button" aria-label={t("common.close")} onClick={closeModal} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition">
+              <button type="button" aria-label={t("common.close")} onClick={closeModal} className="p-1.5 text-[#46545B] hover:text-[#25343D] rounded-lg hover:bg-[#F4F7F7] transition">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -622,10 +622,10 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
             </div>
 
             {success ? (
-              <div data-purpose="appointment-modal-success" className="mt-4 p-4 rounded-2xl bg-gray-50 border border-gray-200 text-center">
-                <h4 className="text-sm font-bold text-black">{t("appointments.modal.moved")}</h4>
-                <p className="text-xs text-gray-900 mt-1">{success}</p>
-                <button type="button" onClick={closeModal} className="mt-3 px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-gray-800 rounded-lg">
+              <div data-purpose="appointment-modal-success" className="mt-4 p-4 rounded-2xl bg-[#F4F7F7] border border-[#DCE4E6] text-center">
+                <h4 className="text-sm font-bold text-[#18242B]">{t("appointments.modal.moved")}</h4>
+                <p className="text-xs text-[#18242B] mt-1">{success}</p>
+                <button type="button" onClick={closeModal} className="mt-3 px-4 py-1.5 text-xs font-semibold text-white bg-black hover:bg-[#18242B] rounded-lg">
                   {t("common.done")}
                 </button>
               </div>
@@ -633,18 +633,18 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
               <form onSubmit={submit} className="mt-4 space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label htmlFor="appointment-date" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.date")}</label>
-                    <input id="appointment-date" type="date" required min={localDateInput(new Date())} value={formDate} onChange={(e) => setFormDate(e.target.value)} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium" />
+                    <label htmlFor="appointment-date" className="block text-xs font-bold text-[#25343D] uppercase tracking-wider mb-1.5">{t("appointments.modal.date")}</label>
+                    <input id="appointment-date" type="date" required min={localDateInput(new Date())} value={formDate} onChange={(e) => setFormDate(e.target.value)} className="w-full text-xs bg-[#F4F7F7] border border-[#DCE4E6] rounded-xl px-3 py-2 text-[#18242B] font-medium" />
                   </div>
                   <div>
-                    <label htmlFor="appointment-time" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.time")}</label>
-                    <input id="appointment-time" type="time" required value={formTime} onChange={(e) => setFormTime(e.target.value)} className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 font-medium" />
+                    <label htmlFor="appointment-time" className="block text-xs font-bold text-[#25343D] uppercase tracking-wider mb-1.5">{t("appointments.modal.time")}</label>
+                    <input id="appointment-time" type="time" required value={formTime} onChange={(e) => setFormTime(e.target.value)} className="w-full text-xs bg-[#F4F7F7] border border-[#DCE4E6] rounded-xl px-3 py-2 text-[#18242B] font-medium" />
                   </div>
                 </div>
 
                 {modal.appointment.visit_mode === "in_person" && (
                   <div>
-                    <label htmlFor="appointment-window" className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">{t("appointments.modal.arrivalWindow")}</label>
+                    <label htmlFor="appointment-window" className="block text-xs font-bold text-[#25343D] uppercase tracking-wider mb-1.5">{t("appointments.modal.arrivalWindow")}</label>
                     <Select value={formWindow} onValueChange={(v) => setFormWindow(v as Appointment["time_window"])}>
                       <SelectTrigger className="w-full text-xs" id="appointment-window">
                         <SelectValue />
@@ -661,14 +661,14 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
                 )}
 
                 {formError && (
-                  <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" data-purpose="appointment-error" role="alert">{formError}</p>
+                  <p className="text-xs text-[#B42318] bg-[#B42318]/10 border border-[#B42318]/20 rounded-lg px-3 py-2" data-purpose="appointment-error" role="alert">{formError}</p>
                 )}
 
                 <div className="pt-2 flex items-center justify-end space-x-3">
-                  <button type="button" onClick={closeModal} className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition">
+                  <button type="button" onClick={closeModal} className="px-4 py-2 text-xs font-semibold text-[#25343D] hover:bg-[#F4F7F7] rounded-xl transition">
                     {t("common.cancel")}
                   </button>
-                  <button type="submit" disabled={isSubmitting} className="px-5 py-2 text-xs font-bold text-white bg-black hover:bg-gray-800 disabled:opacity-60 rounded-xl shadow-sm transition">
+                  <button type="submit" disabled={isSubmitting} className="px-5 py-2 text-xs font-bold text-white bg-black hover:bg-[#18242B] disabled:opacity-60 rounded-xl shadow-sm transition">
                     {isSubmitting ? t("common.saving") : t("appointments.modal.confirmReschedule")}
                   </button>
                 </div>
@@ -683,7 +683,7 @@ export default function AppointmentsView({ highlightTarget, onToast, onBook, hid
           aria-label={t("appointments.scheduleVisit")}
           data-purpose="appointment-fab"
           onClick={onBook}
-          className="fixed bottom-20 right-4 z-50 lg:hidden flex items-center justify-center w-12 h-12 rounded-full bg-black hover:bg-gray-800 text-white shadow-lg transition"
+          className="fixed bottom-20 right-4 z-50 lg:hidden flex items-center justify-center w-12 h-12 rounded-full bg-black hover:bg-[#18242B] text-white shadow-lg transition"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
             <path d="M12 4v16m8-8H4" strokeLinecap="round" strokeLinejoin="round" />

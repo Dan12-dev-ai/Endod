@@ -46,9 +46,9 @@ function MedicalRecordDetailContent() {
   const formatDate = (iso: string) => new Date(iso).toLocaleDateString(locale, { dateStyle: "medium" });
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900 px-4 py-6 sm:px-10" data-purpose="medical-record-detail">
+    <main className="min-h-screen bg-[#F4F7F7] text-[#18242B] px-4 py-6 sm:px-10" data-purpose="medical-record-detail">
       <div className="max-w-3xl mx-auto space-y-5">
-        <Link className="text-sm font-semibold text-black hover:underline" data-purpose="back-link" href="/interview?section=followup">
+        <Link className="text-sm font-semibold text-[#18242B] hover:underline" data-purpose="back-link" href="/interview?section=followup">
           {"← " + t("print.back")}
         </Link>
 
@@ -56,7 +56,7 @@ function MedicalRecordDetailContent() {
           <div data-purpose="record-loading">
             <Skeleton className="space-y-3" label={t("common.loading")}>
             {[0, 1, 2].map((i) => (
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2.5" key={i}>
+              <div className="bg-white rounded-2xl border border-[#DCE4E6] p-4 space-y-2.5" key={i}>
                 <Bone className="h-3 w-24 rounded" />
                 <Bone className="h-4 w-2/3 rounded" />
                 <Bone className="h-3 w-1/2 rounded" />
@@ -67,32 +67,32 @@ function MedicalRecordDetailContent() {
         )}
 
         {!loading && error && (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" role="alert">
+          <p className="text-sm text-[#B42318] bg-[#B42318]/10 border border-[#B42318]/20 rounded-lg px-3 py-2" role="alert">
             {error}
           </p>
         )}
 
         {!loading && !error && !item && (
-          <div className="bg-white rounded-2xl border border-dashed border-slate-300 px-5 py-8 text-center" data-purpose="record-not-found">
-            <p className="text-sm text-slate-500">{t("history.empty")}</p>
+          <div className="bg-white rounded-2xl border border-dashed border-[#DCE4E6] px-5 py-8 text-center" data-purpose="record-not-found">
+            <p className="text-sm text-[#25343D]">{t("history.empty")}</p>
           </div>
         )}
 
         {!loading && !error && item && (
-          <article className="bg-white rounded-2xl border border-slate-200 card-shadow overflow-hidden" data-purpose="record-card">
-            <header className="p-4 sm:p-5 border-b border-slate-100 space-y-2" data-purpose="record-header">
+          <article className="bg-white rounded-2xl border border-[#DCE4E6] card-shadow overflow-hidden" data-purpose="record-card">
+            <header className="p-4 sm:p-5 border-b border-[#F4F7F7] space-y-2" data-purpose="record-header">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-[#46545B]">
                   {t(CATEGORY_LABEL[item.category])}
                 </span>
-                <span className={"text-[10px] font-semibold rounded px-1.5 py-0.5 border " + (item.verified ? "text-black bg-gray-50 border-gray-200" : "text-slate-500 bg-slate-50 border-slate-200")} data-purpose="record-source">
+                <span className={"text-[10px] font-semibold rounded px-1.5 py-0.5 border " + (item.verified ? "text-[#18242B] bg-[#F4F7F7] border-[#DCE4E6]" : "text-[#25343D] bg-[#F4F7F7] border-[#DCE4E6]")} data-purpose="record-source">
                   {item.verified ? t("records.verified") : t("records.selfReported")}
                 </span>
               </div>
-              <h1 className="text-lg sm:text-xl font-bold text-slate-900 break-words" data-purpose="record-title">
+              <h1 className="text-lg sm:text-xl font-bold text-[#18242B] break-words" data-purpose="record-title">
                 {item.title}
               </h1>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-[#25343D]">
                 {[formatDate(item.occurred_at), item.hospital_name, item.recorded_by].filter(Boolean).join(" · ")}
               </p>
             </header>
@@ -105,7 +105,7 @@ function MedicalRecordDetailContent() {
               )}
               {item.files.length > 0 && (
                 <div data-purpose="record-files">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-[#46545B] mb-1.5">
                     {t("history.files")}
                   </p>
                   <ul className="space-y-1.5">
@@ -129,7 +129,7 @@ function MedicalRecordDetailContent() {
 }
 export default function MedicalRecordDetailPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-50" />}>
+    <Suspense fallback={<div className="min-h-screen bg-[#F4F7F7]" />}>
       <MedicalRecordDetailContent />
     </Suspense>
   );

@@ -67,9 +67,9 @@ export default function HealthCardScreen({ embedded = false }: { embedded?: bool
       <Root className={rootClass}>
         <div className="w-full max-w-[720px] text-center">
           {loadError ? (
-            <p className="text-sm text-red-600" role="alert">{loadError}</p>
+            <p className="text-sm text-[#B42318]" role="alert">{loadError}</p>
           ) : (
-          <Skeleton className="bg-white rounded-[32px] border border-slate-100 p-6 sm:p-10 space-y-8" label={t("common.loading")}>
+          <Skeleton className="bg-white rounded-[32px] border border-[#F4F7F7] p-6 sm:p-10 space-y-8" label={t("common.loading")}>
             <HealthCardBones />
             <div className="space-y-3 flex flex-col items-center">
               <Bone className="h-5 w-44 rounded" />
@@ -278,7 +278,7 @@ export default function HealthCardScreen({ embedded = false }: { embedded?: bool
         {/* ===== Digital Health Card ===== */}
         <div
           ref={cardRef}
-          className="bg-white rounded-[32px] shadow-xl shadow-teal-950/10 border border-slate-100 p-3 sm:p-10 mb-8"
+          className="bg-white rounded-[32px] shadow-xl shadow-[#18242B]/10 border border-[#F4F7F7] p-3 sm:p-10 mb-8"
           data-purpose="health-card-wrapper"
         >
           <div className="mb-8">
@@ -295,7 +295,7 @@ export default function HealthCardScreen({ embedded = false }: { embedded?: bool
             </p>
             <div className="flex flex-col sm:flex-row gap-3">
               <button
-                className="flex-1 flex items-center justify-center gap-2 bg-app-green hover:bg-app-green-light text-white font-medium py-3 px-4 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-2 bg-app-green hover:bg-[#135a55] text-white font-medium py-3 px-4 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed"
                 data-purpose="download-pdf"
                 disabled={isDownloading}
                 onClick={downloadAsPdf}
@@ -317,7 +317,7 @@ export default function HealthCardScreen({ embedded = false }: { embedded?: bool
                 {isDownloading ? t("healthCard.preparing") : t("healthCard.downloadPdf")}
               </button>
               <button
-                className="flex-1 flex items-center justify-center gap-2 bg-app-green hover:bg-app-green-light text-white font-medium py-3 px-4 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex-1 flex items-center justify-center gap-2 bg-app-green hover:bg-[#135a55] text-white font-medium py-3 px-4 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed"
                 data-purpose="download-image"
                 disabled={isDownloading}
                 onClick={downloadAsImage}
@@ -377,11 +377,11 @@ export default function HealthCardScreen({ embedded = false }: { embedded?: bool
       {qrOpen && card?.qrSvg && createPortal(
         <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center p-6" onClick={() => setQrOpen(false)} role="dialog" aria-modal="true" aria-label={t("healthCard.scanToVerify")}>
           <div className="w-full max-w-sm flex flex-col items-center text-center" onClick={(e) => e.stopPropagation()}>
-            <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{t("healthCard.scanToVerify")}</p>
+            <p className="text-sm font-semibold text-[#25343D] uppercase tracking-wider">{t("healthCard.scanToVerify")}</p>
             <div className="w-full aspect-square max-w-[min(80vw,360px)] my-6" role="img" aria-label={t("healthCard.scanToVerify")} dangerouslySetInnerHTML={{ __html: card.qrSvg }} />
-            <p className="text-2xl font-bold text-slate-900">{card.fullName}</p>
+            <p className="text-2xl font-bold text-[#18242B]">{card.fullName}</p>
             <p className="text-base font-semibold text-app-green mt-1">{card.userId}</p>
-            <button type="button" autoFocus onClick={() => setQrOpen(false)} className="mt-8 px-8 py-3 rounded-full border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50">{t("common.close")}</button>
+            <button type="button" autoFocus onClick={() => setQrOpen(false)} className="mt-8 px-8 py-3 rounded-full border border-[#DCE4E6] text-[#25343D] font-semibold hover:bg-[#F4F7F7]">{t("common.close")}</button>
           </div>
         </div>,
         document.body

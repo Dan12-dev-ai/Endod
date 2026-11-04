@@ -12,7 +12,7 @@ export default function MobileBottomNav() {
   return (
     <nav
       aria-label={t("interview.mobileNav")}
-      className="md:hidden fixed bottom-0 inset-x-0 bg-app-green border-t border-white/20 shadow-nav px-2 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] z-40"
+      className="md:hidden fixed bottom-0 inset-x-0 bg-[#18242B] border-t border-[#DCE4E6] shadow-nav px-2 pt-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] z-40"
       data-purpose="mobile-bottom-nav"
     >
       <ul className="flex justify-around items-stretch">
@@ -24,7 +24,7 @@ export default function MobileBottomNav() {
                 href={s.href}
                 aria-current={active ? "page" : undefined}
                 data-purpose={`mobile-tab-${s.id}`}
-                className={`flex flex-col items-center gap-0.5 py-1 rounded-lg text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${active ? "bg-white/20" : "opacity-90 hover:opacity-100"}`}
+                className={`flex flex-col items-center gap-0.5 py-1 rounded-lg text-[#FFFFFF] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FFFFFF] ${active ? "bg-[#E8F1EF]/20" : "opacity-90 hover:opacity-100"}`}
               >
                 <span className="[&>svg]:w-5 [&>svg]:h-5">{s.icon}</span>
                 <span className={`text-[11px] w-full truncate text-center ${active ? "font-bold" : "font-medium"}`}>{t(s.labelKey)}</span>

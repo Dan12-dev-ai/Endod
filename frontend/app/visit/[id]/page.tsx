@@ -87,7 +87,7 @@ export default function VisitPage() {
   }, []);
 
   return (
-    <main className="w-full h-screen flex flex-col bg-slate-950 text-white" data-purpose="visit-page">
+    <main className="w-full h-screen flex flex-col bg-[#18242B] text-white" data-purpose="visit-page">
       <header className="flex items-center justify-between px-4 py-3 border-b border-white/10">
         <p className="text-sm font-semibold">{t("visit.title")}</p>
         <a className="px-3 py-1.5 rounded-lg border border-white/30 text-xs font-semibold hover:bg-white/10" data-purpose="visit-leave" href="/interview">
@@ -97,12 +97,12 @@ export default function VisitPage() {
       {state === "unavailable" ? (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4" data-purpose="visit-unavailable" role="status">
           <p className="text-base font-semibold">{t("visit.unavailable")}</p>
-          <a className="px-4 py-2 rounded-xl bg-white text-slate-900 text-sm font-semibold" href="/interview?section=appointment">{t("visit.toAppointments")}</a>
+          <a className="px-4 py-2 rounded-xl bg-white text-[#18242B] text-sm font-semibold" href="/interview?section=appointment">{t("visit.toAppointments")}</a>
         </div>
       ) : error ? (
         <div className="flex-1 flex flex-col items-center justify-center p-6 text-center gap-4" data-purpose="visit-error" role="alert">
           <p className="text-base font-semibold">{error}</p>
-          <a className="px-4 py-2 rounded-xl bg-white text-slate-900 text-sm font-semibold" href="/interview">{t("visit.back")}</a>
+          <a className="px-4 py-2 rounded-xl bg-white text-[#18242B] text-sm font-semibold" href="/interview">{t("visit.back")}</a>
         </div>
       ) : state === "ended" ? (
         <div className="flex-1 flex items-center justify-center p-6 text-center" data-purpose="visit-ended">

@@ -293,16 +293,16 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
         ) : (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div>
-              <h1 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight">{t("booking.title")}</h1>
+              <h1 className="text-xl md:text-2xl font-extrabold text-[#18242B] tracking-tight">{t("booking.title")}</h1>
             </div>
           </div>
         )}
 
         <section data-purpose="manual-booking-section" className="space-y-4 pb-6">
           {/* Search and Filters Bar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 card-shadow flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="bg-white p-4 rounded-2xl border border-[#DCE4E6] card-shadow flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div className="flex-1 relative">
-              <svg className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-[#46545B] absolute left-3.5 top-1/2 -trangray-y-1/2" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input
@@ -312,7 +312,7 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t("booking.searchPlaceholder")}
-                className="w-full pl-9 pr-4 py-2 text-xs md:text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent text-slate-800 placeholder-slate-400"
+                className="w-full pl-9 pr-4 py-2 text-xs md:text-sm rounded-xl border border-[#DCE4E6] focus:outline-none focus:ring-2 focus:ring-[#18242B] focus:border-transparent text-[#18242B] placeholder-[##46545B]"
               />
             </div>
             <div className="flex items-center space-x-2 overflow-x-auto pb-1 -mb-1">
@@ -374,17 +374,17 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
 
           {/* Directory Subhead */}
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+            <h3 className="text-sm font-bold text-[#18242B] flex items-center space-x-2">
               <span>{t("booking.hospitalsCenters")}</span>
-              {directory && <span className="text-xs font-normal text-slate-400">({t("booking.shown", { count: facilities.length })})</span>}
+              {directory && <span className="text-xs font-normal text-[#46545B]">({t("booking.shown", { count: facilities.length })})</span>}
             </h3>
           </div>
 
           {loadError && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" role="alert">{loadError}</p>
+            <p className="text-xs text-[#B42318] bg-[#B42318]/10 border border-[#B42318]/20 rounded-lg px-3 py-2" role="alert">{loadError}</p>
           )}
           {directory && facilities.length === 0 && !loadError && (
-            <p data-purpose="hospital-empty" className="text-xs text-slate-500 px-1">{t("booking.noMatch")}</p>
+            <p data-purpose="hospital-empty" className="text-xs text-[#25343D] px-1">{t("booking.noMatch")}</p>
           )}
 
           <div className="mb-4">
@@ -415,45 +415,45 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
               <div
                 key={facility.id}
                 data-purpose={`hospital-${facility.id}`}
-                className="hospital-card bg-white rounded-2xl p-4 border border-slate-200 card-shadow hover:border-gray-400 transition-all flex items-center justify-between gap-3"
+                className="hospital-card bg-white rounded-2xl p-4 border border-[#DCE4E6] card-shadow hover:border-[#46545B] transition-all flex items-center justify-between gap-3"
               >
                 <div className="flex items-center space-x-4 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#F4F7F7] border border-[#DCE4E6] text-[#18242B] flex items-center justify-center font-bold text-sm flex-shrink-0">
                     {initials(facility.name)}
                   </div>
                   <div className="min-w-0">
-                    <h4 className="text-sm font-bold text-slate-900">{facility.name}</h4>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-0.5 text-xs text-slate-500">
+                    <h4 className="text-sm font-bold text-[#18242B]">{facility.name}</h4>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-0.5 text-xs text-[#25343D]">
                       <span>{facility.city}</span>
                       {facility.distance_km !== null && <span>{facility.distance_km} km</span>}
-                      {facility.open_hours && <span className="text-black font-medium">{facility.open_hours}</span>}
+                      {facility.open_hours && <span className="text-[#18242B] font-medium">{facility.open_hours}</span>}
                       {facility.emergency && <span className="text-rose-600 font-medium">{t("booking.emergencyCare")}</span>}
-                      {!facility.verified && <span className="text-amber-600">{t("booking.unconfirmed")}</span>}
+                      {!facility.verified && <span className="text-[#B7791F]">{t("booking.unconfirmed")}</span>}
                     </div>
                     {facility.partner && (
                       <div className="flex flex-wrap items-center gap-1.5 mt-1.5" data-purpose="partner-details">
                         {facility.price_in_person != null && (
-                          <span className="text-[11px] font-semibold text-slate-800">
+                          <span className="text-[11px] font-semibold text-[#18242B]">
                             {t("booking.price", { price: formatBirr(facility.price_in_person, locale) })}
                           </span>
                         )}
-                        <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-slate-100 text-slate-600">
+                        <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-[#F4F7F7] text-[#25343D]">
                           {facility.ownership === "private" ? t("booking.private") : t("booking.public")}
                         </span>
                         {videoVisits && facility.video_enabled && (
-                          <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-sky-50 text-sky-700">{t("booking.videoAvailable")}</span>
+                          <span className="text-[10px] font-semibold rounded px-1.5 py-0.5 bg-[#F4F7F7] text-[#25343D]">{t("booking.videoAvailable")}</span>
                         )}
                       </div>
                     )}
                     {facility.partner && paymentsOff && (facility.price_in_person ?? 0) > 0 && (
-                      <p className="text-[11px] text-slate-600 mt-1" data-purpose="pay-at-hospital-tag">{t("booking.payAtHospitalTag")}</p>
+                      <p className="text-[11px] text-[#25343D] mt-1" data-purpose="pay-at-hospital-tag">{t("booking.payAtHospitalTag")}</p>
                     )}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => openBooking(facility)}
-                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-black hover:bg-gray-800 text-white font-semibold text-xs transition shadow-sm flex-shrink-0"
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-black hover:bg-[#18242B] text-white font-semibold text-xs transition shadow-sm flex-shrink-0"
                 >
                   <span>{t("booking.bookNow")}</span>
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -468,18 +468,18 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
 
       {/* ===== Booking Time & Submit Modal ===== */}
       {selected && !booked && (
-        <div id="booking-modal" data-purpose="booking-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 max-h-[95vh] overflow-y-auto">
-            <div className="flex items-start justify-between pb-4 border-b border-slate-100">
+        <div id="booking-modal" data-purpose="booking-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#18242B]/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-[#DCE4E6] max-h-[95vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-4 border-b border-[#F4F7F7]">
               <div>
-                <span className="text-[11px] font-semibold text-black uppercase tracking-wider">{t("booking.modalBadge")}</span>
-                <h3 className="text-lg font-bold text-slate-900 mt-0.5">{selected.name}</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <span className="text-[11px] font-semibold text-[#18242B] uppercase tracking-wider">{t("booking.modalBadge")}</span>
+                <h3 className="text-lg font-bold text-[#18242B] mt-0.5">{selected.name}</h3>
+                <p className="text-xs text-[#25343D] mt-0.5">
                   {[selected.address, selected.city].filter(Boolean).join(", ")}
                   {selected.phone ? ` • ${selected.phone}` : ""}
                 </p>
               </div>
-              <button type="button" aria-label={t("common.close")} onClick={closeBooking} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition">
+              <button type="button" aria-label={t("common.close")} onClick={closeBooking} className="text-[#46545B] hover:text-[#25343D] p-1 rounded-lg hover:bg-[#F4F7F7] transition">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -487,24 +487,24 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
             </div>
 
             <form onSubmit={submitBooking} className="space-y-4 mt-4">
-              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 flex items-center justify-between text-xs">
+              <div className="bg-[#F4F7F7] rounded-xl p-3 border border-[#F4F7F7] flex items-center justify-between text-xs">
                 <div className="flex items-center space-x-2">
-                  <div className="w-6 h-6 rounded-full bg-gray-100 text-gray-900 flex items-center justify-center font-bold text-[10px]">P</div>
-                  <span className="font-medium text-slate-700">{t("booking.patient", { id: patientId || "—" })}</span>
+                  <div className="w-6 h-6 rounded-full bg-[#F4F7F7] text-[#18242B] flex items-center justify-center font-bold text-[10px]">P</div>
+                  <span className="font-medium text-[#25343D]">{t("booking.patient", { id: patientId || "—" })}</span>
                 </div>
               </div>
 
               {selected.partner && videoVisits && (
                 <fieldset data-purpose="visit-mode">
-                  <legend className="block text-xs font-semibold text-slate-700 mb-1">{t("booking.visitMode")}</legend>
+                  <legend className="block text-xs font-semibold text-[#25343D] mb-1">{t("booking.visitMode")}</legend>
                   <div className="grid grid-cols-2 gap-2">
                     {(["in_person", "telehealth"] as const).map((mode) => {
                       const disabled = mode === "telehealth" && !selected.video_enabled;
                       return (
                         <label
                           className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
-                            visitMode === mode ? "border-black bg-gray-50 text-black" : "border-slate-200 text-slate-600"
-                          } has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-black ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                            visitMode === mode ? "border-[#18242B] bg-[#F4F7F7] text-[#18242B]" : "border-[#DCE4E6] text-[#25343D]"
+                          } has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[#18242B] ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                           key={mode}
                         >
                           <input
@@ -522,20 +522,20 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
                     })}
                   </div>
                   {visitMode === "telehealth" && (
-                    <p className="text-[11px] text-slate-500 mt-1">{t("booking.videoNeedsApproval")}</p>
+                    <p className="text-[11px] text-[#25343D] mt-1">{t("booking.videoNeedsApproval")}</p>
                   )}
                 </fieldset>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-date">{t("booking.selectDate")}</label>
-                <input type="date" id="booking-date" required min={todayLocal()} value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-black" />
+                <label className="block text-xs font-semibold text-[#25343D] mb-1" htmlFor="booking-date">{t("booking.selectDate")}</label>
+                <input type="date" id="booking-date" required min={todayLocal()} value={bookingDate} onChange={(e) => setBookingDate(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-[#DCE4E6] px-3 py-2 text-[#18242B] focus:outline-none focus:ring-2 focus:ring-[#18242B]" />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-time">{t("booking.visitTime")}</label>
+                <label className="block text-xs font-semibold text-[#25343D] mb-1" htmlFor="booking-time">{t("booking.visitTime")}</label>
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                  <input type="time" id="booking-time" required value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-black" />
+                  <input type="time" id="booking-time" required value={bookingTime} onChange={(e) => setBookingTime(e.target.value)} className="w-full text-xs md:text-sm rounded-xl border border-[#DCE4E6] px-3 py-2 text-[#18242B] focus:outline-none focus:ring-2 focus:ring-[#18242B]" />
                   <Select
                     value={timeWindow}
                     onValueChange={setTimeWindow}
@@ -556,11 +556,11 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
                     </SelectContent>
                   </Select>
                 </div>
-                <p className="text-[11px] text-slate-400">{t("booking.arrivalWindowHint")}</p>
+                <p className="text-[11px] text-[#46545B]">{t("booking.arrivalWindowHint")}</p>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-department">{t("booking.departmentClinic")}</label>
+                <label className="block text-xs font-semibold text-[#25343D] mb-1" htmlFor="booking-department">{t("booking.departmentClinic")}</label>
                 <Select
                   value={bookingDepartment === "" ? "not-sure" : bookingDepartment}
                   onValueChange={(v) => setBookingDepartment(v === "not-sure" ? "" : v)}
@@ -586,16 +586,16 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="booking-note">{t("booking.reasonLabel")}</label>
-                <textarea id="booking-note" rows={2} maxLength={1000} value={bookingNote} onChange={(e) => setBookingNote(e.target.value)} placeholder={t("booking.reasonPlaceholder")} className="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-black" />
+                <label className="block text-xs font-semibold text-[#25343D] mb-1" htmlFor="booking-note">{t("booking.reasonLabel")}</label>
+                <textarea id="booking-note" rows={2} maxLength={1000} value={bookingNote} onChange={(e) => setBookingNote(e.target.value)} placeholder={t("booking.reasonPlaceholder")} className="w-full text-xs rounded-xl border border-[#DCE4E6] px-3 py-2 text-[#18242B] focus:outline-none focus:ring-2 focus:ring-[#18242B]" />
               </div>
 
               {selected.partner && quote && payAtHospital && (
-                <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-xs space-y-1" data-purpose="booking-quote" role="status">
-                  <p className="font-bold text-slate-900" data-purpose="pay-at-hospital">
+                <div className="rounded-xl bg-[#F4F7F7] border border-[#F4F7F7] p-3 text-xs space-y-1" data-purpose="booking-quote" role="status">
+                  <p className="font-bold text-[#18242B]" data-purpose="pay-at-hospital">
                     {t("booking.payAtHospital", { amount: formatBirr(quote.total, locale) })}
                   </p>
-                  <p className="text-[11px] text-slate-500" data-purpose="pay-hint">
+                  <p className="text-[11px] text-[#25343D]" data-purpose="pay-hint">
                     {quote.service_fee > 0
                       ? t("booking.payAtHospitalHintFee", { price: formatBirr(quote.price, locale), fee: formatBirr(quote.service_fee, locale) })
                       : t("booking.payAtHospitalHint")}
@@ -604,24 +604,24 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
               )}
 
               {selected.partner && quote && !payAtHospital && (
-                <dl className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-xs space-y-1" data-purpose="booking-quote">
-                  <div className="flex justify-between"><dt className="text-slate-500">{t("booking.quote.price")}</dt><dd className="font-semibold">{formatBirr(quote.price, locale)}</dd></div>
-                  <div className="flex justify-between"><dt className="text-slate-500">{t("booking.quote.fee")}</dt><dd className="font-semibold">{formatBirr(quote.service_fee, locale)}</dd></div>
-                  <div className="flex justify-between border-t border-slate-200 pt-1"><dt className="font-bold text-slate-800">{t("booking.quote.total")}</dt><dd className="font-bold" data-purpose="quote-total">{formatBirr(quote.total, locale)}</dd></div>
-                  <p className="text-[11px] text-slate-500 pt-1" data-purpose="pay-hint">{t("booking.payHint")}</p>
+                <dl className="rounded-xl bg-[#F4F7F7] border border-[#F4F7F7] p-3 text-xs space-y-1" data-purpose="booking-quote">
+                  <div className="flex justify-between"><dt className="text-[#25343D]">{t("booking.quote.price")}</dt><dd className="font-semibold">{formatBirr(quote.price, locale)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-[#25343D]">{t("booking.quote.fee")}</dt><dd className="font-semibold">{formatBirr(quote.service_fee, locale)}</dd></div>
+                  <div className="flex justify-between border-t border-[#DCE4E6] pt-1"><dt className="font-bold text-[#18242B]">{t("booking.quote.total")}</dt><dd className="font-bold" data-purpose="quote-total">{formatBirr(quote.total, locale)}</dd></div>
+                  <p className="text-[11px] text-[#25343D] pt-1" data-purpose="pay-hint">{t("booking.payHint")}</p>
                 </dl>
               )}
 
               {formError && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" data-purpose="booking-error" role="alert">{formError}</p>
+                <p className="text-xs text-[#B42318] bg-[#B42318]/10 border border-[#B42318]/20 rounded-lg px-3 py-2" data-purpose="booking-error" role="alert">{formError}</p>
               )}
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-3">
-                <button type="button" onClick={closeBooking} className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition">
+              <div className="pt-3 border-t border-[#F4F7F7] flex items-center justify-end space-x-3">
+                <button type="button" onClick={closeBooking} className="px-4 py-2 rounded-xl border border-[#DCE4E6] text-xs font-semibold text-[#25343D] hover:bg-[#F4F7F7] transition">
                   {t("common.cancel")}
                 </button>
                 {/* With online payment off, the price to pay at the hospital is shown before booking. */}
-                <button type="submit" disabled={isSubmitting || redirecting || (selected.partner && paymentsOff && quote === null)} className="px-5 py-2 rounded-xl bg-black hover:bg-gray-800 disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
+                <button type="submit" disabled={isSubmitting || redirecting || (selected.partner && paymentsOff && quote === null)} className="px-5 py-2 rounded-xl bg-black hover:bg-[#18242B] disabled:opacity-60 text-white text-xs font-semibold transition shadow-sm flex items-center space-x-1.5">
                   <span>
                     {redirecting
                       ? t("booking.toChapa")
@@ -642,47 +642,47 @@ export default function BookingView({ patientId, onToast, preset, onPresetUsed, 
 
       {/* ===== Success Confirmation Modal ===== */}
       {selected && booked && (
-        <div id="success-modal" data-purpose="success-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-center">
-            <div className="w-14 h-14 rounded-full bg-gray-100 text-black flex items-center justify-center mx-auto mb-4">
+        <div id="success-modal" data-purpose="success-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#18242B]/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-[#DCE4E6] text-center">
+            <div className="w-14 h-14 rounded-full bg-[#F4F7F7] text-[#18242B] flex items-center justify-center mx-auto mb-4">
               <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-lg font-bold text-slate-900">{t("booking.visitBooked")}</h3>
-            <p className="text-xs text-slate-500 mt-1">
+            <h3 className="text-lg font-bold text-[#18242B]">{t("booking.visitBooked")}</h3>
+            <p className="text-xs text-[#25343D] mt-1">
               {t("booking.savedPrefix", { facility: selected.name })}
               {selected.phone
                 ? t("booking.savedCallSuffix", { phone: selected.phone })
                 : t("booking.savedContactSuffix")}
             </p>
 
-            <div className="bg-slate-50 rounded-xl p-4 my-4 text-left border border-slate-100 space-y-2 text-xs">
+            <div className="bg-[#F4F7F7] rounded-xl p-4 my-4 text-left border border-[#F4F7F7] space-y-2 text-xs">
               <div className="flex justify-between gap-3">
-                <span className="text-slate-400">{t("booking.hospitalLabel")}</span>
-                <span className="font-bold text-slate-800 text-right">{selected.name}</span>
+                <span className="text-[#46545B]">{t("booking.hospitalLabel")}</span>
+                <span className="font-bold text-[#18242B] text-right">{selected.name}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-slate-400">{t("booking.visitTimeLabel")}</span>
-                <span className="font-bold text-black text-right">{formatWhen(booked.scheduled_at, locale)}</span>
+                <span className="text-[#46545B]">{t("booking.visitTimeLabel")}</span>
+                <span className="font-bold text-[#18242B] text-right">{formatWhen(booked.scheduled_at, locale)}</span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-slate-400">{t("booking.reference")}</span>
-                <span className="font-mono font-bold text-slate-800">{booked.appointment_id.slice(0, 8).toUpperCase()}</span>
+                <span className="text-[#46545B]">{t("booking.reference")}</span>
+                <span className="font-mono font-bold text-[#18242B]">{booked.appointment_id.slice(0, 8).toUpperCase()}</span>
               </div>
             </div>
             {booked.hospital_booking?.payment.status === "at_hospital" && (
-              <p className="text-xs font-semibold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4" data-purpose="booked-pay-at-hospital">
+              <p className="text-xs font-semibold text-[#18242B] bg-[#F4F7F7] border border-[#DCE4E6] rounded-lg px-3 py-2 mb-4" data-purpose="booked-pay-at-hospital">
                 {t("booking.payAtHospital", { amount: formatBirr(booked.hospital_booking.total, locale) })}
               </p>
             )}
             {booked.hospital_booking?.state === "awaiting_doctor" && (
-              <p className="text-xs text-sky-800 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2 mb-4" data-purpose="booked-awaiting-doctor">
+              <p className="text-xs text-[#18242B] bg-[#F4F7F7] border border-[#F4F7F7] rounded-lg px-3 py-2 mb-4" data-purpose="booked-awaiting-doctor">
                 {t("booking.awaitingDoctor")}
               </p>
             )}
 
-            <button type="button" onClick={closeBooking} className="w-full py-2.5 rounded-xl bg-black hover:bg-gray-800 text-white font-semibold text-xs transition">
+            <button type="button" onClick={closeBooking} className="w-full py-2.5 rounded-xl bg-black hover:bg-[#18242B] text-white font-semibold text-xs transition">
               {t("common.done")}
             </button>
           </div>

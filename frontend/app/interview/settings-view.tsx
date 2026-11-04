@@ -66,9 +66,9 @@ const DEFAULT_RADIUS_KM = 15;
 const RADIUS_MIN_KM = 5;
 const RADIUS_MAX_KM = 200;
 
-const inputClass = "w-full text-sm rounded-xl border-slate-300 focus:border-emerald-500 focus:ring-black py-2.5 px-3.5 shadow-xs text-slate-900 border";
-const labelClass = "block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5";
-const saveClass = "px-5 py-2.5 bg-black hover:bg-gray-800 disabled:opacity-60 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all";
+const inputClass = "w-full text-sm rounded-xl border-[#DCE4E6] focus:border-[#25343D] focus:ring-[#18242B] py-2.5 px-3.5 shadow-xs text-[#18242B] border";
+const labelClass = "block text-xs font-semibold uppercase tracking-wider text-[#25343D] mb-1.5";
+const saveClass = "px-5 py-2.5 bg-black hover:bg-[#18242B] disabled:opacity-60 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all";
 
 function message(error: unknown, fallback: string): string {
   return error instanceof ApiError ? error.message : fallback;
@@ -91,8 +91,8 @@ const STRENGTH_LABEL_KEYS: TranslationKey[] = [
   "settings.password.strength.good",
   "settings.password.strength.strong",
 ];
-const STRENGTH_COLORS = ["text-slate-400", "text-rose-500", "text-amber-500", "text-black", "text-black"];
-const STRENGTH_BARS = ["bg-slate-200", "bg-rose-500", "bg-amber-500", "bg-black", "bg-gray-500"];
+const STRENGTH_COLORS = ["text-[#46545B]", "text-[#B42318]", "text-[#B7791F]", "text-[#18242B]", "text-[#18242B]"];
+const STRENGTH_BARS = ["border-[##DCE4E6]", "bg-[#F4F7F7]", "bg-[#B7791F]/100", "bg-black", "bg-[#18242B]"];
 
 /** Account settings (GET/PATCH /users/me, preferences, consent, health profile; password change). */
 export default function SettingsView({ onToast, onProfileChange, hideTitle }: Props) {
@@ -392,10 +392,10 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
     return (
       <div data-purpose="settings-view" className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-5xl mx-auto py-6">
-          {loadError ? <p className="text-sm text-red-600" role="alert">{loadError}</p> : (
+          {loadError ? <p className="text-sm text-[#B42318]" role="alert">{loadError}</p> : (
             <Skeleton className="space-y-6" label={t("settings.loading")}>
               {[3, 2, 2].map((fields, section) => (
-                <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-7 space-y-5" key={section}>
+                <div className="bg-white rounded-2xl border border-[#DCE4E6] p-5 sm:p-7 space-y-5" key={section}>
                   <Bone className="h-4 w-40 rounded" />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {Array.from({ length: fields }, (_, i) => <FieldBones key={i} />)}
@@ -419,10 +419,10 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
   const hasConsent = profile.consent.treatment_processing;
 
   const toggle = (id: string, checked: boolean, onChange: (value: boolean) => void, label: string, hint: string) => (
-    <label key={id} className="flex items-start justify-between gap-4 py-3 border-b border-slate-100 last:border-0 cursor-pointer">
+    <label key={id} className="flex items-start justify-between gap-4 py-3 border-b border-[#F4F7F7] last:border-0 cursor-pointer">
       <span>
-        <span className="block text-sm font-semibold text-slate-800">{label}</span>
-        <span className="block text-xs text-slate-500">{hint}</span>
+        <span className="block text-sm font-semibold text-[#18242B]">{label}</span>
+        <span className="block text-xs text-[#25343D]">{hint}</span>
       </span>
       <input
         type="checkbox"
@@ -440,18 +440,18 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
       <div className="max-w-5xl mx-auto space-y-6 py-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-2">
           <div>
-            <h1 className={hideTitle ? "sr-only" : "text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight"}>{t("settings.title")}</h1>
+            <h1 className={hideTitle ? "sr-only" : "text-2xl sm:text-3xl font-extrabold text-[#18242B] tracking-tight"}>{t("settings.title")}</h1>
             </div>
         </div>
 
         {/* Personal information */}
-        <section data-purpose="user-profile-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+        <section data-purpose="user-profile-section" className="bg-white rounded-2xl border border-[#DCE4E6] shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F4F7F7] pb-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{t("settings.personal.title")}</h2>
-              <p className="text-xs sm:text-sm text-slate-500">{t("settings.personal.subtitle")}</p>
+              <h2 className="text-lg font-bold text-[#18242B]">{t("settings.personal.title")}</h2>
+              <p className="text-xs sm:text-sm text-[#25343D]">{t("settings.personal.subtitle")}</p>
             </div>
-            <span className="self-start sm:self-auto px-3 py-1 bg-gray-50 text-gray-900 text-xs font-semibold rounded-full border border-gray-200">
+            <span className="self-start sm:self-auto px-3 py-1 bg-[#F4F7F7] text-[#18242B] text-xs font-semibold rounded-full border border-[#DCE4E6]">
               {profile.dedan_user_id}
             </span>
           </div>
@@ -467,7 +467,7 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
               </div>
               <div>
                 <label className={labelClass} htmlFor="patient-id-field">{t("settings.personal.dedanId")}</label>
-                <input id="patient-id-field" readOnly type="text" value={profile.dedan_user_id} className="w-full text-sm rounded-xl bg-slate-50 border-slate-200 text-slate-500 py-2.5 px-3.5 cursor-not-allowed border" />
+                <input id="patient-id-field" readOnly type="text" value={profile.dedan_user_id} className="w-full text-sm rounded-xl bg-[#F4F7F7] border-[#DCE4E6] text-[#25343D] py-2.5 px-3.5 cursor-not-allowed border" />
               </div>
               <div>
                 <label className={labelClass} htmlFor="email-address">{t("settings.personal.email")}</label>
@@ -476,23 +476,23 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
               <div>
                 <label className={labelClass} htmlFor="phone-number">{t("settings.personal.phone")}</label>
                 <div className="relative">
-                  <input id="phone-number" readOnly type="tel" value={profile.phone ? formatPhoneDisplay(profile.phone) : ""} placeholder={t("settings.personal.noPhone")} className="w-full text-sm rounded-xl bg-slate-50 border-slate-200 text-slate-600 py-2.5 px-3.5 pr-24 border" />
+                  <input id="phone-number" readOnly type="tel" value={profile.phone ? formatPhoneDisplay(profile.phone) : ""} placeholder={t("settings.personal.noPhone")} className="w-full text-sm rounded-xl bg-[#F4F7F7] border-[#DCE4E6] text-[#25343D] py-2.5 px-3.5 pr-24 border" />
                   {profile.phone && (
-                    <span data-purpose="phone-status" className={`absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold px-2 py-0.5 rounded-md ${phoneVerified ? "text-black bg-gray-50" : "text-amber-700 bg-amber-50"}`}>
+                    <span data-purpose="phone-status" className={`absolute right-2.5 top-1/2 -trangray-y-1/2 text-[11px] font-semibold px-2 py-0.5 rounded-md ${phoneVerified ? "text-[#18242B] bg-[#F4F7F7]" : "text-[#B7791F] bg-[#B7791F]/10"}`}>
                       {phoneVerified ? t("settings.personal.verified") : t("settings.personal.notVerified")}
                     </span>
                   )}
                 </div>
                 {phoneStep === "idle" && (
-                  <button type="button" data-purpose="change-phone" onClick={() => { setPhoneStep("number"); setNewPhone(""); setPhoneError(""); }} className="mt-1.5 text-[11px] font-semibold text-gray-900 hover:underline">
+                  <button type="button" data-purpose="change-phone" onClick={() => { setPhoneStep("number"); setNewPhone(""); setPhoneError(""); }} className="mt-1.5 text-[11px] font-semibold text-[#18242B] hover:underline">
                     {profile.phone ? (phoneVerified ? t("settings.personal.changeNumber") : t("settings.personal.verifyNumber")) : t("settings.personal.addPhone")}
                   </button>
                 )}
               </div>
             </div>
             {phoneStep !== "idle" && (
-              <div data-purpose="phone-change" className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                <p className="text-xs text-slate-600">
+              <div data-purpose="phone-change" className="bg-[#F4F7F7] border border-[#DCE4E6] rounded-xl p-4 space-y-3">
+                <p className="text-xs text-[#25343D]">
                   {t("settings.personal.phoneHint")}
                 </p>
                 {phoneStep === "number" ? (
@@ -506,21 +506,21 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
                     <button type="button" disabled={busy !== null || phoneCode.length !== 6} onClick={() => void confirmPhone()} className={saveClass}>{t("common.confirm")}</button>
                   </div>
                 )}
-                {phoneError && <p data-purpose="phone-error" className="text-xs text-red-600" role="alert">{phoneError}</p>}
-                <button type="button" onClick={() => setPhoneStep("idle")} className="text-[11px] text-slate-500 hover:underline">{t("common.cancel")}</button>
+                {phoneError && <p data-purpose="phone-error" className="text-xs text-[#B42318]" role="alert">{phoneError}</p>}
+                <button type="button" onClick={() => setPhoneStep("idle")} className="text-[11px] text-[#25343D] hover:underline">{t("common.cancel")}</button>
               </div>
             )}
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#F4F7F7]">
               <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.personal.saveChanges")}</button>
             </div>
           </form>
         </section>
 
         {/* Location */}
-        <section data-purpose="location-settings-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-900">{t("settings.location.title")}</h2>
-            <p className="text-xs sm:text-sm text-slate-500">{t("settings.location.subtitle")}</p>
+        <section data-purpose="location-settings-section" className="bg-white rounded-2xl border border-[#DCE4E6] shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="border-b border-[#F4F7F7] pb-4">
+            <h2 className="text-lg font-bold text-[#18242B]">{t("settings.location.title")}</h2>
+            <p className="text-xs sm:text-sm text-[#25343D]">{t("settings.location.subtitle")}</p>
           </div>
           <form onSubmit={saveLocation} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -559,29 +559,29 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
                 </Select>
               </div>
             </div>
-            <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
+            <div className="bg-[#F4F7F7]/80 p-4 rounded-xl border border-[#DCE4E6]">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700" htmlFor="radius-slider">{t("settings.location.radius")}</label>
-                <span className="text-xs font-semibold text-gray-900 bg-gray-100/70 px-2.5 py-0.5 rounded-full">{t("settings.location.within", { km: radius })}</span>
+                <label className="text-xs font-bold uppercase tracking-wider text-[#25343D]" htmlFor="radius-slider">{t("settings.location.radius")}</label>
+                <span className="text-xs font-semibold text-[#18242B] bg-[#F4F7F7]/70 px-2.5 py-0.5 rounded-full">{t("settings.location.within", { km: radius })}</span>
               </div>
-              <input id="radius-slider" max={RADIUS_MAX_KM} min={RADIUS_MIN_KM} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-black h-2 bg-slate-200 rounded-lg cursor-pointer" />
-              <div className="flex justify-between text-[11px] text-slate-400 mt-1">
+              <input id="radius-slider" max={RADIUS_MAX_KM} min={RADIUS_MIN_KM} step={5} type="range" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full accent-black h-2 border-[##DCE4E6] rounded-lg cursor-pointer" />
+              <div className="flex justify-between text-[11px] text-[#46545B] mt-1">
                 <span>{t("settings.location.within", { km: RADIUS_MIN_KM })}</span>
                 <span>{t("settings.location.within", { km: 100 })}</span>
                 <span>{t("settings.location.within", { km: RADIUS_MAX_KM })}</span>
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#F4F7F7]">
               <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.location.update")}</button>
             </div>
           </form>
         </section>
 
         {/* Privacy & notifications */}
-        <section data-purpose="privacy-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7">
-          <div className="border-b border-slate-100 pb-4 mb-2">
-            <h2 className="text-lg font-bold text-slate-900">{t("settings.privacy.title")}</h2>
-            <p className="text-xs sm:text-sm text-slate-500">{t("settings.privacy.subtitle")}</p>
+        <section data-purpose="privacy-section" className="bg-white rounded-2xl border border-[#DCE4E6] shadow-xs p-5 sm:p-7">
+          <div className="border-b border-[#F4F7F7] pb-4 mb-2">
+            <h2 className="text-lg font-bold text-[#18242B]">{t("settings.privacy.title")}</h2>
+            <p className="text-xs sm:text-sm text-[#25343D]">{t("settings.privacy.subtitle")}</p>
           </div>
           {toggle("consent-health", profile.consent.treatment_processing, (v) => void setConsent("treatment_processing", v),
             t("settings.privacy.consentHealth.label"), t("settings.privacy.consentHealth.hint"))}
@@ -592,10 +592,10 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
         </section>
 
         {/* Password */}
-        <section data-purpose="security-settings-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-900">{t("settings.password.title")}</h2>
-            <p className="text-xs sm:text-sm text-slate-500">{t("settings.password.subtitle")}</p>
+        <section data-purpose="security-settings-section" className="bg-white rounded-2xl border border-[#DCE4E6] shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="border-b border-[#F4F7F7] pb-4">
+            <h2 className="text-lg font-bold text-[#18242B]">{t("settings.password.title")}</h2>
+            <p className="text-xs sm:text-sm text-[#25343D]">{t("settings.password.subtitle")}</p>
           </div>
           <form onSubmit={changePassword} className="space-y-5">
             <div>
@@ -608,11 +608,11 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
                 <input id="new-password" autoComplete="new-password" required type={showPasswords ? "text" : "password"} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={inputClass} />
                 <div className="mt-2.5">
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-slate-500">{t("settings.password.strength")}</span>
+                    <span className="text-[#25343D]">{t("settings.password.strength")}</span>
                     <span id="strength-label" className={`font-semibold ${STRENGTH_COLORS[score]}`}>{t(STRENGTH_LABEL_KEYS[score])}</span>
                   </div>
                   <div className="grid grid-cols-4 gap-1.5 h-1.5">
-                    {[0, 1, 2, 3].map((i) => <div key={i} className={`rounded-full ${i < score ? STRENGTH_BARS[score] : "bg-slate-200"}`} />)}
+                    {[0, 1, 2, 3].map((i) => <div key={i} className={`rounded-full ${i < score ? STRENGTH_BARS[score] : "border-[##DCE4E6]"}`} />)}
                   </div>
                 </div>
               </div>
@@ -620,21 +620,21 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
                 <label className={labelClass} htmlFor="confirm-password">{t("settings.password.confirm")}</label>
                 <input id="confirm-password" autoComplete="new-password" required type={showPasswords ? "text" : "password"} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className={inputClass} />
                 {confirmPassword && (
-                  <div id="match-indicator" className={`text-[11px] mt-1.5 font-semibold ${newPassword === confirmPassword ? "text-black" : "text-rose-500"}`}>
+                  <div id="match-indicator" className={`text-[11px] mt-1.5 font-semibold ${newPassword === confirmPassword ? "text-[#18242B]" : "text-[#B42318]"}`}>
                     {newPassword === confirmPassword ? t("settings.password.match") : t("settings.password.noMatch")}
                   </div>
                 )}
               </div>
             </div>
-            <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="p-3.5 bg-[#F4F7F7] rounded-xl border border-[#DCE4E6] text-xs grid grid-cols-1 sm:grid-cols-3 gap-2">
               {requirements.map((req) => (
-                <div key={req.id} data-purpose={req.id} data-met={req.met} className={`flex items-center gap-1.5 ${req.met ? "text-black" : "text-slate-400"}`}>
+                <div key={req.id} data-purpose={req.id} data-met={req.met} className={`flex items-center gap-1.5 ${req.met ? "text-[#18242B]" : "text-[#46545B]"}`}>
                   <span>{req.met ? "✓" : "•"}</span><span>{req.label}</span>
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
-              <label className="flex items-center gap-2 text-xs text-slate-600">
+            <div className="flex items-center justify-between gap-3 pt-3 border-t border-[#F4F7F7]">
+              <label className="flex items-center gap-2 text-xs text-[#25343D]">
                 <input type="checkbox" checked={showPasswords} onChange={(e) => setShowPasswords(e.target.checked)} className="accent-black" />
                 {t("settings.password.show")}
               </label>
@@ -644,14 +644,14 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
         </section>
 
         {/* Digital health card */}
-        <section data-purpose="digital-card-section" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+        <section data-purpose="digital-card-section" className="bg-white rounded-2xl border border-[#DCE4E6] shadow-xs p-5 sm:p-7 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F4F7F7] pb-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{t("settings.card.title")}</h2>
-              <p className="text-xs sm:text-sm text-slate-500">{t("settings.card.subtitle")}</p>
+              <h2 className="text-lg font-bold text-[#18242B]">{t("settings.card.title")}</h2>
+              <p className="text-xs sm:text-sm text-[#25343D]">{t("settings.card.subtitle")}</p>
             </div>
             <div className="flex gap-2 self-start sm:self-auto">
-              <button type="button" onClick={() => setCardVisible(!cardVisible)} className="px-3.5 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-900 text-xs font-semibold border border-gray-200">
+              <button type="button" onClick={() => setCardVisible(!cardVisible)} className="px-3.5 py-1.5 rounded-lg bg-[#F4F7F7] hover:bg-[#F4F7F7] text-[#18242B] text-xs font-semibold border border-[#DCE4E6]">
                 {cardVisible ? t("settings.card.hidePreview") : t("settings.card.showPreview")}
               </button>
               <Link data-purpose="open-health-card" href="/health-card" className="px-3.5 py-1.5 rounded-lg bg-[#000000] hover:bg-[#174640] text-white text-xs font-semibold">
@@ -683,9 +683,9 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
           )}
 
           {healthError ? (
-            <p data-purpose="card-load-error" className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl p-3" role="alert">{healthError}</p>
+            <p data-purpose="card-load-error" className="text-xs text-[#B42318] bg-[#B42318]/10 border border-[#B42318]/20 rounded-xl p-3" role="alert">{healthError}</p>
           ) : !hasConsent || !health ? (
-            <p data-purpose="card-needs-consent" className="text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-xl p-3">
+            <p data-purpose="card-needs-consent" className="text-xs text-[#25343D] bg-[#F4F7F7] border border-[#DCE4E6] rounded-xl p-3">
               {t("settings.card.needsConsent")}
             </p>
           ) : (
@@ -718,7 +718,7 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
                   <input id="emergency-phone" maxLength={32} type="tel" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} placeholder="09XXXXXXXX" className={inputClass} />
                 </div>
               </div>
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#F4F7F7]">
                 <button type="submit" disabled={busy !== null} className={saveClass}>{t("settings.card.save")}</button>
               </div>
             </form>

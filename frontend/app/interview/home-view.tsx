@@ -65,10 +65,10 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
     <div data-purpose="home-view" className="flex-1 min-h-0 overflow-y-auto">
       <div className="max-w-5xl mx-auto space-y-6 py-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#18242B] tracking-tight">
             {firstName ? t("home.welcomeNamed", { name: firstName }) : t("home.welcome")}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">{t("home.subtitle")}</p>
+          <p className="text-sm text-[#25343D] mt-1">{t("home.subtitle")}</p>
         </div>
 
         {/* Live: a place in today's queue, and follow-ups to book. */}
@@ -76,7 +76,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
         <FollowUpCards onBook={onBook} />
 
         {/* The card comes first: open the app, show the phone, get scanned. */}
-        <section aria-labelledby="home-card-title" className="bg-white rounded-2xl border border-slate-200 card-shadow p-4 sm:p-6" data-purpose="home-card">
+        <section aria-labelledby="home-card-title" className="bg-white rounded-2xl border border-[#DCE4E6] card-shadow p-4 sm:p-6" data-purpose="home-card">
           <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] gap-5 md:gap-8 items-center">
             <div className="w-full max-w-[520px] mx-auto md:mx-0">
               {card === undefined ? (
@@ -86,10 +86,10 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
               ) : card ? (
                 <HealthCardView card={card} />
               ) : (
-                <div className="aspect-[1.586] w-full rounded-2xl border border-dashed border-slate-300 flex flex-col items-center justify-center gap-3 p-6 text-center" data-purpose="home-card-error" role="alert">
-                  <p className="text-sm text-slate-600">{t("home.cardLoadError")}</p>
+                <div className="aspect-[1.586] w-full rounded-2xl border border-dashed border-[#DCE4E6] flex flex-col items-center justify-center gap-3 p-6 text-center" data-purpose="home-card-error" role="alert">
+                  <p className="text-sm text-[#25343D]">{t("home.cardLoadError")}</p>
                   <button
-                    className="px-4 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    className="px-4 py-2 rounded-lg border border-[#DCE4E6] text-sm font-semibold text-[#25343D] hover:bg-[#F4F7F7]"
                     onClick={() => {
                       invalidateHealthCard();
                       setCard(undefined);
@@ -104,8 +104,8 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
             </div>
             <div className="space-y-4">
               <div>
-                <h2 id="home-card-title" className="text-lg font-bold text-slate-900">{t("home.yourCard")}</h2>
-                <p className="text-sm text-slate-500 mt-1">{t("home.cardHint")}</p>
+                <h2 id="home-card-title" className="text-lg font-bold text-[#18242B]">{t("home.yourCard")}</h2>
+                <p className="text-sm text-[#25343D] mt-1">{t("home.cardHint")}</p>
               </div>
               <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row gap-2.5">
                 <button
@@ -121,7 +121,7 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
                   {t("home.showQr")}
                 </button>
                 <Link
-                  className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition"
+                  className="inline-flex items-center justify-center px-4 py-2.5 rounded-xl border border-[#DCE4E6] hover:bg-[#F4F7F7] text-[#25343D] text-sm font-semibold transition"
                   data-purpose="home-open-card"
                   href="/health-card"
                 >
@@ -129,13 +129,13 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
                 </Link>
               </div>
               {card?.medicalUnavailable && (
-                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5" data-purpose="home-health-unavailable">
+                <p className="text-xs text-[#B7791F] bg-[#B7791F]/10 border border-[#B7791F]/20 rounded-xl px-3.5 py-2.5" data-purpose="home-health-unavailable">
                   {t("home.healthDetailsUnavailable")}
                 </p>
               )}
               {card && !card.medicalUnavailable && !hasMedical(card) && (
                 <button
-                  className="w-full text-left text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2.5 hover:bg-emerald-100 transition"
+                  className="w-full text-left text-xs font-medium text-[#18242B] bg-[#F4F7F7] border border-[#DCE4E6] rounded-xl px-3.5 py-2.5 hover:bg-[#F4F7F7] transition"
                   data-purpose="home-add-health-details"
                   onClick={() => onNavigate("setting")}
                   type="button"
@@ -148,8 +148,8 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
         </section>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.nextAppointment")}</p>
+<button type="button" aria-busy={next === undefined} data-purpose="home-next-appointment" onClick={() => onNavigate("appointment")} className="group text-left bg-white p-6 rounded-2xl border border-[#DCE4E6] card-shadow hover:bg-black hover:border-[#18242B] hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+            <p className="text-xs font-medium text-[#46545B] uppercase tracking-wider group-hover:text-[#DCE4E6]">{t("home.nextAppointment")}</p>
             {next === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
                 <Bone className="h-5 w-2/3 rounded mt-1.5" />
@@ -157,29 +157,29 @@ export default function HomeView({ firstName, onNavigate, onBook }: Props) {
               </InlineSkeleton>
             ) : (
               <>
-                <h2 className="text-lg font-bold text-slate-900 mt-1 group-hover:text-white">
+                <h2 className="text-lg font-bold text-[#18242B] mt-1 group-hover:text-white">
                   {next ? formatWhen(next.scheduled_at, locale) : t("home.noneScheduled")}
                 </h2>
-                {next && <p className="text-sm text-emerald-600 font-medium mt-0.5 group-hover:text-emerald-300">{appointmentTitle(next, t)}</p>}
+                {next && <p className="text-sm text-[#25343D] font-medium mt-0.5 group-hover:text-[#DCE4E6]">{appointmentTitle(next, t)}</p>}
               </>
             )}
           </button>
-<button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
-            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-slate-300">{t("home.notifications")}</p>
+<button type="button" aria-busy={unread === undefined} data-purpose="home-unread" onClick={() => onNavigate("message")} className="group text-left bg-white p-6 rounded-2xl border border-[#DCE4E6] card-shadow hover:bg-black hover:border-[#18242B] hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+            <p className="text-xs font-medium text-[#46545B] uppercase tracking-wider group-hover:text-[#DCE4E6]">{t("home.notifications")}</p>
             {unread === undefined ? (
               <InlineSkeleton label={t("common.loading")}>
                 <Bone className="h-5 w-1/2 rounded mt-1.5" />
               </InlineSkeleton>
             ) : (
-              <h2 className="text-lg font-bold text-slate-900 mt-1 group-hover:text-white">
+              <h2 className="text-lg font-bold text-[#18242B] mt-1 group-hover:text-white">
                 {unread === null ? "—" : unread === 0 ? t("home.upToDate") : t("home.unread", { count: unread })}
               </h2>
             )}
           </button>
           {SHORTCUTS.map((s) => (
-<button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white p-6 rounded-2xl border border-slate-200 card-shadow hover:bg-black hover:border-black hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
-              <h3 className="text-base font-bold text-slate-900 group-hover:text-white">{t(s.titleKey)}</h3>
-              <p className="text-sm text-slate-500 mt-1 group-hover:text-slate-300">{t(s.hintKey)}</p>
+<button key={s.nav} type="button" data-purpose={`home-shortcut-${s.nav}`} onClick={() => onNavigate(s.nav)} className="group text-left bg-white p-6 rounded-2xl border border-[#DCE4E6] card-shadow hover:bg-black hover:border-[#18242B] hover:text-white transition cursor-pointer min-h-[112px] flex flex-col justify-between">
+              <h3 className="text-base font-bold text-[#18242B] group-hover:text-white">{t(s.titleKey)}</h3>
+              <p className="text-sm text-[#25343D] mt-1 group-hover:text-[#DCE4E6]">{t(s.hintKey)}</p>
             </button>
           ))}
         </div>
@@ -237,17 +237,17 @@ function QrScreen({ card, onClose }: { card: HealthCardInfo; onClose: () => void
       role="dialog"
     >
       <div className="w-full max-w-sm flex flex-col items-center text-center" onClick={(event) => event.stopPropagation()}>
-        <p id="qr-screen-title" className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{t("home.qrTitle")}</p>
+        <p id="qr-screen-title" className="text-sm font-semibold text-[#25343D] uppercase tracking-wider">{t("home.qrTitle")}</p>
         <div
           aria-label={t("healthCard.scanToVerify")}
           className="w-full aspect-square max-w-[min(80vw,360px)] my-6"
           role="img"
           dangerouslySetInnerHTML={{ __html: card.qrSvg }}
         />
-        <p className="text-2xl font-bold font-serif text-slate-900">{card.fullName}</p>
-        <p className="text-base font-semibold text-emerald-700 mt-1">{card.userId}</p>
+        <p className="text-2xl font-bold font-serif text-[#18242B]">{card.fullName}</p>
+        <p className="text-base font-semibold text-[#25343D] mt-1">{card.userId}</p>
         <button
-          className="mt-8 px-8 py-3 rounded-full border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50"
+          className="mt-8 px-8 py-3 rounded-full border border-[#DCE4E6] text-[#25343D] font-semibold hover:bg-[#F4F7F7]"
           data-purpose="qr-screen-close"
           onClick={onClose}
           ref={closeRef}

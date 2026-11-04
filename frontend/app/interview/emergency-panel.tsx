@@ -117,7 +117,7 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
     <div
       aria-labelledby="emergency-title"
       aria-modal="true"
-      className="fixed inset-0 z-[90] bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center"
+      className="fixed inset-0 z-[90] bg-[#18242B]/60 backdrop-blur-sm flex items-end sm:items-center justify-center"
       data-purpose="emergency-panel"
       onClick={onClose}
       role="dialog"
@@ -129,12 +129,12 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-extrabold text-red-700" id="emergency-title">{t("emergency.title")}</h2>
-            <p className="text-xs text-slate-500 mt-1">{t("emergency.subtitle")}</p>
+            <h2 className="text-xl font-extrabold text-[#B42318]" id="emergency-title">{t("emergency.title")}</h2>
+            <p className="text-xs text-[#25343D] mt-1">{t("emergency.subtitle")}</p>
           </div>
           <button
             aria-label={t("common.close")}
-            className="p-2 rounded-lg text-slate-500 hover:bg-slate-100"
+            className="p-2 rounded-lg text-[#25343D] hover:bg-[#F4F7F7]"
             onClick={onClose}
             ref={closeRef}
             type="button"
@@ -160,7 +160,7 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
         <div className="grid grid-cols-2 gap-2">
           {(data?.national ?? []).filter((n) => n.service !== "ambulance").map((n) => (
             <a
-              className="rounded-xl border border-slate-200 py-2.5 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-xl border border-[#DCE4E6] py-2.5 text-center text-sm font-semibold text-[#25343D] hover:bg-[#F4F7F7]"
               data-purpose={`call-${n.service}`}
               href={telHref(n.number)}
               key={n.service}
@@ -172,9 +172,9 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
 
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-bold text-slate-900">{t("emergency.nearby")}</h3>
+            <h3 className="text-sm font-bold text-[#18242B]">{t("emergency.nearby")}</h3>
             <button
-              className="text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-60"
+              className="text-xs font-semibold text-[#25343D] hover:underline disabled:opacity-60"
               data-purpose="emergency-locate"
               disabled={locating}
               onClick={locate}
@@ -183,7 +183,7 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
               {locating ? t("emergency.locating") : data?.location_used ? t("emergency.updateLocation") : t("emergency.useLocation")}
             </button>
           </div>
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2" role="alert">{error}</p>}
+          {error && <p className="text-xs text-[#B42318] bg-[#B42318]/10 border border-[#B42318]/20 rounded-lg px-3 py-2" role="alert">{error}</p>}
           <HospitalMap points={points} here={here} />
           {!data && !error && (
             <Skeleton className="space-y-2" label={t("common.loading")}>
@@ -192,33 +192,33 @@ export default function EmergencyPanel({ onClose }: { onClose: () => void }) {
             </Skeleton>
           )}
           {data && data.hospitals.length === 0 && (
-            <p className="text-xs text-slate-500" data-purpose="emergency-none">{t("emergency.noHospitals")}</p>
+            <p className="text-xs text-[#25343D]" data-purpose="emergency-none">{t("emergency.noHospitals")}</p>
           )}
           {data?.hospitals.map((h) => (
-            <div className="rounded-2xl border border-slate-200 p-3.5" data-purpose={`emergency-hospital-${h.hospital_id}`} key={h.hospital_id}>
+            <div className="rounded-2xl border border-[#DCE4E6] p-3.5" data-purpose={`emergency-hospital-${h.hospital_id}`} key={h.hospital_id}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-slate-900">{language === "am" && h.name_am ? h.name_am : h.name}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-sm font-bold text-[#18242B]">{language === "am" && h.name_am ? h.name_am : h.name}</p>
+                  <p className="text-xs text-[#25343D]">
                     {[h.address, h.city].filter(Boolean).join(", ")}
                     {h.distance_km !== null ? ` · ${h.distance_km} km` : ""}
                   </p>
                 </div>
-                {h.emergency && <span className="text-[10px] font-bold text-red-700 bg-red-50 rounded px-1.5 py-0.5">{t("emergency.er24")}</span>}
+                {h.emergency && <span className="text-[10px] font-bold text-[#B42318] bg-[#B42318]/10 rounded px-1.5 py-0.5">{t("emergency.er24")}</span>}
               </div>
               <div className="flex flex-wrap gap-2 mt-3">
                 {h.ambulance_phone && (
-                  <a className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-bold border border-red-100" href={telHref(h.ambulance_phone)}>
+                  <a className="px-3 py-1.5 rounded-lg bg-[#B42318]/10 text-[#B42318] text-xs font-bold border border-[#B42318]/20" href={telHref(h.ambulance_phone)}>
                     {t("emergency.callTheirAmbulance")} · {h.ambulance_phone}
                   </a>
                 )}
                 {h.phone && (
-                  <a className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700" href={telHref(h.phone)}>
+                  <a className="px-3 py-1.5 rounded-lg border border-[#DCE4E6] text-xs font-semibold text-[#25343D]" href={telHref(h.phone)}>
                     {t("emergency.callHospital")}
                   </a>
                 )}
                 <a
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700"
+                  className="px-3 py-1.5 rounded-lg border border-[#DCE4E6] text-xs font-semibold text-[#25343D]"
                   href={directionsHref(h.latitude, h.longitude)}
                   rel="noopener noreferrer"
                   target="_blank"

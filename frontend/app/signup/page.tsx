@@ -240,7 +240,7 @@ export default function SignUp() {
               {/* Submit Button */}
               <div className="pt-2">
                 <button
-                  className="w-full bg-app-green lg:bg-[#E5ECEB] hover:bg-app-green-light lg:hover:bg-[#D5E3E0] active:scale-[0.99] text-white lg:text-brand-heading/80 font-medium py-3 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
+                  className="w-full bg-app-green lg:bg-[#E5ECEB] hover:bg-[#135a55] lg:hover:bg-[#D5E3E0] active:scale-[0.99] text-white lg:text-brand-heading/80 font-medium py-3 rounded-full text-sm transition-all focus:outline-hidden disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100"
                   disabled={isSubmitting}
                   type="submit"
                 >

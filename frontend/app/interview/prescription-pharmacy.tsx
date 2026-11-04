@@ -64,16 +64,16 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
   };
 
   const STATUS_STYLE: Record<Dispensing["status"], string> = {
-    open: "text-black bg-gray-50 border-gray-200",
-    completed: "text-slate-700 bg-slate-100 border-slate-200",
-    expired: "text-amber-800 bg-amber-50 border-amber-200",
-    retracted: "text-red-800 bg-red-50 border-red-200",
+    open: "text-[#18242B] bg-[#F4F7F7] border-[#DCE4E6]",
+    completed: "text-[#25343D] bg-[#F4F7F7] border-[#DCE4E6]",
+    expired: "text-[#B7791F] bg-[#B7791F]/10 border-[#B7791F]/20",
+    retracted: "text-[#B42318] bg-[#B42318]/10 border-[#B42318]/20",
   };
 
   return (
-    <section aria-label={t("rx.title")} className="rounded-2xl border border-gray-200 bg-gray-50/40 p-3 sm:p-4 space-y-3" data-purpose="rx-pharmacy" data-status={rx.status}>
+    <section aria-label={t("rx.title")} className="rounded-2xl border border-[#DCE4E6] bg-[#F4F7F7]/40 p-3 sm:p-4 space-y-3" data-purpose="rx-pharmacy" data-status={rx.status}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-bold text-slate-900">{t("rx.title")}</h3>
+        <h3 className="text-sm font-bold text-[#18242B]">{t("rx.title")}</h3>
         <span className={`text-[11px] font-semibold rounded-full px-2 py-0.5 border ${STATUS_STYLE[rx.status]}`} data-purpose="rx-status">
           {t(`rx.status.${rx.status}` as TranslationKey)}
         </span>
@@ -82,27 +82,27 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
       {usable && (
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           {rx.qr_url && (
-            <div className="mx-auto sm:mx-0 w-full max-w-[280px] aspect-square rounded-xl bg-white border border-slate-200 p-2 flex items-center justify-center">
+            <div className="mx-auto sm:mx-0 w-full max-w-[280px] aspect-square rounded-xl bg-white border border-[#DCE4E6] p-2 flex items-center justify-center">
               {qr ? (
                 // eslint-disable-next-line @next/next/no-img-element -- a data URL drawn in the browser
                 <img alt={t("rx.qrAlt")} className="w-full h-full [image-rendering:pixelated]" data-purpose="rx-qr" src={qr} />
               ) : (
-                <span className="text-xs text-slate-400">{t("common.loading")}</span>
+                <span className="text-xs text-[#46545B]">{t("common.loading")}</span>
               )}
             </div>
           )}
           <div className="space-y-2 min-w-0">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{t("rx.code")}</p>
-              <p className="text-3xl font-bold tracking-[0.2em] tabular-nums text-slate-900" data-purpose="rx-code">{rx.code}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-[#25343D]">{t("rx.code")}</p>
+              <p className="text-3xl font-bold tracking-[0.2em] tabular-nums text-[#18242B]" data-purpose="rx-code">{rx.code}</p>
             </div>
-            <p className="text-xs text-slate-600">{t("rx.howTo")}</p>
-            <p className="text-xs font-semibold text-slate-700" data-purpose="rx-expiry">{t("rx.validUntil", { date: day })}</p>
+            <p className="text-xs text-[#25343D]">{t("rx.howTo")}</p>
+            <p className="text-xs font-semibold text-[#25343D]" data-purpose="rx-expiry">{t("rx.validUntil", { date: day })}</p>
           </div>
         </div>
       )}
       {!usable && (
-        <p className="text-xs text-slate-600" data-purpose="rx-expiry">
+        <p className="text-xs text-[#25343D]" data-purpose="rx-expiry">
           {rx.status === "expired" ? t("rx.expiredOn", { date: day }) : rx.status === "completed" ? t("rx.completedNote") : t("rx.retractedNote")}
         </p>
       )}
@@ -112,12 +112,12 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
           {rx.items.map((item) => {
             const medicine = medicines.get(item.item_index) ?? {};
             return (
-              <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-xl bg-white border border-slate-200 px-3 py-2" data-purpose="rx-item" data-status={item.status} key={item.item_index}>
-                <span className="min-w-0 text-sm font-medium text-slate-800 break-words">
+              <li className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-xl bg-white border border-[#DCE4E6] px-3 py-2" data-purpose="rx-item" data-status={item.status} key={item.item_index}>
+                <span className="min-w-0 text-sm font-medium text-[#18242B] break-words">
                   {[text(medicine.drug), text(medicine.dose)].filter(Boolean).join(" ") || t("rx.item.unnamed", { n: item.item_index + 1 })}
-                  {item.quantity_text && <span className="block text-[11px] font-normal text-slate-500">{t("history.rx.quantity", { quantity: item.quantity_text })}</span>}
+                  {item.quantity_text && <span className="block text-[11px] font-normal text-[#25343D]">{t("history.rx.quantity", { quantity: item.quantity_text })}</span>}
                 </span>
-                <span className={`text-xs font-semibold ${item.status === "given" ? "text-black" : item.status === "partly_given" ? "text-amber-700" : "text-slate-500"}`} data-purpose="rx-item-status">
+                <span className={`text-xs font-semibold ${item.status === "given" ? "text-[#18242B]" : item.status === "partly_given" ? "text-[#B7791F]" : "text-[#25343D]"}`} data-purpose="rx-item-status">
                   {itemStatus(item)}
                 </span>
               </li>
@@ -127,19 +127,19 @@ export function PrescriptionPharmacy({ rx, details }: { rx: Dispensing; details:
       )}
 
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">{t("rx.dispenses")}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#25343D] mb-1">{t("rx.dispenses")}</p>
         {rx.dispenses.length === 0 ? (
-          <p className="text-xs text-slate-500" data-purpose="rx-no-dispenses">{t("rx.noDispenses")}</p>
+          <p className="text-xs text-[#25343D]" data-purpose="rx-no-dispenses">{t("rx.noDispenses")}</p>
         ) : (
           <>
             <ul className="space-y-1" data-purpose="rx-dispenses">
               {rx.dispenses.map((d, i) => (
-                <li className="text-sm text-slate-800 break-words" data-purpose="rx-dispense" key={`${d.at}-${i}`}>
+                <li className="text-sm text-[#18242B] break-words" data-purpose="rx-dispense" key={`${d.at}-${i}`}>
                   {t("rx.dispensedAt", { pharmacy: d.pharmacy_name, when: when(d.at) })}
                 </li>
               ))}
             </ul>
-            <p className="text-[11px] text-slate-400 mt-1">{t("rx.namesAsTyped")}</p>
+            <p className="text-[11px] text-[#46545B] mt-1">{t("rx.namesAsTyped")}</p>
           </>
         )}
       </div>

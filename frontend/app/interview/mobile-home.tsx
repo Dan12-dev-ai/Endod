@@ -37,16 +37,16 @@ export default function MobileHome() {
 
   return (
     <div className="min-h-screen bg-white font-sans antialiased text-app-charcoal flex flex-col pb-20" data-purpose="mobile-home">
-      <header className="bg-white px-5 py-2.5 flex justify-between items-center border-b border-gray-100">
+      <header className="px-5 py-2.5 flex justify-between items-center border-b border-[#DCE4E6]">
         <Link href="/" aria-label={t("nav.homeAria")} className="flex items-center gap-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-app-green">
           <Image alt={t("nav.logoAlt")} className="h-8 w-auto object-contain" src="/endod_logo.png" width={32} height={32} />
-          <span className="text-lg font-black tracking-tight text-slate-800">Endod</span>
+          <span className="text-lg font-black tracking-tight text-[#25343D]">Endod</span>
         </Link>
         <button
           type="button"
           data-purpose="sign-out"
           onClick={() => void logout()}
-          className="px-3 py-1.5 text-xs font-medium text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-app-green"
+          className="px-3 py-1.5 text-xs font-medium text-[#25343D] border border-[#DCE4E6] rounded-lg hover:bg-[#F4F7F7] focus:outline-none focus-visible:ring-2 focus-visible:ring-app-green"
         >
           {t("interview.signOut")}
         </button>
@@ -55,16 +55,24 @@ export default function MobileHome() {
       <section
         className="relative pt-3 px-5 text-white shadow-sm pb-5"
         style={{
-          backgroundImage: `radial-gradient(circle at 50% -20%, rgba(255,255,255,0.22) 0%, transparent 45%), radial-gradient(circle at 50% -20%, rgba(255,255,255,0.15) 50%, transparent 70%), repeating-radial-gradient(circle at 50% -10%, transparent 0, transparent 18px, rgba(255,255,255,0.08) 19px, rgba(255,255,255,0.08) 20px), linear-gradient(to bottom, #70C13B, #85CE53)`,
+          backgroundImage: `radial-gradient(circle at 50% -20%, rgba(255,255,255,0.22) 0%, transparent 45%), radial-gradient(circle at 50% -20%, rgba(255,255,255,0.15) 50%, transparent 70%), repeating-radial-gradient(circle at 50% -10%, transparent 0, transparent 18px, rgba(255,255,255,0.08) 19px, rgba(255,255,255,0.08) 20px), linear-gradient(to bottom, #176B65, #72AFA5)`,
         }}
       >
         <div className="flex justify-between items-center gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div aria-hidden className="w-9 h-9 rounded-full bg-white/30 border border-white/60 flex items-center justify-center flex-shrink-0">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path clipRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" fillRule="evenodd" />
-              </svg>
-            </div>
+            <svg
+              aria-hidden
+              className="w-5 h-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
             <h1 className="text-base font-semibold tracking-wide text-white drop-shadow-sm truncate" data-purpose="mobile-greeting">
               {firstName ? t("mobile.dashboard.greeting", { name: firstName }) : t("mobile.dashboard.greetingNoName")}
             </h1>
@@ -85,7 +93,7 @@ export default function MobileHome() {
               <Link
                 href={s.href}
                 data-purpose={`mobile-tile-${s.id}`}
-                className="bg-white rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-[0_20px_40px_-10px_rgba(0,0,0,0.25)] border border-gray-100 active:scale-95 transition min-h-[110px] focus:outline-none focus-visible:ring-2 focus-visible:ring-app-green"
+                className="bg-white rounded-2xl p-4 flex flex-col items-center justify-center text-center border border-[#DCE4E6] active:scale-95 transition min-h-[110px] focus:outline-none focus-visible:ring-2 focus-visible:ring-app-green"
               >
                 <span className="w-14 h-14 rounded-2xl text-app-green flex items-center justify-center mb-2 [&>svg]:w-7 [&>svg]:h-7">{s.icon}</span>
                 <span className="text-base font-semibold text-app-charcoal leading-tight">{t(s.labelKey)}</span>

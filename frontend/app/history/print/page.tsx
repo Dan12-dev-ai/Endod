@@ -38,12 +38,12 @@ export default function PrintRecordsPage() {
   const name = profile ? [profile.first_name, profile.middle_name, profile.last_name].filter(Boolean).join(" ") || profile.dedan_user_id : "";
 
   return (
-    <main className="min-h-screen bg-white text-slate-900 px-4 py-6 sm:px-10 print:p-0" data-purpose="print-records">
+    <main className="min-h-screen bg-white text-[#18242B] px-4 py-6 sm:px-10 print:p-0" data-purpose="print-records">
       <div className="max-w-3xl mx-auto">
         <div className="flex flex-wrap items-center justify-between gap-3 print:hidden mb-6">
-          <Link href="/interview" className="text-sm font-semibold text-emerald-700 hover:underline">← {t("print.back")}</Link>
+          <Link href="/interview" className="text-sm font-semibold text-[#25343D] hover:underline">← {t("print.back")}</Link>
           <button
-            className="px-4 py-2 rounded-xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-50"
+            className="px-4 py-2 rounded-xl bg-[#18242B] text-white text-sm font-semibold disabled:opacity-50"
             data-purpose="print-button"
             disabled={!data}
             onClick={() => window.print()}
@@ -52,16 +52,16 @@ export default function PrintRecordsPage() {
             {t("print.print")}
           </button>
         </div>
-        <header className="border-b-2 border-slate-900 pb-3 mb-4">
-          <p className="text-xs font-bold tracking-widest uppercase text-emerald-700">Endod Health</p>
+        <header className="border-b-2 border-[#18242B] pb-3 mb-4">
+          <p className="text-xs font-bold tracking-widest uppercase text-[#25343D]">Endod Health</p>
           <h1 className="text-2xl font-bold">{t("print.title")}</h1>
           {profile && (
-            <p className="text-sm text-slate-600 mt-1" data-purpose="print-patient">
+            <p className="text-sm text-[#25343D] mt-1" data-purpose="print-patient">
               {t("print.prepared", { date: new Date().toLocaleDateString(locale, { dateStyle: "long" }), name, id: profile.dedan_user_id })}
             </p>
           )}
         </header>
-        {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+        {error && <p className="text-sm text-[#B42318]" role="alert">{error}</p>}
         {!data && !error && (
           <Skeleton className="space-y-4" label={t("common.loading")}>
             {[0, 1, 2].map((i) => (
@@ -72,20 +72,20 @@ export default function PrintRecordsPage() {
             ))}
           </Skeleton>
         )}
-        {data && !data.items.length && <p className="text-sm text-slate-500">{t("print.empty")}</p>}
+        {data && !data.items.length && <p className="text-sm text-[#25343D]">{t("print.empty")}</p>}
         {data && data.items.length > 0 && (
           <ol className="space-y-4">
             {data.items.map((item) => (
-              <li className="break-inside-avoid border-b border-slate-200 pb-4" data-purpose="print-item" key={item.id}>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <li className="break-inside-avoid border-b border-[#DCE4E6] pb-4" data-purpose="print-item" key={item.id}>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-[#25343D]">
                   {[t(CATEGORY_LABEL[item.category]), new Date(item.occurred_at).toLocaleDateString(locale, { dateStyle: "medium" }),
                     item.verified ? t("records.verified") : t("records.selfReported")].join(" · ")}
                 </p>
                 <h2 className="text-base font-bold">{item.title}</h2>
-                <p className="text-xs text-slate-600 mb-2">{[item.hospital_name, item.recorded_by].filter(Boolean).join(" · ")}</p>
+                <p className="text-xs text-[#25343D] mb-2">{[item.hospital_name, item.recorded_by].filter(Boolean).join(" · ")}</p>
                 <RecordDetails item={item} />
                 {item.files.length > 0 && (
-                  <p className="text-xs text-slate-500 mt-2">
+                  <p className="text-xs text-[#25343D] mt-2">
                     {t("history.files")}: {item.files.map((f) => f.filename).join(", ")}
                   </p>
                 )}
