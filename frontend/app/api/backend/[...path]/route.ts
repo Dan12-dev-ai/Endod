@@ -28,7 +28,7 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/backend/[..
   if (!token) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
   let rawBody: string | undefined;
-  if (request.method === "POST" || request.method === "PATCH") {
+  if (request.method === "POST" || request.method === "PUT" || request.method === "PATCH") {
     // Refuse a declared oversize body before reading it, then count bytes.
     if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return tooLarge();
     rawBody = await request.text();
@@ -51,5 +51,6 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/backend/[..
 
 export const GET = forward;
 export const POST = forward;
+export const PUT = forward;
 export const PATCH = forward;
 export const DELETE = forward;
