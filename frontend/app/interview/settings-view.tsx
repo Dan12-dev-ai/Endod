@@ -8,6 +8,7 @@ import {
 } from "../health-card/health-card-data";
 import { useI18n, type TranslationKey } from "../lib/i18n";
 import { Bone, FieldBones, Skeleton } from "../components/skeleton";
+import SmsPinSection from "./sms-pin-section";
 import {
   Select,
   SelectContent,
@@ -590,6 +591,9 @@ export default function SettingsView({ onToast, onProfileChange, hideTitle }: Pr
           {toggle("pref-sms", profile.preferences.sms_notifications, (v) => void setNotification("sms_notifications", v),
             t("settings.privacy.sms.label"), t("settings.privacy.sms.hint"))}
         </section>
+
+        {/* SMS PIN: texting commands to the short code */}
+        <SmsPinSection phoneVerified={phoneVerified} />
 
         {/* Password */}
         <section data-purpose="security-settings-section" className="bg-white rounded-2xl border border-[#DCE4E6] shadow-xs p-5 sm:p-7 space-y-6">

@@ -170,6 +170,24 @@ and the header `X-Endod-Signature: t=<unix time>,v1=<hex HMAC-SHA256 of
 The answer carries the reply for the gateway to send:
 `{"reply": "...", "to": "+2519..."}` (`reply` null: send nothing).
 
+## The PIN in the patient app
+
+Settings > SMS PIN (`frontend/app/interview/sms-pin-section.tsx`, the same
+section on desktop and on the phone screen `/interview/mobile-setting`), in
+English and Amharic. It reads `GET /users/me/sms-pin`, the one source for
+both the PIN's state and whether commands work: `has_pin`, `locked_until`
+(only while locked), `commands_enabled` and `short_code` (null while the
+short code is not live). It:
+
+* says what the PIN is for and whether one is set;
+* sets or changes it (`PUT /users/me/sms-pin`: new PIN and confirmation; the
+  signed-in session is the proof, so the current PIN is not asked for and a
+  forgotten or locked PIN can be replaced here, which also unlocks it);
+* checks 4 digits, the confirmation and the easy PINs before sending (the
+  backend still decides; a 422 shows the "too easy to guess" message);
+* while `commands_enabled` and a `short_code`: the short code and the CARD,
+  APPT, RESULT, REPORT and RX commands; otherwise "coming soon", no number.
+
 ## Settings
 
 In `platform_settings` (key `sms.<NAME>`, for the super admin later) or the
